@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Users, CalendarDays, CheckSquare, LogOut,
   GraduationCap, Bell, BookOpen, Calendar,
-  ChevronLeft, ChevronRight, ListChecks, Layers,
+  ChevronLeft, ChevronRight, ListChecks, Layers, FileSpreadsheet,
 } from "lucide-react";
 
 const navSections = [
@@ -32,6 +32,7 @@ const navSections = [
       { href: "/agent/emploi-du-temps", icon: CalendarDays, label: "Emplois du temps" },
       { href: "/agent/notes", icon: CheckSquare, label: "Notes & Validation" },
       { href: "/agent/deliberations", icon: ListChecks, label: "Délibérations" },
+      { href: "/agent/feuilles", icon: FileSpreadsheet, label: "Feuilles" },
     ],
   },
   {

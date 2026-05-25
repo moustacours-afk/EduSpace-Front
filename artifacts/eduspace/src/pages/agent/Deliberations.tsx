@@ -4,8 +4,9 @@ import { AgentSidebar } from "@/components/AgentSidebar";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Printer, Filter } from "lucide-react";
+import { FileText, Printer, Filter, Users, Edit, Plus, Trash2, X, Save } from "lucide-react";
 import { gradeSubmissions, agentStudents } from "@/data/mockData";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
@@ -25,17 +26,19 @@ function calcMoy(cc: number | null, exam: number | null) {
 
 const CREDIT_PER_MODULE = 3;
 
-type DecisionType = "Admis (session normale)" | "Admis (session rattrapage)" | "Ajourné";
+type DecisionType = "Admis (session normale)" | "Admis par compensation" | "Admis (session rattrapage)" | "Ajourné";
 
-function getDecision(moyenne: number | null, session: string): DecisionType {
-  if (moyenne === null) return "Ajourné";
-  if (moyenne >= 10) return "Admis (session normale)";
-  if (moyenne >= 8 && session === "Rattrapage") return "Admis (session rattrapage)";
-  return "Ajourné";
+function getMention(moy: number | null): string {
+  if (moy === null || moy < 10) return "";
+  if (moy >= 16) return "Très bien";
+  if (moy >= 14) return "Bien";
+  if (moy >= 12) return "Assez bien";
+  return "Passable";
 }
 
 function decisionStyle(d: DecisionType) {
   if (d === "Admis (session normale)") return "bg-green-100 text-green-800 border-green-200";
+  if (d === "Admis par compensation") return "bg-teal-100 text-teal-800 border-teal-200";
   if (d === "Admis (session rattrapage)") return "bg-amber-100 text-amber-800 border-amber-200";
   return "bg-red-100 text-red-800 border-red-200";
 }
@@ -46,6 +49,12 @@ export default function AgentDeliberations() {
   const [semestre, setSemestre] = useState("S5");
   const [session,  setSession]  = useState("Normale");
   const [showPV,   setShowPV]   = useState(false);
+
+  const [juryPresident, setJuryPresident] = useState("Pr. Mohamed Hadj");
+  const [juryMembers,   setJuryMembers]   = useState(["Dr. Amira Ziani", "Dr. Yacine Bouzid"]);
+  const [showEditJury,  setShowEditJury]  = useState(false);
+  const [draftPresident, setDraftPresident] = useState("");
+  const [draftMembers,   setDraftMembers]   = useState<string[]>([]);
 
   const semestreNum = parseInt(semestre.slice(1));
 
@@ -87,15 +96,36 @@ export default function AgentDeliberations() {
     return m;
   }, [submissions]);
 
-  // Aggregate per student
+  // Aggregate per student with compensation + mention logic
   const rows = useMemo(() => studentsInGroupe.map((s, idx) => {
     const grades = gradeMap[s.matricule] ?? {};
     const moyennes = moduleList.map(mod => grades[mod]?.moy ?? null);
     const validMoyennes = moyennes.filter(m => m !== null) as number[];
     const semMoy = validMoyennes.length > 0 ? Math.round(validMoyennes.reduce((a, b) => a + b, 0) / validMoyennes.length * 100) / 100 : null;
-    const creditsAcquis = moduleList.filter((mod, i) => (moyennes[i] ?? 0) >= 10).length * CREDIT_PER_MODULE;
-    const decision = getDecision(semMoy, session);
-    return { idx: idx + 1, ...s, moyennes, semMoy, creditsAcquis, decision };
+
+    const allPassed = moyennes.every(m => m === null || m >= 10);
+    let decision: DecisionType;
+    if (semMoy === null) {
+      decision = "Ajourné";
+    } else if (semMoy >= 10) {
+      decision = allPassed ? "Admis (session normale)" : "Admis par compensation";
+    } else if (session === "Rattrapage" && semMoy >= 5) {
+      decision = "Admis (session rattrapage)";
+    } else {
+      decision = "Ajourné";
+    }
+
+    const isCompensated = semMoy !== null && semMoy >= 10;
+    const creditsAcquis = moduleList.filter((_, i) => {
+      const moy = moyennes[i];
+      if (moy === null) return false;
+      if (moy >= 10) return true;
+      if (isCompensated && moy >= 5) return true;
+      return false;
+    }).length * CREDIT_PER_MODULE;
+
+    const mention = getMention(semMoy);
+    return { idx: idx + 1, ...s, moyennes, semMoy, creditsAcquis, decision, mention };
   }), [studentsInGroupe, gradeMap, moduleList, session]);
 
   function printPV() {
@@ -106,13 +136,15 @@ export default function AgentDeliberations() {
     const subHeaders = moduleList.map(() => `<th style="border:1px solid #bbb;background:#f5f5f5;padding:4px;font-size:9px;text-align:center">M</th><th style="border:1px solid #bbb;background:#f5f5f5;padding:4px;font-size:9px;text-align:center">C</th>`).join("");
 
     const tableRows = rows.map(r => {
-      const gradeCells = moduleList.map((mod, i) => {
+      const isComp = r.decision === "Admis par compensation";
+      const gradeCells = moduleList.map((_, i) => {
         const moy = r.moyennes[i];
-        const credit = moy !== null && moy >= 10 ? CREDIT_PER_MODULE : 0;
-        const color = moy === null ? "#aaa" : moy >= 10 ? "#166534" : "#991b1b";
-        return `<td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;color:${color}">${moy !== null ? moy.toFixed(2) : "ABS"}</td><td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px">${credit}</td>`;
+        const comp = isComp && moy !== null && moy < 10 && moy >= 5;
+        const credit = moy !== null && (moy >= 10 || comp) ? CREDIT_PER_MODULE : 0;
+        const color = moy === null ? "#aaa" : moy >= 10 ? "#166534" : comp ? "#0d9488" : "#991b1b";
+        return `<td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;color:${color}">${moy !== null ? moy.toFixed(2) : "ABS"}${comp ? "<sup>C</sup>" : ""}</td><td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px">${credit}</td>`;
       }).join("");
-      const decColor = r.decision === "Admis (session normale)" ? "#166534" : r.decision === "Admis (session rattrapage)" ? "#854d0e" : "#991b1b";
+      const decColor = r.decision === "Admis (session normale)" ? "#166534" : r.decision === "Admis par compensation" ? "#0d9488" : r.decision === "Admis (session rattrapage)" ? "#854d0e" : "#991b1b";
       return `<tr>
         <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px">${r.idx}</td>
         <td style="border:1px solid #bbb;padding:4px;font-size:10px;font-family:monospace">${r.matricule}</td>
@@ -120,9 +152,11 @@ export default function AgentDeliberations() {
         ${gradeCells}
         <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold">${r.creditsAcquis}</td>
         <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold">${r.semMoy !== null ? r.semMoy.toFixed(2) : "—"}</td>
+        <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px">${r.mention}</td>
         <td style="border:1px solid #bbb;padding:4px;font-size:10px;color:${decColor};font-weight:bold">${r.decision}</td>
       </tr>`;
     }).join("");
+    const memberSigsBlock = juryMembers.map(m => `<p style="font-size:11px">${m}</p>`).join("");
 
     win.document.write(`<html><head><title>PV Délibération</title>
     <style>body{font-family:Arial,sans-serif;padding:20px}table{border-collapse:collapse;width:100%}@media print{button{display:none}}</style></head>
@@ -136,6 +170,7 @@ export default function AgentDeliberations() {
         <p style="font-size:14px;font-weight:bold;margin:10px 0;text-decoration:underline">PV de délibération — ${semestre} — Session ${session}</p>
       </div>
       <button onclick="window.print()" style="margin-bottom:12px;padding:8px 16px;background:#4f46e5;color:white;border:none;border-radius:6px;cursor:pointer">Imprimer</button>
+      <p style="font-size:9px;color:#666;margin-bottom:4px">C = module compensé (moy. semestre ≥ 10)</p>
       <table>
         <thead>
           <tr>
@@ -145,6 +180,7 @@ export default function AgentDeliberations() {
             ${moduleHeaders}
             <th rowspan="2" style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px">Crédits</th>
             <th rowspan="2" style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px">Moy. Sem.</th>
+            <th rowspan="2" style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px">Mention</th>
             <th rowspan="2" style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px">Décision du jury</th>
           </tr>
           <tr>${subHeaders}</tr>
@@ -152,8 +188,9 @@ export default function AgentDeliberations() {
         <tbody>${tableRows}</tbody>
       </table>
       <div style="margin-top:40px;display:flex;justify-content:space-between">
-        <div><p style="font-size:11px;font-weight:bold">Le Président du Jury</p><br/><br/><p style="font-size:11px">Signature et cachet</p></div>
-        <div><p style="font-size:11px;font-weight:bold">L'Agent Pédagogique</p><br/><br/><p style="font-size:11px">Signature</p></div>
+        <div><p style="font-size:11px;font-weight:bold">Le Président du Jury</p><p style="font-size:11px">${juryPresident}</p><br/><br/><p style="font-size:11px">Signature et cachet</p></div>
+        <div><p style="font-size:11px;font-weight:bold">Membres du Jury</p>${memberSigsBlock}<br/><p style="font-size:11px">Signatures</p></div>
+        <div><p style="font-size:11px;font-weight:bold">L'Agent Pédagogique</p><p style="font-size:11px">Ferhat Nadia</p><br/><br/><p style="font-size:11px">Signature</p></div>
       </div>
     </body></html>`);
     win.document.close();
@@ -252,15 +289,17 @@ export default function AgentDeliberations() {
           </motion.div>
 
           {/* Results summary */}
-          <motion.div variants={item} className="grid grid-cols-3 gap-3">
+          <motion.div variants={item} className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: "Total étudiants", value: rows.length, color: "text-foreground" },
-              { label: "Admis", value: rows.filter(r => r.decision !== "Ajourné").length, color: "text-green-700" },
-              { label: "Ajournés", value: rows.filter(r => r.decision === "Ajourné").length, color: "text-red-700" },
+              { label: "Total étudiants", value: rows.length, color: "text-foreground", sub: "" },
+              { label: "Admis (normale)", value: rows.filter(r => r.decision === "Admis (session normale)").length, color: "text-green-700", sub: "" },
+              { label: "Admis (compensation)", value: rows.filter(r => r.decision === "Admis par compensation").length, color: "text-teal-700", sub: "Moy. sem. ≥ 10" },
+              { label: "Ajournés", value: rows.filter(r => r.decision === "Ajourné").length, color: "text-red-700", sub: "" },
             ].map(c => (
               <Card key={c.label} className="p-4 text-center">
                 <p className="text-xs text-muted-foreground">{c.label}</p>
                 <p className={`text-2xl font-bold mt-1 ${c.color}`}>{c.value}</p>
+                {c.sub && <p className="text-[10px] text-muted-foreground mt-0.5">{c.sub}</p>}
               </Card>
             ))}
           </motion.div>
@@ -288,6 +327,7 @@ export default function AgentDeliberations() {
                         ))}
                         <th rowSpan={2} className="border border-border/60 px-2 py-2 font-semibold text-center bg-muted/30">Crédits</th>
                         <th rowSpan={2} className="border border-border/60 px-2 py-2 font-semibold text-center bg-muted/30">Moy. Sem.</th>
+                        <th rowSpan={2} className="border border-border/60 px-2 py-2 font-semibold text-center bg-muted/30">Mention</th>
                         <th rowSpan={2} className="border border-border/60 px-3 py-2 font-semibold text-center bg-muted/30 min-w-28">Décision du jury</th>
                       </tr>
                       <tr className="bg-muted/30">
@@ -301,18 +341,20 @@ export default function AgentDeliberations() {
                     </thead>
                     <tbody>
                       {rows.length === 0 ? (
-                        <tr><td colSpan={3 + moduleList.length * 2 + 3} className="text-center py-8 text-muted-foreground">Aucun étudiant dans ce groupe</td></tr>
+                        <tr><td colSpan={3 + moduleList.length * 2 + 4} className="text-center py-8 text-muted-foreground">Aucun étudiant dans ce groupe</td></tr>
                       ) : rows.map((r, ri) => (
                         <tr key={r.matricule} className={`${ri % 2 === 0 ? "bg-background" : "bg-muted/10"} hover:bg-primary/5 transition-colors`}>
                           <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{r.idx}</td>
                           <td className="border border-border/40 px-3 py-2 font-mono">{r.matricule}</td>
                           <td className="border border-border/40 px-3 py-2 font-medium">{r.prenom} {r.nom}</td>
                           {r.moyennes.map((moy, i) => {
-                            const credit = moy !== null && moy >= 10 ? CREDIT_PER_MODULE : 0;
+                            const isComp = r.decision === "Admis par compensation" && moy !== null && moy < 10 && moy >= 5;
+                            const credit = moy !== null && (moy >= 10 || isComp) ? CREDIT_PER_MODULE : 0;
                             return (
                               <Fragment key={i}>
-                                <td className={`border border-border/40 px-2 py-2 text-center font-semibold ${moy === null ? "text-muted-foreground" : moy >= 10 ? "text-green-700" : "text-red-600"}`}>
+                                <td className={`border border-border/40 px-2 py-2 text-center font-semibold ${moy === null ? "text-muted-foreground" : moy >= 10 ? "text-green-700" : isComp ? "text-teal-600" : "text-red-600"}`}>
                                   {moy !== null ? moy.toFixed(2) : "ABS"}
+                                  {isComp && <span className="text-[8px] ml-0.5 text-teal-500">C</span>}
                                 </td>
                                 <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{credit}</td>
                               </Fragment>
@@ -321,6 +363,9 @@ export default function AgentDeliberations() {
                           <td className="border border-border/40 px-2 py-2 text-center font-bold">{r.creditsAcquis}</td>
                           <td className={`border border-border/40 px-2 py-2 text-center font-bold ${r.semMoy !== null && r.semMoy >= 10 ? "text-green-700" : "text-red-600"}`}>
                             {r.semMoy !== null ? r.semMoy.toFixed(2) : "—"}
+                          </td>
+                          <td className="border border-border/40 px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+                            {r.mention}
                           </td>
                           <td className="border border-border/40 px-2 py-2 text-center">
                             <Badge className={`text-[10px] border ${decisionStyle(r.decision)}`}>{r.decision}</Badge>
@@ -334,26 +379,89 @@ export default function AgentDeliberations() {
             </Card>
           </motion.div>
 
-          {/* Signature area */}
+          {/* Jury composition + Signature area */}
           {moduleList.length > 0 && (
             <motion.div variants={item}>
               <Card className="p-6">
-                <div className="flex justify-between items-start">
-                  <div className="text-sm">
-                    <p className="font-semibold mb-6">Le Président du Jury</p>
-                    <p className="text-muted-foreground text-xs">Signature et cachet</p>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-semibold">Composition du Jury</span>
                   </div>
-                  <div className="text-sm text-center">
-                    <p className="font-semibold mb-6">Membres du Jury</p>
-                    <p className="text-muted-foreground text-xs">Signatures</p>
+                  <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs"
+                    onClick={() => { setDraftPresident(juryPresident); setDraftMembers([...juryMembers]); setShowEditJury(true); }}>
+                    <Edit className="w-3 h-3" />Modifier
+                  </Button>
+                </div>
+                <div className="grid grid-cols-3 gap-6">
+                  <div className="text-sm">
+                    <p className="text-xs text-muted-foreground mb-1">Président du Jury</p>
+                    <p className="font-semibold">{juryPresident}</p>
+                    <div className="mt-8 border-t border-border/50 pt-2">
+                      <p className="text-xs text-muted-foreground">Signature et cachet</p>
+                    </div>
+                  </div>
+                  <div className="text-sm">
+                    <p className="text-xs text-muted-foreground mb-1">Membres du Jury</p>
+                    {juryMembers.map((m, i) => <p key={i} className="font-medium">{m}</p>)}
+                    <div className="mt-8 border-t border-border/50 pt-2">
+                      <p className="text-xs text-muted-foreground">Signatures</p>
+                    </div>
                   </div>
                   <div className="text-sm text-right">
-                    <p className="font-semibold mb-6">L'Agent Pédagogique</p>
-                    <p className="text-muted-foreground text-xs">Ferhat Nadia — Signature</p>
+                    <p className="text-xs text-muted-foreground mb-1">L'Agent Pédagogique</p>
+                    <p className="font-semibold">Ferhat Nadia</p>
+                    <div className="mt-8 border-t border-border/50 pt-2">
+                      <p className="text-xs text-muted-foreground">Signature</p>
+                    </div>
                   </div>
                 </div>
               </Card>
             </motion.div>
+          )}
+
+          {/* Edit Jury Modal */}
+          {showEditJury && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+                <Card className="p-6 w-full max-w-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-base">Composition du jury</h3>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowEditJury(false)}><X className="w-4 h-4" /></Button>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground block mb-1">Président du jury</label>
+                      <Input value={draftPresident} onChange={e => setDraftPresident(e.target.value)} className="h-9 text-sm" />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-medium text-muted-foreground">Membres du jury</label>
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => setDraftMembers(prev => [...prev, ""])}>
+                          <Plus className="w-3 h-3" />Ajouter
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        {draftMembers.map((m, i) => (
+                          <div key={i} className="flex gap-2">
+                            <Input value={m} onChange={e => setDraftMembers(prev => prev.map((x, xi) => xi === i ? e.target.value : x))} className="h-9 text-sm flex-1" />
+                            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-red-400 hover:text-red-600" onClick={() => setDraftMembers(prev => prev.filter((_, xi) => xi !== i))}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 mt-5">
+                    <Button variant="outline" className="flex-1" onClick={() => setShowEditJury(false)}>Annuler</Button>
+                    <Button className="flex-1 gap-2" onClick={() => { setJuryPresident(draftPresident); setJuryMembers(draftMembers.filter(m => m.trim())); setShowEditJury(false); }}>
+                      <Save className="w-4 h-4" />Enregistrer
+                    </Button>
+                  </div>
+                </Card>
+              </motion.div>
+            </div>
           )}
 
         </motion.div>

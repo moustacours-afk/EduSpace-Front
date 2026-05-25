@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, Plus, X, CheckCircle, ChevronDown, ChevronRight,
-  GraduationCap, Layers, Shuffle, Trash2,
+  GraduationCap, Layers, Shuffle, Trash2, Edit, ArrowRightLeft,
+  Filter,
 } from "lucide-react";
 import { agentStudents } from "@/data/mockData";
 import {
@@ -56,6 +57,15 @@ export default function AgentOrganisationEtudiants() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createSuccess, setCreateSuccess] = useState("");
+  const [filterNiveau, setFilterNiveau] = useState("all");
+
+  // Section edit modal
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [editGroupsForm, setEditGroupsForm] = useState<{ id: string; nom: string; nbMax: number }[]>([]);
+
+  // Student reassignment modal
+  const [reassignStudent, setReassignStudent] = useState<{ studentId: string; currentSectionId: string; currentGroupId: string } | null>(null);
+  const [reassignTarget, setReassignTarget] = useState<{ sectionId: string; groupId: string }>({ sectionId: "", groupId: "" });
 
   const [form, setForm] = useState({
     niveau: "L3",
@@ -130,7 +140,90 @@ export default function AgentOrganisationEtudiants() {
     });
   }
 
+  // Open section edit modal
+  function openEditSection(section: OrgSection) {
+    setEditingSectionId(section.id);
+    setEditGroupsForm(section.groupes.map(g => ({ id: g.id, nom: g.nom, nbMax: g.nbMax })));
+  }
+
+  function saveEditSection() {
+    if (!editingSectionId) return;
+    const newState: OrgState = {
+      sections: orgState.sections.map(sec => {
+        if (sec.id !== editingSectionId) return sec;
+        // Apply nbMax edits, handle group additions/removals
+        const updatedGroupes = sec.groupes
+          .filter(g => editGroupsForm.some(ef => ef.id === g.id))
+          .map(g => {
+            const ef = editGroupsForm.find(f => f.id === g.id)!;
+            return { ...g, nom: ef.nom, nbMax: ef.nbMax };
+          });
+        // Add any new groups (id starts with "new-")
+        const newGroups = editGroupsForm
+          .filter(ef => ef.id.startsWith("new-"))
+          .map((ef, i) => ({
+            id: `${editingSectionId}-g${Date.now()}-${i}`,
+            nom: ef.nom,
+            nbMax: ef.nbMax,
+            studentIds: [],
+          }));
+        return { ...sec, groupes: [...updatedGroupes, ...newGroups], nbGroupes: updatedGroupes.length + newGroups.length };
+      }),
+    };
+    saveOrg(newState);
+    setEditingSectionId(null);
+  }
+
+  function addGroupToForm() {
+    const nextNum = editGroupsForm.length + 1;
+    setEditGroupsForm(prev => [...prev, { id: `new-${Date.now()}`, nom: `Groupe ${nextNum}`, nbMax: 30 }]);
+  }
+
+  function removeGroupFromForm(id: string) {
+    setEditGroupsForm(prev => prev.filter(g => g.id !== id));
+  }
+
+  // Student reassignment
+  function openReassign(studentId: string, sectionId: string, groupId: string) {
+    setReassignStudent({ studentId, currentSectionId: sectionId, currentGroupId: groupId });
+    setReassignTarget({ sectionId: "", groupId: "" });
+  }
+
+  function confirmReassign() {
+    if (!reassignStudent || !reassignTarget.sectionId || !reassignTarget.groupId) return;
+    const newState: OrgState = {
+      sections: orgState.sections.map(sec => ({
+        ...sec,
+        groupes: sec.groupes.map(grp => {
+          // Remove from current
+          if (grp.id === reassignStudent.currentGroupId) {
+            return { ...grp, studentIds: grp.studentIds.filter(id => id !== reassignStudent.studentId) };
+          }
+          // Add to target
+          if (grp.id === reassignTarget.groupId) {
+            return { ...grp, studentIds: [...grp.studentIds, reassignStudent.studentId] };
+          }
+          return grp;
+        }),
+      })),
+    };
+    saveOrg(newState);
+    setReassignStudent(null);
+  }
+
   const approxPerGroup = Math.ceil((parseInt(form.maxStudents) || 200) / (parseInt(form.nbGroupes) || 4));
+
+  const filteredSections = filterNiveau === "all"
+    ? orgState.sections
+    : orgState.sections.filter(s => s.niveau === filterNiveau);
+
+  const editingSection = editingSectionId ? orgState.sections.find(s => s.id === editingSectionId) : null;
+
+  // Groups available for reassignment target
+  const reassignSectionOptions = orgState.sections.filter(s => s.id !== reassignStudent?.currentSectionId || true);
+  const reassignGroupOptions = reassignTarget.sectionId
+    ? (orgState.sections.find(s => s.id === reassignTarget.sectionId)?.groupes ?? []).filter(g => g.id !== reassignStudent?.currentGroupId)
+    : [];
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -150,6 +243,26 @@ export default function AgentOrganisationEtudiants() {
             </Button>
           </motion.div>
 
+          {/* Niveau filter */}
+          <motion.div variants={item}>
+            <Card className="p-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Filter className="w-3.5 h-3.5" />Filtrer par niveau :
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {["all", ...NIVEAUX].map(n => (
+                    <button key={n} onClick={() => setFilterNiveau(n)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${filterNiveau === n ? "bg-primary text-white border-primary" : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"}`}>
+                      {n === "all" ? "Tous les niveaux" : n}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-xs text-muted-foreground ml-auto">{filteredSections.length} section(s) affichée(s)</span>
+              </div>
+            </Card>
+          </motion.div>
+
           {createSuccess && (
             <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
               <div className="flex items-center gap-2.5 p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800">
@@ -158,11 +271,13 @@ export default function AgentOrganisationEtudiants() {
             </motion.div>
           )}
 
-          {orgState.sections.length === 0 ? (
+          {filteredSections.length === 0 ? (
             <motion.div variants={item}>
               <Card className="p-12 text-center">
                 <Layers className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-                <p className="text-muted-foreground font-medium">Aucune section créée pour le moment.</p>
+                <p className="text-muted-foreground font-medium">
+                  {filterNiveau === "all" ? "Aucune section créée pour le moment." : `Aucune section pour le niveau ${filterNiveau}.`}
+                </p>
                 <p className="text-sm text-muted-foreground mt-1 mb-4">
                   Créez une section pour répartir automatiquement les étudiants en groupes.
                 </p>
@@ -173,7 +288,7 @@ export default function AgentOrganisationEtudiants() {
             </motion.div>
           ) : (
             <motion.div variants={item} className="space-y-4">
-              {orgState.sections.map(section => {
+              {filteredSections.map(section => {
                 const isExpanded = expandedSections.has(section.id);
                 const totalStudents = section.groupes.reduce((acc, g) => acc + g.studentIds.length, 0);
                 return (
@@ -195,12 +310,20 @@ export default function AgentOrganisationEtudiants() {
                           <p className="text-xs text-muted-foreground">{AGENT_FILIERE} — {section.niveau}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         <div className="text-right hidden sm:block">
                           <p className="text-sm font-semibold">{totalStudents} <span className="font-normal text-muted-foreground">étudiant(s)</span></p>
                           <p className="text-xs text-muted-foreground">{section.nbGroupes} groupe(s)</p>
                         </div>
                         <Badge className="text-xs bg-primary/10 text-primary border-primary/20">{section.niveau}</Badge>
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-7 w-7 p-0 text-blue-500 hover:text-blue-700"
+                          onClick={e => { e.stopPropagation(); openEditSection(section); }}
+                          title="Modifier la section"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </Button>
                         <Button
                           size="sm" variant="ghost"
                           className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
@@ -239,8 +362,7 @@ export default function AgentOrganisationEtudiants() {
                                       <span className="text-sm font-medium">{groupe.nom}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                      <Shuffle className="w-3 h-3 text-muted-foreground/50" />
-                                      <span className="text-xs text-muted-foreground">{groupe.studentIds.length} étudiant(s)</span>
+                                      <span className="text-xs text-muted-foreground">{groupe.studentIds.length}/{groupe.nbMax} étudiant(s)</span>
                                     </div>
                                   </div>
 
@@ -265,6 +387,7 @@ export default function AgentOrganisationEtudiants() {
                                                   <th className="text-left px-4 py-2 font-medium text-muted-foreground">Matricule</th>
                                                   <th className="text-left px-4 py-2 font-medium text-muted-foreground">Nom complet</th>
                                                   <th className="text-left px-4 py-2 font-medium text-muted-foreground">Niveau</th>
+                                                  <th className="text-center px-4 py-2 font-medium text-muted-foreground">Changer groupe</th>
                                                 </tr>
                                               </thead>
                                               <tbody>
@@ -276,6 +399,12 @@ export default function AgentOrganisationEtudiants() {
                                                       <td className="px-4 py-2 font-mono">{s.matricule}</td>
                                                       <td className="px-4 py-2 font-medium">{s.prenom} {s.nom}</td>
                                                       <td className="px-4 py-2 text-muted-foreground">{s.niveau}</td>
+                                                      <td className="px-4 py-2 text-center">
+                                                        <Button size="sm" variant="ghost" className="h-6 px-2 gap-1 text-[10px] text-indigo-600 hover:text-indigo-800"
+                                                          onClick={() => openReassign(sid, section.id, groupe.id)}>
+                                                          <ArrowRightLeft className="w-3 h-3" />Changer
+                                                        </Button>
+                                                      </td>
                                                     </tr>
                                                   );
                                                 })}
@@ -374,6 +503,126 @@ export default function AgentOrganisationEtudiants() {
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+      {/* ── EDIT SECTION GROUPS MODAL ── */}
+      <AnimatePresence>
+        {editingSectionId && editingSection && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
+              <Card className="p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h3 className="font-bold text-base">Modifier {editingSection.nom}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">{AGENT_FILIERE} — {editingSection.niveau}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditingSectionId(null)}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Groupes</p>
+                  {editGroupsForm.map((g, idx) => (
+                    <div key={g.id} className="flex items-center gap-2 p-3 border border-border/60 rounded-lg">
+                      <div className="flex-1 space-y-2">
+                        <div>
+                          <label className="text-xs text-muted-foreground block mb-1">Nom du groupe</label>
+                          <Input value={g.nom} className="h-8 text-sm"
+                            onChange={e => setEditGroupsForm(prev => prev.map((x, i) => i === idx ? { ...x, nom: e.target.value } : x))} />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground block mb-1">Nb max étudiants</label>
+                          <Input type="number" value={g.nbMax} className="h-8 text-sm"
+                            onChange={e => setEditGroupsForm(prev => prev.map((x, i) => i === idx ? { ...x, nbMax: parseInt(e.target.value) || 30 } : x))} />
+                        </div>
+                      </div>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600 flex-shrink-0"
+                        onClick={() => removeGroupFromForm(g.id)} disabled={editGroupsForm.length <= 1}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs" onClick={addGroupToForm}>
+                    <Plus className="w-3.5 h-3.5" />Ajouter un groupe
+                  </Button>
+                </div>
+
+                <div className="flex gap-3 mt-5">
+                  <Button variant="outline" className="flex-1" onClick={() => setEditingSectionId(null)}>Annuler</Button>
+                  <Button className="flex-1" onClick={saveEditSection}>Enregistrer</Button>
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── REASSIGN STUDENT MODAL ── */}
+      <AnimatePresence>
+        {reassignStudent && (() => {
+          const student = agentStudents.find(s => s.id === reassignStudent.studentId);
+          const currentSection = orgState.sections.find(s => s.id === reassignStudent.currentSectionId);
+          const currentGroup = currentSection?.groupes.find(g => g.id === reassignStudent.currentGroupId);
+          return (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
+                <Card className="p-6 w-full max-w-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <ArrowRightLeft className="w-4 h-4 text-indigo-500" />
+                      <h3 className="font-bold text-base">Changer de groupe</h3>
+                    </div>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setReassignStudent(null)}><X className="w-4 h-4" /></Button>
+                  </div>
+
+                  <div className="bg-muted/20 rounded-lg p-3 mb-4 text-sm">
+                    <p className="font-medium">{student?.prenom} {student?.nom}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Actuellement : {currentSection?.nom} — {currentGroup?.nom}
+                    </p>
+                  </div>
+
+                  <div className="space-y-3 text-sm">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground block mb-1">Section de destination</label>
+                      <Select value={reassignTarget.sectionId} onValueChange={v => setReassignTarget({ sectionId: v, groupId: "" })}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choisir une section…" /></SelectTrigger>
+                        <SelectContent>
+                          {orgState.sections.map(s => (
+                            <SelectItem key={s.id} value={s.id}>{s.nom} ({s.niveau})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {reassignTarget.sectionId && (
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground block mb-1">Groupe de destination</label>
+                        <Select value={reassignTarget.groupId} onValueChange={v => setReassignTarget(p => ({ ...p, groupId: v }))}>
+                          <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choisir un groupe…" /></SelectTrigger>
+                          <SelectContent>
+                            {(orgState.sections.find(s => s.id === reassignTarget.sectionId)?.groupes ?? [])
+                              .filter(g => g.id !== reassignStudent.currentGroupId || reassignTarget.sectionId !== reassignStudent.currentSectionId)
+                              .map(g => (
+                                <SelectItem key={g.id} value={g.id}>{g.nom} ({g.studentIds.length}/{g.nbMax})</SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3 mt-5">
+                    <Button variant="outline" className="flex-1" onClick={() => setReassignStudent(null)}>Annuler</Button>
+                    <Button className="flex-1 gap-2" disabled={!reassignTarget.sectionId || !reassignTarget.groupId} onClick={confirmReassign}>
+                      <ArrowRightLeft className="w-4 h-4" />Confirmer
+                    </Button>
+                  </div>
+                </Card>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
     </div>
   );

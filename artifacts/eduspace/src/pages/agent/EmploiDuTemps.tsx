@@ -10,7 +10,7 @@ import {
   CalendarDays, Plus, Edit, Save, X, AlertTriangle, DoorOpen,
   UsersRound, Trash2, CheckCircle, Download, Wifi, MapPin, Clock,
 } from "lucide-react";
-import { seances as initialSeances, modules, agentTeachers, agentRooms as initialRooms, groupesParNiveau } from "@/data/mockData";
+import { seances as initialSeances, modules, agentTeachers, agentRooms as initialRooms, groupesParNiveau, semestresParNiveau, modulesParNiveauSemestre } from "@/data/mockData";
 import { getSectionsForNiveau, getGroupesForNiveau } from "@/lib/orgStore";
 
 const jours    = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Samedi"];
@@ -33,6 +33,7 @@ type Room    = typeof initialRooms[0];
 type NewSession = {
   jour: string; debut: string; fin: string;
   isCustomCreneau: boolean;
+  semestre: string;
   moduleId: string; enseignant: string; salle: string; type: string;
   section: string; groupe: string;
   typeSeance: "presentielle" | "ead";
@@ -54,9 +55,10 @@ const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
 type TabType = "timetable" | "rooms" | "groups";
 
-const defaultNewSession = (groupe: string): NewSession => ({
+const defaultNewSession = (groupe: string, niv: string = "L3"): NewSession => ({
   jour: "Dimanche", debut: "08:00", fin: "10:00",
   isCustomCreneau: false,
+  semestre: semestresParNiveau[niv]?.[0] ?? "S1",
   moduleId: "", enseignant: "", salle: "", type: "CM",
   section: "", groupe, typeSeance: "presentielle",
 });
@@ -69,7 +71,7 @@ export default function AgentEmploiDuTemps() {
   const [showAddModal, setShowAddModal]   = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [conflictError, setConflictError] = useState("");
-  const [newSession, setNewSession]       = useState<NewSession>(() => defaultNewSession("Groupe 2"));
+  const [newSession, setNewSession]       = useState<NewSession>(() => defaultNewSession("Groupe 2", "L3"));
   const [saveSuccess, setSaveSuccess]     = useState(false);
 
   const [rooms, setRooms]           = useState<Room[]>(initialRooms);
@@ -82,7 +84,7 @@ export default function AgentEmploiDuTemps() {
 
   function openAddModal(prefill?: Partial<NewSession>) {
     setEditingSessionId(null);
-    setNewSession({ ...defaultNewSession(groupe), ...prefill });
+    setNewSession({ ...defaultNewSession(groupe, niveau), ...prefill });
     setConflictError("");
     setShowAddModal(true);
   }
@@ -90,9 +92,18 @@ export default function AgentEmploiDuTemps() {
   function openEditModal(s: Session) {
     setEditingSessionId(s.id);
     const isCustom = !creneaux.some(c => c.debut === s.heureDebut);
+    const sems = semestresParNiveau[niveau] ?? ["S1"];
+    let detectedSemestre = sems[0];
+    for (const sem of sems) {
+      if (modulesParNiveauSemestre[`${niveau}-${sem}`]?.some(m => m.id === s.moduleId || m.intitule === s.module)) {
+        detectedSemestre = sem;
+        break;
+      }
+    }
     setNewSession({
       jour: s.jour, debut: s.heureDebut, fin: s.heureFin,
       isCustomCreneau: isCustom,
+      semestre: detectedSemestre,
       moduleId: s.moduleId ?? s.module,
       enseignant: s.enseignant, salle: s.salle ?? "",
       type: s.type,
@@ -120,7 +131,9 @@ export default function AgentEmploiDuTemps() {
     const conflict = detectConflict(sessions, newSession, editingSessionId ?? undefined);
     if (conflict) { setConflictError(conflict); return; }
 
-    const mod = modules.find(m => m.id === newSession.moduleId || m.intitule === newSession.moduleId);
+    const semMods = modulesParNiveauSemestre[`${niveau}-${newSession.semestre}`] ?? [];
+    const mod = semMods.find(m => m.id === newSession.moduleId)
+      ?? modules.find(m => m.id === newSession.moduleId || m.intitule === newSession.moduleId);
     const assignedGroupes = newSession.type === "CM"
       ? (newSession.section ? [newSession.section] : [groupe])
       : [newSession.groupe];
@@ -466,9 +479,16 @@ export default function AgentEmploiDuTemps() {
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
               <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
                 <Card className="p-6 w-full max-w-lg max-h-[92vh] overflow-y-auto">
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-3">
                     <h3 className="font-bold text-base">{editingSessionId ? "Modifier la séance" : "Nouvelle séance"}</h3>
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setShowAddModal(false); setEditingSessionId(null); }}><X className="w-4 h-4" /></Button>
+                  </div>
+
+                  {/* Niveau badge — non-editable indicator */}
+                  <div className="mb-4 flex items-center gap-2 p-2.5 rounded-lg bg-primary/5 border border-primary/20 text-xs">
+                    <span className="text-muted-foreground">Niveau :</span>
+                    <span className="font-bold text-primary px-2 py-0.5 rounded bg-primary/10">{niveau}</span>
+                    <span className="text-muted-foreground/60 ml-0.5">— non modifiable ici</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
@@ -523,12 +543,27 @@ export default function AgentEmploiDuTemps() {
                       </>
                     )}
 
-                    {/* Module */}
+                    {/* Semestre filter */}
+                    <div className="col-span-2">
+                      <label className="text-xs font-medium text-muted-foreground block mb-1">Semestre</label>
+                      <Select value={newSession.semestre} onValueChange={v => setNewSession(prev => ({ ...prev, semestre: v, moduleId: "" }))}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {(semestresParNiveau[niveau] ?? ["S1"]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Module — filtered by niveau + semestre */}
                     <div className="col-span-2">
                       <label className="text-xs font-medium text-muted-foreground block mb-1">Module *</label>
                       <Select value={newSession.moduleId} onValueChange={v => setNewSession(prev => ({ ...prev, moduleId: v }))}>
                         <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choisir un module…" /></SelectTrigger>
-                        <SelectContent>{modules.map(m => <SelectItem key={m.id} value={m.id}>{m.intitule}</SelectItem>)}</SelectContent>
+                        <SelectContent>
+                          {(modulesParNiveauSemestre[`${niveau}-${newSession.semestre}`] ?? modules).map(m => (
+                            <SelectItem key={m.id} value={m.id}>{m.intitule}</SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                     </div>
 

@@ -396,6 +396,75 @@ export const dailySubmissionsData = Array.from({ length: 14 }, (_, i) => {
   };
 });
 
+export const modulesParNiveauSemestre: Record<string, { id: string; intitule: string; credits: number }[]> = {
+  "L1-S1": [
+    { id: "l1s1-1", intitule: "Introduction à l'Informatique", credits: 6 },
+    { id: "l1s1-2", intitule: "Algorithmique 1", credits: 6 },
+    { id: "l1s1-3", intitule: "Mathématiques 1", credits: 6 },
+    { id: "l1s1-4", intitule: "Architecture des Ordinateurs", credits: 4 },
+    { id: "l1s1-5", intitule: "Électronique Numérique", credits: 4 },
+  ],
+  "L1-S2": [
+    { id: "l1s2-1", intitule: "Algorithmique 2", credits: 6 },
+    { id: "l1s2-2", intitule: "Structures de Données 1", credits: 6 },
+    { id: "l1s2-3", intitule: "Mathématiques 2", credits: 6 },
+    { id: "l1s2-4", intitule: "Systèmes d'Exploitation 1", credits: 4 },
+    { id: "l1s2-5", intitule: "Logique Formelle", credits: 4 },
+  ],
+  "L2-S3": [
+    { id: "l2s3-1", intitule: "Algorithmique 3", credits: 6 },
+    { id: "l2s3-2", intitule: "Structures de Données 2", credits: 6 },
+    { id: "l2s3-3", intitule: "Systèmes d'Exploitation 2", credits: 4 },
+    { id: "l2s3-4", intitule: "Bases de Données 1", credits: 4 },
+    { id: "l2s3-5", intitule: "Probabilités et Statistiques", credits: 4 },
+  ],
+  "L2-S4": [
+    { id: "l2s4-1", intitule: "Programmation Orientée Objet", credits: 6 },
+    { id: "l2s4-2", intitule: "Bases de Données 2", credits: 6 },
+    { id: "l2s4-3", intitule: "Réseaux 1", credits: 4 },
+    { id: "l2s4-4", intitule: "Théorie des Graphes", credits: 4 },
+    { id: "l2s4-5", intitule: "Recherche Opérationnelle", credits: 4 },
+  ],
+  "L3-S5": [
+    { id: "m1", intitule: "Algorithmique", credits: 6 },
+    { id: "m2", intitule: "Structures de Données", credits: 6 },
+    { id: "m3", intitule: "Base de Données", credits: 4 },
+    { id: "m4", intitule: "Réseaux Informatiques", credits: 4 },
+    { id: "m5", intitule: "Systèmes d'Exploitation", credits: 4 },
+    { id: "m6", intitule: "Analyse Mathématique", credits: 4 },
+  ],
+  "L3-S6": [
+    { id: "l3s6-1", intitule: "Compilation", credits: 6 },
+    { id: "l3s6-2", intitule: "Intelligence Artificielle", credits: 6 },
+    { id: "l3s6-3", intitule: "Sécurité Informatique", credits: 4 },
+    { id: "l3s6-4", intitule: "Génie Logiciel", credits: 4 },
+    { id: "l3s6-5", intitule: "Programmation Web", credits: 4 },
+  ],
+  "M1-S1": [
+    { id: "m1s1-1", intitule: "Algorithmique Avancée", credits: 6 },
+    { id: "m1s1-2", intitule: "Architecture Logicielle", credits: 6 },
+    { id: "m1s1-3", intitule: "Machine Learning", credits: 6 },
+    { id: "m1s1-4", intitule: "Sécurité des Systèmes", credits: 4 },
+    { id: "m1s1-5", intitule: "Recherche Bibliographique", credits: 4 },
+  ],
+  "M1-S2": [
+    { id: "m1s2-1", intitule: "Deep Learning", credits: 6 },
+    { id: "m1s2-2", intitule: "Big Data", credits: 6 },
+    { id: "m1s2-3", intitule: "Cloud Computing", credits: 4 },
+    { id: "m1s2-4", intitule: "Projet de Recherche 1", credits: 8 },
+  ],
+  "M2-S3": [
+    { id: "m2s3-1", intitule: "Recherche Avancée en IA", credits: 6 },
+    { id: "m2s3-2", intitule: "Systèmes Embarqués", credits: 6 },
+    { id: "m2s3-3", intitule: "Vision par Ordinateur", credits: 4 },
+    { id: "m2s3-4", intitule: "Projet de Mémoire 1", credits: 8 },
+  ],
+  "M2-S4": [
+    { id: "m2s4-1", intitule: "Rédaction Scientifique", credits: 4 },
+    { id: "m2s4-2", intitule: "Mémoire de Master", credits: 20 },
+  ],
+};
+
 export const studentsDB: Record<string, { id: string; matricule: string; nom: string; prenom: string; groupe: string }[]> = {
   "L3-Groupe 1": makeGroup("L3","Groupe 1", 28),
   "L3-Groupe 2": makeGroup("L3","Groupe 2", 25),

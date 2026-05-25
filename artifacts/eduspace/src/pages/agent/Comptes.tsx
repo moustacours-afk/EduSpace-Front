@@ -27,6 +27,15 @@ const SECTIONS  = ["Section 1", "Section 2"];
 const GROUPS    = ["Groupe 1", "Groupe 2", "Groupe 3", "Groupe 4"];
 const NIVEAUX   = ["L1", "L2", "L3", "M1", "M2"];
 const GRADES    = ["MAA", "MAB", "MCA", "MCB", "Professeur"];
+const WILAYAS_ALGERIE = [
+  "Adrar","Chlef","Laghouat","Oum El Bouaghi","Batna","Béjaïa","Biskra","Béchar","Blida","Bouira",
+  "Tamanrasset","Tébessa","Tlemcen","Tiaret","Tizi Ouzou","Alger","Djelfa","Jijel","Sétif","Saïda",
+  "Skikda","Sidi Bel Abbès","Annaba","Guelma","Constantine","Médéa","Mostaganem","M'Sila","Mascara",
+  "Ouargla","Oran","El Bayadh","Illizi","Bordj Bou Arréridj","Boumerdès","El Tarf","Tindouf",
+  "Tissemsilt","El Oued","Khenchela","Souk Ahras","Tipaza","Mila","Aïn Defla","Naâma",
+  "Aïn Témouchent","Ghardaïa","Relizane","Timimoun","Bordj Badji Mokhtar","Ouled Djellal",
+  "Béni Abbès","In Salah","In Guezzam","Touggourt","Djanet","El M'Ghair","El Meniaa",
+];
 const AGENT_DEPT    = "Informatique";
 const AGENT_FACULTY = "Faculté d'Informatique";
 const AGENT_UNIV    = "Université des Sciences et de la Technologie Houari Boumediene";
@@ -163,6 +172,9 @@ export default function AgentComptes() {
   const [createdInfo, setCreatedInfo]           = useState<CreatedInfo | null>(null);
   const [showCreatedModal, setShowCreatedModal] = useState(false);
 
+  const [deleteStudentTarget, setDeleteStudentTarget] = useState<AgentStudent | null>(null);
+  const [deleteTeacherTarget, setDeleteTeacherTarget] = useState<AgentTeacher | null>(null);
+
   const [showEditModal, setShowEditModal]       = useState(false);
   const [editingTeacher, setEditingTeacher]     = useState<AgentTeacher | null>(null);
   const [editModules, setEditModules]           = useState<ModuleRow[]>([]);
@@ -181,6 +193,19 @@ export default function AgentComptes() {
   // ── helpers ──────────────────────────────────────────────
   function toggleDept(dept: string) {
     setSelectedDepts(prev => prev.includes(dept) ? prev.filter(d => d !== dept) : [...prev, dept]);
+  }
+
+  function deleteStudentFn(id: string) {
+    setStudents(prev => prev.filter(s => s.id !== id));
+    setStudentPasswordStore(prev => { const n = { ...prev }; delete n[id]; return n; });
+    setDeleteStudentTarget(null);
+    if (selectedStudent?.id === id) setSelectedStudent(null);
+  }
+  function deleteTeacherFn(id: string) {
+    setTeachers(prev => prev.filter(t => t.id !== id));
+    setTeacherPasswordStore(prev => { const n = { ...prev }; delete n[id]; return n; });
+    setDeleteTeacherTarget(null);
+    if (selectedTeacher?.id === id) setSelectedTeacher(null);
   }
 
   function toggleStudentStatus(id: string) {
@@ -262,8 +287,8 @@ export default function AgentComptes() {
     setStudentPasswordStore(prev => ({ ...prev, [newS.id]: password }));
     setShowAddStudent(false);
     setNewStudent({ nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "", matricule: "", niveau: "L3" });
-    setAddSuccess(`Étudiant ${newS.prenom} ${newS.nom} créé. Matricule : ${newS.matricule}`);
-    setTimeout(() => setAddSuccess(""), 5000);
+    setStudentCredentialsFor(newS);
+    setShowStudentCredentials(true);
   }
 
   function addTeacherFn() {
@@ -479,6 +504,9 @@ export default function AgentComptes() {
                               <Button size="sm" variant="ghost" className={`h-7 w-7 p-0 ${s.statutCompte === "actif" ? "text-amber-600" : "text-blue-600"}`} onClick={() => toggleStudentStatus(s.id)}>
                                 {s.statutCompte === "actif" ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
                               </Button>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" title="Supprimer le compte" onClick={() => setDeleteStudentTarget(s)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
                             </div>
                           </td>
                         </tr>
@@ -538,6 +566,9 @@ export default function AgentComptes() {
                               <Button size="sm" variant="ghost" className={`h-7 w-7 p-0 ${t.statutCompte === "actif" ? "text-amber-600" : "text-blue-600"}`} onClick={() => toggleTeacherStatus(t.id)}>
                                 {t.statutCompte === "actif" ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
                               </Button>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" title="Supprimer le compte" onClick={() => setDeleteTeacherTarget(t)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
                             </div>
                           </td>
                         </tr>
@@ -589,7 +620,6 @@ export default function AgentComptes() {
                           {[
                             { label: "Date de naissance", value: s.dateNaissance },
                             { label: "Wilaya de naissance", value: s.wilaya },
-                            { label: "Email", value: s.email },
                             { label: "Filière", value: s.filiere },
                             { label: "Niveau", value: s.niveau },
                             { label: "Section", value: assignment ? assignment.section : "—" },
@@ -939,8 +969,6 @@ export default function AgentComptes() {
                     { label: "Nom *", key: "nom", placeholder: "Bensalem", span: false },
                     { label: "Prénom *", key: "prenom", placeholder: "Karim", span: false },
                     { label: "Date de naissance", key: "dateNaissance", placeholder: "", type: "date", span: false },
-                    { label: "Wilaya de naissance", key: "wilayaNaissance", placeholder: "Alger", span: false },
-                    { label: "Numéro de matricule *", key: "matricule", placeholder: "Ex: 20221234567", span: true },
                   ].map(f => (
                     <div key={f.key} className={f.span ? "col-span-2" : ""}>
                       <label className="text-xs font-medium text-muted-foreground block mb-1">{f.label}</label>
@@ -949,6 +977,21 @@ export default function AgentComptes() {
                         onChange={e => setNewStudent(prev => ({ ...prev, [f.key]: e.target.value }))} className="h-9 text-sm" />
                     </div>
                   ))}
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Wilaya de naissance</label>
+                    <Select value={newStudent.wilayaNaissance || "Oran"} onValueChange={v => setNewStudent(prev => ({ ...prev, wilayaNaissance: v }))}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choisir une wilaya…" /></SelectTrigger>
+                      <SelectContent className="max-h-52">
+                        {WILAYAS_ALGERIE.map(w => <SelectItem key={w} value={w}>{w}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Numéro de matricule *</label>
+                    <Input placeholder="Ex: 20221234567"
+                      value={newStudent.matricule}
+                      onChange={e => setNewStudent(prev => ({ ...prev, matricule: e.target.value }))} className="h-9 text-sm" />
+                  </div>
                   <div className="col-span-2">
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Filière</label>
                     <div className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/30 text-sm text-muted-foreground cursor-not-allowed">
@@ -1044,6 +1087,70 @@ export default function AgentComptes() {
                 <div className="flex gap-3 mt-5">
                   <Button variant="outline" className="flex-1" onClick={() => setShowAddTeacher(false)}>Annuler</Button>
                   <Button className="flex-1" disabled={!newTeacher.nom || !newTeacher.prenom} onClick={addTeacherFn}>Créer le compte</Button>
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── DELETE STUDENT CONFIRMATION ── */}
+      <AnimatePresence>
+        {deleteStudentTarget && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
+              <Card className="p-6 w-full max-w-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                    <Trash2 className="w-4 h-4 text-red-600" />
+                  </div>
+                  <h3 className="font-bold text-base">Supprimer le compte</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Êtes-vous sûr de vouloir supprimer le compte de :
+                </p>
+                <p className="font-semibold text-sm mb-1">{deleteStudentTarget.prenom} {deleteStudentTarget.nom}</p>
+                <p className="text-xs text-muted-foreground mb-4">Matricule : {deleteStudentTarget.matricule}</p>
+                <div className="flex gap-2 p-3 bg-red-50 border border-red-100 rounded-lg mb-4 text-xs text-red-700">
+                  Cette action est irréversible. Le compte et toutes les données associées seront supprimés.
+                </div>
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1" onClick={() => setDeleteStudentTarget(null)}>Annuler</Button>
+                  <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => deleteStudentFn(deleteStudentTarget.id)}>
+                    Supprimer
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── DELETE TEACHER CONFIRMATION ── */}
+      <AnimatePresence>
+        {deleteTeacherTarget && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
+              <Card className="p-6 w-full max-w-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                    <Trash2 className="w-4 h-4 text-red-600" />
+                  </div>
+                  <h3 className="font-bold text-base">Supprimer le compte enseignant</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Êtes-vous sûr de vouloir supprimer le compte de :
+                </p>
+                <p className="font-semibold text-sm mb-1">{deleteTeacherTarget.prenom} {deleteTeacherTarget.nom}</p>
+                <p className="text-xs text-muted-foreground mb-4">Matricule : {deleteTeacherTarget.matricule} — {deleteTeacherTarget.grade}</p>
+                <div className="flex gap-2 p-3 bg-red-50 border border-red-100 rounded-lg mb-4 text-xs text-red-700">
+                  Cette action est irréversible. Le compte et tous les enseignements associés seront supprimés.
+                </div>
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1" onClick={() => setDeleteTeacherTarget(null)}>Annuler</Button>
+                  <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => deleteTeacherFn(deleteTeacherTarget.id)}>
+                    Supprimer
+                  </Button>
                 </div>
               </Card>
             </motion.div>

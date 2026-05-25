@@ -32,6 +32,7 @@ import AgentDeliberations from "@/pages/agent/Deliberations";
 import AgentCalendrier from "@/pages/agent/Calendrier";
 import AgentNotifications from "@/pages/agent/Notifications";
 import AgentOrganisationEtudiants from "@/pages/agent/OrganisationEtudiants";
+import AgentFeuilles from "@/pages/agent/Sheets";
 
 import NotFound from "@/pages/not-found";
 
@@ -103,6 +104,9 @@ function Router() {
       </Route>
       <Route path="/agent/organisation-etudiants">
         <AgentGuard component={AgentOrganisationEtudiants} />
+      </Route>
+      <Route path="/agent/feuilles">
+        <AgentGuard component={AgentFeuilles} />
       </Route>
 
       <Route component={NotFound} />
