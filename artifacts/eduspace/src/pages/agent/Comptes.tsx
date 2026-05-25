@@ -16,6 +16,7 @@ import {
   agentStudents, agentTeachers, modules, gradeSubmissions,
   type AgentStudent, type AgentTeacher, type CompteStatut,
 } from "@/data/mockData";
+import { getStudentAssignment } from "@/lib/orgStore";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
@@ -170,7 +171,7 @@ export default function AgentComptes() {
 
   const [newStudent, setNewStudent] = useState({
     nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "", matricule: "",
-    niveau: "L3", section: "Section 1", groupe: "Groupe 1",
+    niveau: "L3",
   });
   const [newTeacher, setNewTeacher]     = useState({ nom: "", prenom: "", grade: "MAA", username: "" });
   const [selectedDepts, setSelectedDepts] = useState<string[]>([AGENT_DEPT]);
@@ -251,7 +252,7 @@ export default function AgentComptes() {
     const newS: AgentStudent = {
       id: `as${Date.now()}`, matricule: newStudent.matricule, nom: newStudent.nom, prenom: newStudent.prenom,
       dateNaissance: newStudent.dateNaissance || "2001-01-01", wilaya: newStudent.wilayaNaissance || "Alger",
-      filiere: AGENT_DEPT, niveau: newStudent.niveau, groupe: newStudent.groupe, email,
+      filiere: AGENT_DEPT, niveau: newStudent.niveau, groupe: "", email,
       statutCompte: "actif", statutReinscription: "en_attente", statutPaiement: "non_paye",
       montantPaye: 0, methodePayment: "", referencePayment: "", datePayment: "",
       documents: ["CNI", "Attestation de naissance", "Bac original", "Relevé de notes", "Photo d'identité", "Reçu de paiement"].map(type => ({ type, soumis: false, verifie: false })),
@@ -260,7 +261,7 @@ export default function AgentComptes() {
     setStudents(prev => [newS, ...prev]);
     setStudentPasswordStore(prev => ({ ...prev, [newS.id]: password }));
     setShowAddStudent(false);
-    setNewStudent({ nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "", matricule: "", niveau: "L3", section: "Section 1", groupe: "Groupe 1" });
+    setNewStudent({ nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "", matricule: "", niveau: "L3" });
     setAddSuccess(`Étudiant ${newS.prenom} ${newS.nom} créé. Matricule : ${newS.matricule}`);
     setTimeout(() => setAddSuccess(""), 5000);
   }
@@ -468,7 +469,9 @@ export default function AgentComptes() {
                           <td className="px-4 py-3 font-mono text-xs">{s.matricule}</td>
                           <td className="px-4 py-3 font-medium">{s.prenom} {s.nom}</td>
                           <td className="px-4 py-3 text-muted-foreground text-xs">{s.filiere} — {s.niveau}</td>
-                          <td className="px-4 py-3 text-xs text-muted-foreground">{getSectionFromGroupe(s.groupe)}<br />{s.groupe}</td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">
+                            {(() => { const a = getStudentAssignment(s.id); return a ? <>{a.section}<br />{a.groupe}</> : <span className="italic text-muted-foreground/50">—</span>; })()}
+                          </td>
                           <td className="px-4 py-3 text-center"><Badge className={`text-xs border ${statutCompteBadge[s.statutCompte]}`}>{s.statutCompte}</Badge></td>
                           <td className="px-4 py-3 text-center">
                             <div className="flex justify-center gap-1">
@@ -579,31 +582,33 @@ export default function AgentComptes() {
                       <GraduationCap className="w-4 h-4 text-primary" />
                       <span className="font-semibold text-sm">Informations personnelles</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      {[
-                        { label: "Date de naissance", value: s.dateNaissance },
-                        { label: "Wilaya de naissance", value: s.wilaya },
-                        { label: "Email", value: s.email },
-                        { label: "Filière", value: s.filiere },
-                        { label: "Niveau", value: s.niveau },
-                        { label: "Groupe", value: s.groupe },
-                      ].map(f => (
-                        <div key={f.label} className="bg-muted/20 rounded-lg p-3">
-                          <p className="text-xs text-muted-foreground">{f.label}</p>
-                          <p className="font-medium mt-0.5 break-all">{f.value}</p>
+                    {(() => {
+                      const assignment = getStudentAssignment(s.id);
+                      return (
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          {[
+                            { label: "Date de naissance", value: s.dateNaissance },
+                            { label: "Wilaya de naissance", value: s.wilaya },
+                            { label: "Email", value: s.email },
+                            { label: "Filière", value: s.filiere },
+                            { label: "Niveau", value: s.niveau },
+                            { label: "Section", value: assignment ? assignment.section : "—" },
+                            { label: "Groupe", value: assignment ? assignment.groupe : "—" },
+                          ].map(f => (
+                            <div key={f.label} className="bg-muted/20 rounded-lg p-3">
+                              <p className="text-xs text-muted-foreground">{f.label}</p>
+                              <p className={`font-medium mt-0.5 break-all ${!assignment && (f.label === "Section" || f.label === "Groupe") ? "text-muted-foreground/50 italic" : ""}`}>{f.value}</p>
+                            </div>
+                          ))}
+                          <div className="bg-muted/20 rounded-lg p-3 flex items-center justify-between gap-2 col-span-2">
+                            <Button size="sm" variant="outline" className="gap-1.5 text-xs border-violet-300 text-violet-700 hover:bg-violet-50"
+                              onClick={() => { setStudentCredentialsFor(s); setShowStudentCredentials(true); }}>
+                              <KeyRound className="w-3.5 h-3.5" />Afficher matricule et mot de passe
+                            </Button>
+                          </div>
                         </div>
-                      ))}
-                      <div className="bg-muted/20 rounded-lg p-3 flex items-start justify-between gap-2 col-span-2">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Section</p>
-                          <p className="font-medium mt-0.5">{getSectionFromGroupe(s.groupe)}</p>
-                        </div>
-                        <Button size="sm" variant="outline" className="gap-1.5 text-xs border-violet-300 text-violet-700 hover:bg-violet-50 flex-shrink-0 mt-1"
-                          onClick={() => { setStudentCredentialsFor(s); setShowStudentCredentials(true); }}>
-                          <KeyRound className="w-3.5 h-3.5" />Afficher matricule et mot de passe
-                        </Button>
-                      </div>
-                    </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="space-y-1">
@@ -950,26 +955,16 @@ export default function AgentComptes() {
                       {AGENT_DEPT} <span className="ml-2 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">non modifiable</span>
                     </div>
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Niveau</label>
                     <Select value={newStudent.niveau} onValueChange={v => setNewStudent(prev => ({ ...prev, niveau: v }))}>
                       <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>{NIVEAUX.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">Section</label>
-                    <Select value={newStudent.section} onValueChange={v => setNewStudent(prev => ({ ...prev, section: v }))}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                      <SelectContent>{SECTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">Groupe</label>
-                    <Select value={newStudent.groupe} onValueChange={v => setNewStudent(prev => ({ ...prev, groupe: v }))}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                      <SelectContent>{GROUPS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
-                    </Select>
+                  <div className="col-span-2 flex items-center gap-2 p-3 bg-muted/20 rounded-lg text-xs text-muted-foreground">
+                    <CheckCircle className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                    La section et le groupe seront attribués via <strong className="mx-1">Organisation des étudiants</strong>.
                   </div>
                 </div>
                 <div className="mt-3 flex items-center gap-2 bg-muted/20 rounded-lg p-3 text-xs text-muted-foreground">

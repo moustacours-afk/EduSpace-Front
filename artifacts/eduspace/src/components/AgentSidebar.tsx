@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Users, CalendarDays, CheckSquare, LogOut,
   GraduationCap, Bell, BookOpen, Calendar,
-  ChevronLeft, ChevronRight, ListChecks,
+  ChevronLeft, ChevronRight, ListChecks, Layers,
 } from "lucide-react";
 
 const navSections = [
@@ -18,6 +18,12 @@ const navSections = [
     items: [
       { href: "/agent/comptes/etudiants", icon: GraduationCap, label: "Comptes étudiants" },
       { href: "/agent/comptes/enseignants", icon: Users, label: "Comptes enseignants" },
+    ],
+  },
+  {
+    label: "Organisation",
+    items: [
+      { href: "/agent/organisation-etudiants", icon: Layers, label: "Organisation des étudiants" },
     ],
   },
   {
