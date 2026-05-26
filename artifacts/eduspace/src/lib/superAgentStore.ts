@@ -6,6 +6,8 @@ export type AgentAccount = {
   motDePasse: string;
   wilaya: string;
   etablissement: string;
+  faculte: string;
+  departement: string;
   createdAt: string;
   active: boolean;
 };
@@ -18,18 +20,17 @@ export type ModuleEntry = {
   ue: string;
 };
 
-export type SemestreModules = {
+export type ProgrammeEntry = {
+  faculte: string;
+  departement: string;
+  specialite: string;
+  niveau: string;
   semestre: string;
   modules: ModuleEntry[];
 };
 
-export type NiveauProgram = {
-  niveau: string;
-  semestres: SemestreModules[];
-};
-
 const AGENTS_KEY = "superAgent_agents";
-const MODULES_KEY = "superAgent_modules";
+const PROGRAMMES_KEY = "superAgent_programmes";
 
 export const NIVEAUX_LIST = ["L1", "L2", "L3", "M1", "M2", "ING1", "ING2", "ING3"];
 
@@ -49,59 +50,368 @@ export const WILAYAS = [
   "Aïn Témouchent","Ghardaïa","Relizane",
 ];
 
-const DEFAULT_MODULES: Record<string, ModuleEntry[]> = {
-  "L1-S1": [
-    { id: "l1s1-1", nom: "Algorithmique 1", coefficient: 3, credits: 6, ue: "UEF 1.1" },
-    { id: "l1s1-2", nom: "Architecture des Ordinateurs", coefficient: 2, credits: 4, ue: "UEF 1.1" },
-    { id: "l1s1-3", nom: "Analyse 1", coefficient: 3, credits: 6, ue: "UEM 1.1" },
-    { id: "l1s1-4", nom: "Algèbre 1", coefficient: 2, credits: 4, ue: "UEM 1.1" },
-    { id: "l1s1-5", nom: "Langue Française", coefficient: 1, credits: 1, ue: "UET 1.1" },
-    { id: "l1s1-6", nom: "Anglais Technique", coefficient: 1, credits: 1, ue: "UET 1.1" },
+export const ETABLISSEMENTS_PAR_WILAYA: Record<string, string[]> = {
+  "Adrar": ["Université Ahmed Draia — Adrar"],
+  "Chlef": ["Université Hassiba Ben Bouali — Chlef"],
+  "Laghouat": ["Université Amar Telidji — Laghouat"],
+  "Oum El Bouaghi": ["Université Larbi Ben M'hidi — Oum El Bouaghi"],
+  "Batna": ["Université Hadj Lakhdar — Batna 1", "Université Mostefa Ben Boulaïd — Batna 2"],
+  "Béjaïa": ["Université Abderrahmane Mira — Béjaïa"],
+  "Biskra": ["Université Mohamed Khider — Biskra"],
+  "Béchar": ["Université Tahri Mohamed — Béchar"],
+  "Blida": ["Université Saad Dahleb — Blida 1", "Université Ali Lounici — Blida 2"],
+  "Bouira": ["Université Akli Mohand Oulhadj — Bouira"],
+  "Tamanrasset": ["Centre Universitaire Tamanrasset"],
+  "Tébessa": ["Université Larbi Tébessi — Tébessa"],
+  "Tlemcen": ["Université Abou Bekr Belkaid — Tlemcen"],
+  "Tiaret": ["Université Ibn Khaldoun — Tiaret"],
+  "Tizi Ouzou": ["Université Mouloud Mammeri — Tizi Ouzou"],
+  "Alger": [
+    "USTHB — Université des Sciences et de la Technologie Houari Boumediene",
+    "Université d'Alger 1 — Benyoucef Benkhedda",
+    "Université d'Alger 2 — Abou El Kacem Saâdallah",
+    "Université d'Alger 3 — Hassiba Ben Bouali",
+    "École Nationale Polytechnique — Alger (ENP)",
+    "École Nationale Supérieure d'Informatique (ESI)",
   ],
-  "L1-S2": [
-    { id: "l1s2-1", nom: "Algorithmique 2", coefficient: 3, credits: 6, ue: "UEF 1.2" },
-    { id: "l1s2-2", nom: "Systèmes d'Exploitation 1", coefficient: 2, credits: 4, ue: "UEF 1.2" },
-    { id: "l1s2-3", nom: "Analyse 2", coefficient: 3, credits: 6, ue: "UEM 1.2" },
-    { id: "l1s2-4", nom: "Probabilités & Statistiques", coefficient: 2, credits: 4, ue: "UEM 1.2" },
+  "Djelfa": ["Université Ziane Achour — Djelfa"],
+  "Jijel": ["Université Mohammed Seddik Ben Yahia — Jijel"],
+  "Sétif": ["Université Ferhat Abbas — Sétif 1", "Université El-Arbi Ben M'hidi — Sétif 2"],
+  "Saïda": ["Université Dr. Moulay Tahar — Saïda"],
+  "Skikda": ["Université 20 Août 1955 — Skikda"],
+  "Sidi Bel Abbès": ["Université Djillali Liabes — Sidi Bel Abbès"],
+  "Annaba": ["Université Badji Mokhtar — Annaba"],
+  "Guelma": ["Université 8 Mai 1945 — Guelma"],
+  "Constantine": [
+    "Université Constantine 1 — Frères Mentouri",
+    "Université Constantine 2 — Abdelhamid Mehri",
+    "Université Constantine 3 — Salah Boubnider",
   ],
-  "L2-S3": [
-    { id: "l2s3-1", nom: "Structures de Données", coefficient: 3, credits: 6, ue: "UEF 2.1" },
-    { id: "l2s3-2", nom: "Programmation Orientée Objet", coefficient: 3, credits: 6, ue: "UEF 2.1" },
-    { id: "l2s3-3", nom: "Systèmes d'Exploitation 2", coefficient: 2, credits: 4, ue: "UEF 2.2" },
-    { id: "l2s3-4", nom: "Recherche Opérationnelle", coefficient: 2, credits: 4, ue: "UEM 2.1" },
+  "Médéa": ["Université Yahia Fares — Médéa"],
+  "Mostaganem": ["Université Abdelhamid Ibn Badis — Mostaganem"],
+  "M'Sila": ["Université Mohammed Boudiaf — M'Sila"],
+  "Mascara": ["Université Mustapha Stambouli — Mascara"],
+  "Ouargla": ["Université Kasdi Merbah — Ouargla"],
+  "Oran": [
+    "USTO-MB — Université des Sciences et de la Technologie d'Oran",
+    "Université d'Oran 1 — Ahmed Ben Bella",
+    "Université d'Oran 2 — Mohamed Ben Ahmed",
+    "École Nationale Polytechnique d'Oran — Maurice Audin (ENPO)",
   ],
-  "L2-S4": [
-    { id: "l2s4-1", nom: "Base de Données 1", coefficient: 3, credits: 6, ue: "UEF 2.3" },
-    { id: "l2s4-2", nom: "Réseaux 1", coefficient: 2, credits: 4, ue: "UEF 2.3" },
-    { id: "l2s4-3", nom: "Compilation", coefficient: 3, credits: 6, ue: "UEF 2.4" },
-    { id: "l2s4-4", nom: "Logique Mathématique", coefficient: 2, credits: 4, ue: "UEM 2.2" },
+  "El Bayadh": ["Centre Universitaire Nour Bachir — El Bayadh"],
+  "Illizi": ["Centre Universitaire — Illizi"],
+  "Bordj Bou Arréridj": ["Université Mohamed El Bachir El Ibrahimi — Bordj Bou Arréridj"],
+  "Boumerdès": ["Université M'Hamed Bougara — Boumerdès"],
+  "El Tarf": ["Centre Universitaire — El Tarf"],
+  "Tindouf": ["Centre Universitaire — Tindouf"],
+  "Tissemsilt": ["Centre Universitaire — Tissemsilt"],
+  "El Oued": ["Université Echahid Hamma Lakhdar — El Oued"],
+  "Khenchela": ["Université Abbas Laghrour — Khenchela"],
+  "Souk Ahras": ["Université Mohamed Chérif Messaadia — Souk Ahras"],
+  "Tipaza": ["Centre Universitaire — Tipaza"],
+  "Mila": ["Centre Universitaire Abdelhafid Boussouf — Mila"],
+  "Aïn Defla": ["Centre Universitaire — Aïn Defla"],
+  "Naâma": ["Centre Universitaire Ahmed Salhi — Naâma"],
+  "Aïn Témouchent": ["Centre Universitaire Belhadj Bouchaib — Aïn Témouchent"],
+  "Ghardaïa": ["Université Ghardaïa"],
+  "Relizane": ["Centre Universitaire Abdelkader Askeur — Relizane"],
+};
+
+const FACULTES_COMMUNES = [
+  "Faculté des Mathématiques et Informatique",
+  "Faculté des Sciences",
+  "Faculté des Sciences de l'Ingénieur",
+  "Faculté de Technologie",
+  "Faculté des Sciences Économiques, Commerciales et de Gestion",
+  "Faculté des Lettres et Langues",
+  "Faculté des Sciences Humaines et Sociales",
+  "Faculté de Droit et Science Politique",
+  "Faculté de Médecine",
+  "Faculté des Sciences de la Nature et de la Vie",
+];
+
+const FACULTES_SPECIFIQUES: Record<string, string[]> = {
+  "USTHB — Université des Sciences et de la Technologie Houari Boumediene": [
+    "Faculté d'Informatique",
+    "Faculté de Mathématiques",
+    "Faculté d'Électronique",
+    "Faculté de Génie Mécanique et Génie des Procédés",
+    "Faculté de Génie Civil",
+    "Faculté de Chimie",
+    "Faculté de Physique",
+    "Faculté de Génie Électrique",
+    "Faculté des Sciences Biologiques",
+    "Faculté des Sciences de la Terre, Géographie et Aménagement du Territoire",
   ],
-  "L3-S5": [
-    { id: "l3s5-1", nom: "Algorithmique Avancée", coefficient: 3, credits: 6, ue: "UEF 1.1" },
-    { id: "l3s5-2", nom: "Structures de Données", coefficient: 2, credits: 4, ue: "UEF 1.1" },
-    { id: "l3s5-3", nom: "Base de Données", coefficient: 3, credits: 6, ue: "UEF 1.2" },
-    { id: "l3s5-4", nom: "Réseaux Informatiques", coefficient: 2, credits: 4, ue: "UEF 1.2" },
-    { id: "l3s5-5", nom: "Systèmes d'Exploitation", coefficient: 2, credits: 4, ue: "UET 1.1" },
-    { id: "l3s5-6", nom: "Analyse Mathématique", coefficient: 2, credits: 2, ue: "UEM 1.1" },
+  "USTO-MB — Université des Sciences et de la Technologie d'Oran": [
+    "Faculté de Mathématiques et d'Informatique",
+    "Faculté de Physique",
+    "Faculté de Chimie",
+    "Faculté des Sciences de la Nature et de la Vie",
+    "Faculté d'Architecture et Génie Civil",
+    "Faculté de Génie Mécanique",
+    "Faculté d'Électrotechnique",
+    "Faculté de Génie des Procédés",
+    "Faculté des Sciences de la Terre et de l'Univers",
   ],
-  "L3-S6": [
-    { id: "l3s6-1", nom: "Compilation", coefficient: 3, credits: 6, ue: "UEF 2.1" },
-    { id: "l3s6-2", nom: "Intelligence Artificielle", coefficient: 2, credits: 4, ue: "UEF 2.1" },
-    { id: "l3s6-3", nom: "Sécurité Informatique", coefficient: 2, credits: 4, ue: "UEF 2.2" },
-    { id: "l3s6-4", nom: "Génie Logiciel", coefficient: 2, credits: 4, ue: "UEF 2.2" },
-    { id: "l3s6-5", nom: "Développement Web", coefficient: 2, credits: 2, ue: "UEO 2.1" },
+  "École Nationale Polytechnique — Alger (ENP)": [
+    "Faculté de Génie Civil",
+    "Faculté de Génie Mécanique",
+    "Faculté d'Électrotechnique",
+    "Faculté de Génie des Procédés",
+    "Faculté de Génie Industriel",
+    "Faculté d'Informatique",
+    "Faculté d'Hydraulique",
   ],
-  "M1-S1": [
-    { id: "m1s1-1", nom: "Apprentissage Automatique", coefficient: 3, credits: 6, ue: "UEF 1.1" },
-    { id: "m1s1-2", nom: "Traitement du Signal", coefficient: 2, credits: 4, ue: "UEF 1.1" },
-    { id: "m1s1-3", nom: "Réseaux Avancés", coefficient: 3, credits: 6, ue: "UEF 1.2" },
+  "École Nationale Supérieure d'Informatique (ESI)": [
+    "Faculté d'Informatique Fondamentale et Appliquée",
+    "Faculté des Systèmes Intelligents et Embarqués",
+    "Faculté des Technologies de l'Information et de la Communication",
   ],
-  "M1-S2": [
-    { id: "m1s2-1", nom: "Deep Learning", coefficient: 3, credits: 6, ue: "UEF 2.1" },
-    { id: "m1s2-2", nom: "Big Data", coefficient: 3, credits: 6, ue: "UEF 2.1" },
-    { id: "m1s2-3", nom: "Cloud Computing", coefficient: 2, credits: 4, ue: "UEF 2.2" },
+  "École Nationale Polytechnique d'Oran — Maurice Audin (ENPO)": [
+    "Faculté de Génie Mécanique",
+    "Faculté d'Électrotechnique",
+    "Faculté de Génie des Procédés",
+    "Faculté de Génie Civil",
+    "Faculté de Génie Industriel",
   ],
 };
+
+export const DEPARTEMENTS_PAR_FACULTE: Record<string, string[]> = {
+  "Faculté des Mathématiques et Informatique": ["Informatique", "Mathématiques", "Statistiques et Probabilités"],
+  "Faculté d'Informatique": ["Informatique", "Systèmes et Réseaux Informatiques", "Génie Logiciel"],
+  "Faculté de Mathématiques et d'Informatique": ["Informatique", "Mathématiques", "Statistiques"],
+  "Faculté d'Informatique Fondamentale et Appliquée": ["Informatique Fondamentale", "Informatique Appliquée"],
+  "Faculté des Systèmes Intelligents et Embarqués": ["Intelligence Artificielle", "Systèmes Embarqués"],
+  "Faculté des Technologies de l'Information et de la Communication": ["Réseaux et Systèmes", "Sécurité Informatique", "Technologies Web et Mobile"],
+  "Faculté de Mathématiques": ["Mathématiques", "Recherche Opérationnelle", "Probabilités et Statistiques"],
+  "Faculté d'Électronique": ["Électronique", "Télécommunications", "Microélectronique"],
+  "Faculté de Génie Mécanique et Génie des Procédés": ["Génie Mécanique", "Génie des Procédés"],
+  "Faculté de Génie Mécanique": ["Génie Mécanique", "Énergétique", "Construction Mécanique"],
+  "Faculté de Génie Civil": ["Génie Civil", "Hydraulique", "Aménagement du Territoire"],
+  "Faculté d'Architecture et Génie Civil": ["Architecture", "Génie Civil", "Hydraulique"],
+  "Faculté de Génie Électrique": ["Électrotechnique", "Automatique", "Génie Électrique"],
+  "Faculté d'Électrotechnique": ["Électrotechnique", "Génie Électrique", "Automatique"],
+  "Faculté de Génie des Procédés": ["Génie Chimique", "Génie Pétrolier", "Génie de l'Environnement"],
+  "Faculté de Génie Industriel": ["Génie Industriel", "Logistique et Supply Chain"],
+  "Faculté de Chimie": ["Chimie Industrielle", "Génie Chimique", "Chimie Analytique"],
+  "Faculté de Physique": ["Physique", "Physique Théorique", "Physique des Matériaux"],
+  "Faculté d'Hydraulique": ["Hydraulique", "Ressources en Eau"],
+  "Faculté des Sciences": ["Physique", "Chimie", "Biologie", "Biochimie"],
+  "Faculté des Sciences de l'Ingénieur": ["Génie Civil", "Génie Mécanique", "Génie Électrique", "Génie Industriel"],
+  "Faculté de Technologie": ["Génie Civil", "Génie Électrique", "Génie Mécanique", "Informatique"],
+  "Faculté des Sciences Économiques, Commerciales et de Gestion": ["Sciences Économiques", "Sciences Commerciales", "Sciences de Gestion"],
+  "Faculté des Lettres et Langues": ["Langue et Littérature Arabes", "Langue et Littérature Françaises", "Langue et Littérature Anglaises", "Traduction"],
+  "Faculté des Sciences Humaines et Sociales": ["Psychologie", "Sociologie", "Histoire", "Géographie"],
+  "Faculté de Droit et Science Politique": ["Droit Privé", "Droit Public", "Science Politique"],
+  "Faculté de Médecine": ["Médecine", "Pharmacie", "Chirurgie Dentaire"],
+  "Faculté des Sciences de la Nature et de la Vie": ["Biologie", "Biochimie", "Microbiologie", "Écologie et Environnement"],
+  "Faculté des Sciences de la Terre, Géographie et Aménagement du Territoire": ["Géologie", "Géographie", "Aménagement du Territoire"],
+  "Faculté des Sciences de la Terre et de l'Univers": ["Géologie", "Géophysique"],
+  "Faculté des Sciences Biologiques": ["Biologie Cellulaire et Moléculaire", "Biochimie", "Microbiologie"],
+};
+
+const SPECIALITES_PAR_DEPT_NIVEAU: Record<string, Partial<Record<string, string[]>>> = {
+  "Informatique": {
+    L3: ["Systèmes Informatiques", "Génie Logiciel", "Bases de Données et Systèmes d'Information"],
+    M1: ["Apprentissage Automatique et IA", "Réseaux et Cybersécurité", "Génie Logiciel Avancé", "Systèmes Distribués"],
+    M2: ["Apprentissage Automatique et IA", "Réseaux et Cybersécurité", "Génie Logiciel Avancé", "Systèmes Distribués"],
+    ING1: ["Génie des Systèmes Informatiques"],
+    ING2: ["Génie des Systèmes Informatiques", "Réseaux et Télécommunications", "Sécurité Informatique"],
+    ING3: ["Génie des Systèmes Informatiques", "Réseaux et Télécommunications", "Sécurité Informatique"],
+  },
+  "Systèmes et Réseaux Informatiques": {
+    L3: ["Réseaux Informatiques", "Administration Systèmes"],
+    M1: ["Réseaux Avancés", "Sécurité des Réseaux", "Cloud Computing"],
+    M2: ["Réseaux Avancés", "Sécurité des Réseaux", "Cloud Computing"],
+    ING1: ["Réseaux et Systèmes"],
+    ING2: ["Réseaux et Télécommunications", "Sécurité Informatique"],
+    ING3: ["Réseaux et Télécommunications", "Sécurité Informatique"],
+  },
+  "Génie Logiciel": {
+    L3: ["Développement Logiciel", "Tests et Qualité Logicielle"],
+    M1: ["Architecture Logicielle", "DevOps et Cloud", "Développement Web et Mobile"],
+    M2: ["Architecture Logicielle", "DevOps et Cloud", "Développement Web et Mobile"],
+    ING1: ["Génie Logiciel"],
+    ING2: ["Génie Logiciel et Systèmes d'Information", "Développement Web et Mobile"],
+    ING3: ["Génie Logiciel et Systèmes d'Information", "Développement Web et Mobile"],
+  },
+  "Informatique Fondamentale": {
+    L3: ["Algorithmique et Complexité", "Langages et Compilation"],
+    M1: ["Calcul Formel", "Vérification et Preuve", "Théorie des Langages"],
+    M2: ["Calcul Formel", "Vérification et Preuve", "Théorie des Langages"],
+    ING1: ["Informatique Fondamentale"],
+    ING2: ["Informatique Théorique Appliquée"],
+    ING3: ["Informatique Théorique Appliquée"],
+  },
+  "Informatique Appliquée": {
+    L3: ["Systèmes d'Information", "Développement d'Applications"],
+    M1: ["Systèmes Intelligents", "Big Data et Analyse", "Informatique Décisionnelle"],
+    M2: ["Systèmes Intelligents", "Big Data et Analyse", "Informatique Décisionnelle"],
+    ING1: ["Informatique Appliquée"],
+    ING2: ["Systèmes d'Information Avancés", "Développement Logiciel Avancé"],
+    ING3: ["Systèmes d'Information Avancés", "Développement Logiciel Avancé"],
+  },
+  "Intelligence Artificielle": {
+    L3: ["Machine Learning", "Traitement du Langage Naturel"],
+    M1: ["Deep Learning", "Vision Artificielle", "Robotique Intelligente"],
+    M2: ["Deep Learning", "Vision Artificielle", "Robotique Intelligente"],
+    ING1: ["Intelligence Artificielle"],
+    ING2: ["IA Embarquée", "Systèmes Multi-Agents"],
+    ING3: ["IA Embarquée", "Systèmes Multi-Agents"],
+  },
+  "Systèmes Embarqués": {
+    L3: ["Microcontrôleurs", "Systèmes Temps Réel"],
+    M1: ["Conception de Systèmes Embarqués", "IoT et Réseaux de Capteurs"],
+    M2: ["Conception de Systèmes Embarqués", "IoT et Réseaux de Capteurs"],
+    ING1: ["Systèmes Embarqués"],
+    ING2: ["Systèmes Embarqués Avancés", "IoT Industriel"],
+    ING3: ["Systèmes Embarqués Avancés", "IoT Industriel"],
+  },
+  "Réseaux et Systèmes": {
+    L3: ["Administration Réseau", "Sécurité des Systèmes"],
+    M1: ["Réseaux Avancés et SDN", "Cybersécurité"],
+    M2: ["Réseaux Avancés et SDN", "Cybersécurité"],
+    ING1: ["Réseaux et Systèmes"],
+    ING2: ["Réseaux Haut Débit", "Sécurité des Infrastructures"],
+    ING3: ["Réseaux Haut Débit", "Sécurité des Infrastructures"],
+  },
+  "Sécurité Informatique": {
+    L3: ["Cryptographie", "Sécurité des Systèmes"],
+    M1: ["Cybersécurité Avancée", "Sécurité des Réseaux"],
+    M2: ["Cybersécurité Avancée", "Sécurité des Réseaux"],
+    ING1: ["Sécurité Informatique"],
+    ING2: ["Sécurité Offensive et Défensive", "Forensique Numérique"],
+    ING3: ["Sécurité Offensive et Défensive", "Forensique Numérique"],
+  },
+  "Technologies Web et Mobile": {
+    L3: ["Développement Web", "Développement Mobile"],
+    M1: ["Architecture Web", "Applications Mobile Avancées"],
+    M2: ["Architecture Web", "Applications Mobile Avancées"],
+    ING1: ["Technologies Web et Mobile"],
+    ING2: ["Développement Full Stack", "UX/UI Design"],
+    ING3: ["Développement Full Stack", "UX/UI Design"],
+  },
+  "Mathématiques": {
+    L3: ["Mathématiques Fondamentales", "Mathématiques Appliquées"],
+    M1: ["Analyse Fonctionnelle", "Algèbre et Géométrie", "Mathématiques Numériques"],
+    M2: ["Analyse Fonctionnelle", "Algèbre et Géométrie", "Mathématiques Numériques"],
+  },
+  "Recherche Opérationnelle": {
+    L3: ["Optimisation", "Aide à la Décision"],
+    M1: ["Optimisation Avancée", "Modélisation Stochastique"],
+    M2: ["Optimisation Avancée", "Modélisation Stochastique"],
+  },
+  "Statistiques": {
+    L3: ["Statistiques et Informatique Décisionnelle", "Actuariat"],
+    M1: ["Statistiques Appliquées", "Biostatistiques"],
+    M2: ["Statistiques Appliquées", "Biostatistiques"],
+  },
+  "Statistiques et Probabilités": {
+    L3: ["Statistiques", "Probabilités Appliquées"],
+    M1: ["Statistiques Mathématiques", "Modèles Stochastiques"],
+    M2: ["Statistiques Mathématiques", "Modèles Stochastiques"],
+  },
+  "Électronique": {
+    L3: ["Électronique des Systèmes", "Microélectronique"],
+    M1: ["Électronique Avancée", "Conception de Circuits Intégrés"],
+    M2: ["Électronique Avancée", "Conception de Circuits Intégrés"],
+    ING1: ["Électronique"],
+    ING2: ["Électronique Industrielle", "Microélectronique et Nano-Technologies"],
+    ING3: ["Électronique Industrielle", "Microélectronique et Nano-Technologies"],
+  },
+  "Télécommunications": {
+    L3: ["Réseaux de Télécommunications", "Traitement du Signal"],
+    M1: ["Systèmes de Communications Avancés", "Réseaux Mobile 5G"],
+    M2: ["Systèmes de Communications Avancés", "Réseaux Mobile 5G"],
+    ING1: ["Télécommunications"],
+    ING2: ["Réseaux et Télécommunications", "Communications Mobiles"],
+    ING3: ["Réseaux et Télécommunications", "Communications Mobiles"],
+  },
+  "Génie Civil": {
+    L3: ["Constructions", "Hydraulique Urbaine"],
+    M1: ["Structures", "Géotechnique et Fondations", "Hydraulique"],
+    M2: ["Structures", "Géotechnique et Fondations", "Hydraulique"],
+    ING1: ["Génie Civil"],
+    ING2: ["Structures et Matériaux", "Géotechnique"],
+    ING3: ["Structures et Matériaux", "Géotechnique"],
+  },
+  "Génie Mécanique": {
+    L3: ["Fabrication Mécanique", "Mécanique des Fluides"],
+    M1: ["Conception Mécanique", "Mécatronique", "Énergétique"],
+    M2: ["Conception Mécanique", "Mécatronique", "Énergétique"],
+    ING1: ["Génie Mécanique"],
+    ING2: ["Construction Mécanique", "Énergétique et Turbomachines"],
+    ING3: ["Construction Mécanique", "Énergétique et Turbomachines"],
+  },
+  "Génie Électrique": {
+    L3: ["Électrotechnique", "Automatique"],
+    M1: ["Commande des Systèmes", "Électronique de Puissance"],
+    M2: ["Commande des Systèmes", "Électronique de Puissance"],
+    ING1: ["Génie Électrique"],
+    ING2: ["Électrotechnique Industrielle", "Automatique et Systèmes Embarqués"],
+    ING3: ["Électrotechnique Industrielle", "Automatique et Systèmes Embarqués"],
+  },
+  "Électrotechnique": {
+    L3: ["Machines Électriques", "Systèmes de Puissance"],
+    M1: ["Commande des Machines Électriques", "Réseaux Électriques Intelligents"],
+    M2: ["Commande des Machines Électriques", "Réseaux Électriques Intelligents"],
+    ING1: ["Électrotechnique"],
+    ING2: ["Électrotechnique Industrielle", "Énergie Renouvelable"],
+    ING3: ["Électrotechnique Industrielle", "Énergie Renouvelable"],
+  },
+  "Génie des Procédés": {
+    L3: ["Procédés Chimiques", "Génie des Réactions"],
+    M1: ["Génie des Procédés Avancés", "Génie de l'Environnement"],
+    M2: ["Génie des Procédés Avancés", "Génie de l'Environnement"],
+    ING1: ["Génie des Procédés"],
+    ING2: ["Procédés Industriels", "Génie de l'Environnement"],
+    ING3: ["Procédés Industriels", "Génie de l'Environnement"],
+  },
+  "Génie Industriel": {
+    L3: ["Gestion de Production", "Qualité et Maintenance"],
+    M1: ["Systèmes de Production", "Logistique Industrielle"],
+    M2: ["Systèmes de Production", "Logistique Industrielle"],
+    ING1: ["Génie Industriel"],
+    ING2: ["Gestion Industrielle", "Sûreté et Maintenance Industrielle"],
+    ING3: ["Gestion Industrielle", "Sûreté et Maintenance Industrielle"],
+  },
+  "Sciences Économiques": {
+    L3: ["Économie Monétaire et Bancaire", "Économie du Développement"],
+    M1: ["Économie Quantitative", "Finance et Banque"],
+    M2: ["Économie Quantitative", "Finance et Banque"],
+  },
+  "Sciences Commerciales": {
+    L3: ["Commerce International", "Marketing"],
+    M1: ["Management Commercial", "Commerce Électronique"],
+    M2: ["Management Commercial", "Commerce Électronique"],
+  },
+  "Sciences de Gestion": {
+    L3: ["Management des Organisations", "Comptabilité et Audit"],
+    M1: ["Management Stratégique", "Audit et Contrôle de Gestion"],
+    M2: ["Management Stratégique", "Audit et Contrôle de Gestion"],
+  },
+};
+
+export function getFacultes(etablissement: string): string[] {
+  return FACULTES_SPECIFIQUES[etablissement] ?? FACULTES_COMMUNES;
+}
+
+export function getAllFacultes(): string[] {
+  const all = new Set([...FACULTES_COMMUNES, ...Object.values(FACULTES_SPECIFIQUES).flat()]);
+  return [...all].sort();
+}
+
+export function getDepartements(faculte: string): string[] {
+  return DEPARTEMENTS_PAR_FACULTE[faculte] ?? [];
+}
+
+export function getSpecialites(departement: string, niveau: string): string[] {
+  if (niveau === "L1" || niveau === "L2") return ["Tronc commun"];
+  return SPECIALITES_PAR_DEPT_NIVEAU[departement]?.[niveau] ?? ["Spécialité principale"];
+}
+
+// ── Agent CRUD ──────────────────────────────────────────────────────────────
 
 function loadAgents(): AgentAccount[] {
   try { return JSON.parse(localStorage.getItem(AGENTS_KEY) ?? "[]"); }
@@ -110,24 +420,6 @@ function loadAgents(): AgentAccount[] {
 
 function saveAgents(a: AgentAccount[]) {
   localStorage.setItem(AGENTS_KEY, JSON.stringify(a));
-}
-
-function loadModules(): NiveauProgram[] {
-  try {
-    const stored = JSON.parse(localStorage.getItem(MODULES_KEY) ?? "null");
-    if (stored) return stored;
-  } catch {}
-  return NIVEAUX_LIST.map(niveau => ({
-    niveau,
-    semestres: (SEMESTRES_PAR_NIVEAU[niveau] ?? ["S1", "S2"]).map(semestre => ({
-      semestre,
-      modules: DEFAULT_MODULES[`${niveau}-${semestre}`] ?? [],
-    })),
-  }));
-}
-
-function saveModules(m: NiveauProgram[]) {
-  localStorage.setItem(MODULES_KEY, JSON.stringify(m));
 }
 
 export function getAgents(): AgentAccount[] { return loadAgents(); }
@@ -149,18 +441,56 @@ export function toggleAgentActive(id: string) {
   if (idx !== -1) { agents[idx].active = !agents[idx].active; saveAgents(agents); }
 }
 
-export function getModules(): NiveauProgram[] { return loadModules(); }
+// ── Programme / Module CRUD ─────────────────────────────────────────────────
 
-export function addModule(niveau: string, semestre: string, mod: Omit<ModuleEntry, "id">) {
-  const programs = loadModules();
-  const prog = programs.find(p => p.niveau === niveau);
-  const sem = prog?.semestres.find(s => s.semestre === semestre);
-  if (sem) { sem.modules.push({ ...mod, id: crypto.randomUUID() }); saveModules(programs); }
+function loadProgrammes(): ProgrammeEntry[] {
+  try { return JSON.parse(localStorage.getItem(PROGRAMMES_KEY) ?? "[]"); }
+  catch { return []; }
 }
 
-export function removeModule(niveau: string, semestre: string, moduleId: string) {
-  const programs = loadModules();
-  const prog = programs.find(p => p.niveau === niveau);
-  const sem = prog?.semestres.find(s => s.semestre === semestre);
-  if (sem) { sem.modules = sem.modules.filter(m => m.id !== moduleId); saveModules(programs); }
+function saveProgrammes(p: ProgrammeEntry[]) {
+  localStorage.setItem(PROGRAMMES_KEY, JSON.stringify(p));
+}
+
+export function getProgrammes(): ProgrammeEntry[] { return loadProgrammes(); }
+
+export function getModulesForProgramme(
+  faculte: string, departement: string, specialite: string, niveau: string, semestre: string
+): ModuleEntry[] {
+  return loadProgrammes().find(p =>
+    p.faculte === faculte && p.departement === departement &&
+    p.specialite === specialite && p.niveau === niveau && p.semestre === semestre
+  )?.modules ?? [];
+}
+
+export function addModuleToProgramme(
+  faculte: string, departement: string, specialite: string, niveau: string, semestre: string,
+  mod: Omit<ModuleEntry, "id">
+) {
+  const programmes = loadProgrammes();
+  let entry = programmes.find(p =>
+    p.faculte === faculte && p.departement === departement &&
+    p.specialite === specialite && p.niveau === niveau && p.semestre === semestre
+  );
+  if (!entry) {
+    entry = { faculte, departement, specialite, niveau, semestre, modules: [] };
+    programmes.push(entry);
+  }
+  entry.modules.push({ ...mod, id: crypto.randomUUID() });
+  saveProgrammes(programmes);
+}
+
+export function removeModuleFromProgramme(
+  faculte: string, departement: string, specialite: string, niveau: string, semestre: string,
+  moduleId: string
+) {
+  const programmes = loadProgrammes();
+  const entry = programmes.find(p =>
+    p.faculte === faculte && p.departement === departement &&
+    p.specialite === specialite && p.niveau === niveau && p.semestre === semestre
+  );
+  if (entry) {
+    entry.modules = entry.modules.filter(m => m.id !== moduleId);
+    saveProgrammes(programmes);
+  }
 }

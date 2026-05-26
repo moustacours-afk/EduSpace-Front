@@ -304,50 +304,29 @@ export default function AgentDeliberations() {
   }
 
   function printAnnualPV() {
-    const win = window.open("", "_blank", "width=1200,height=800");
+    const win = window.open("", "_blank", "width=1100,height=800");
     if (!win) return;
 
-    const sem1Headers = moduleList.map(m => `<th colspan="2" style="border:1px solid #bbb;background:#dbeafe;padding:5px 3px;font-size:9px;text-align:center">${m}</th>`).join("");
-    const sem2Headers = moduleList2.map(m => `<th colspan="2" style="border:1px solid #bbb;background:#dcfce7;padding:5px 3px;font-size:9px;text-align:center">${m}</th>`).join("");
-    const sem1SubH = moduleList.map(() => `<th style="border:1px solid #bbb;background:#eff6ff;padding:3px;font-size:8px;text-align:center">M</th><th style="border:1px solid #bbb;background:#eff6ff;padding:3px;font-size:8px;text-align:center">C</th>`).join("");
-    const sem2SubH = moduleList2.map(() => `<th style="border:1px solid #bbb;background:#f0fdf4;padding:3px;font-size:8px;text-align:center">M</th><th style="border:1px solid #bbb;background:#f0fdf4;padding:3px;font-size:8px;text-align:center">C</th>`).join("");
-
     const tableRows = annualRows.map(r => {
-      const isComp1 = r.decision === "Admis par compensation";
-      const cells1 = moduleList.map((_, i) => {
-        const moy = r.moyennes1[i];
-        const comp = isComp1 && moy !== null && moy < 10 && moy >= 5;
-        const credit = moy !== null && (moy >= 10 || comp) ? CREDIT_PER_MODULE : 0;
-        const color = moy === null ? "#aaa" : moy >= 10 ? "#166534" : comp ? "#0d9488" : "#991b1b";
-        return `<td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;color:${color}">${moy !== null ? moy.toFixed(2) : "ABS"}</td><td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px">${credit}</td>`;
-      }).join("");
-      const cells2 = moduleList2.map((_, i) => {
-        const moy = r.moyennes2[i];
-        const comp = isComp1 && moy !== null && moy < 10 && moy >= 5;
-        const credit = moy !== null && (moy >= 10 || comp) ? CREDIT_PER_MODULE : 0;
-        const color = moy === null ? "#aaa" : moy >= 10 ? "#166534" : comp ? "#0d9488" : "#991b1b";
-        return `<td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;color:${color}">${moy !== null ? moy.toFixed(2) : "ABS"}</td><td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px">${credit}</td>`;
-      }).join("");
       const decColor = r.decision === "Admis (session normale)" ? "#166534" : r.decision === "Admis par compensation" ? "#0d9488" : r.decision === "Admis (session rattrapage)" ? "#854d0e" : "#991b1b";
+      const moy1Color = r.semMoy1 !== null ? (r.semMoy1 >= 10 ? "#166534" : "#991b1b") : "#aaa";
+      const moy2Color = r.semMoy2 !== null ? (r.semMoy2 >= 10 ? "#166534" : "#991b1b") : "#aaa";
+      const annColor  = r.annualMoy !== null ? (r.annualMoy >= 10 ? "#166534" : "#991b1b") : "#aaa";
       return `<tr>
-        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px">${r.idx}</td>
-        <td style="border:1px solid #bbb;padding:3px;font-size:9px;font-family:monospace">${r.matricule}</td>
-        <td style="border:1px solid #bbb;padding:3px;font-size:9px;font-weight:bold">${r.prenom} ${r.nom}</td>
-        ${cells1}
-        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;font-weight:bold;background:#eff6ff">${r.semMoy1 !== null ? r.semMoy1.toFixed(2) : "—"}</td>
-        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;background:#eff6ff">${r.credits1}</td>
-        ${cells2}
-        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;font-weight:bold;background:#f0fdf4">${r.semMoy2 !== null ? r.semMoy2.toFixed(2) : "—"}</td>
-        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;background:#f0fdf4">${r.credits2}</td>
-        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;font-weight:bold">${r.totalCredits}</td>
-        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;font-weight:bold">${r.annualMoy !== null ? r.annualMoy.toFixed(2) : "—"}</td>
-        <td style="border:1px solid #bbb;padding:3px;font-size:9px;color:${decColor};font-weight:bold">${r.decision}</td>
+        <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px">${r.idx}</td>
+        <td style="border:1px solid #bbb;padding:4px;font-size:10px;font-family:monospace">${r.matricule}</td>
+        <td style="border:1px solid #bbb;padding:4px;font-size:10px;font-weight:bold">${r.prenom} ${r.nom}</td>
+        <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold;background:#eff6ff;color:${moy1Color}">${r.semMoy1 !== null ? r.semMoy1.toFixed(2) : "—"}</td>
+        <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;background:#eff6ff">${r.credits1}</td>
+        <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold;background:#f0fdf4;color:${moy2Color}">${r.semMoy2 !== null ? r.semMoy2.toFixed(2) : "—"}</td>
+        <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;background:#f0fdf4">${r.credits2}</td>
+        <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold">${r.totalCredits}</td>
+        <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold;color:${annColor}">${r.annualMoy !== null ? r.annualMoy.toFixed(2) : "—"}</td>
+        <td style="border:1px solid #bbb;padding:4px;font-size:10px;color:${decColor};font-weight:bold">${r.decision}</td>
       </tr>`;
     }).join("");
 
     const memberSigsBlock = juryMembers.map(m => `<p style="font-size:11px">${m}</p>`).join("");
-    const sem1ColSpan = moduleList.length * 2 + 2;
-    const sem2ColSpan = moduleList2.length * 2 + 2;
 
     win.document.write(`<html><head><title>PV Délibération Annuelle</title>
     <style>body{font-family:Arial,sans-serif;padding:20px}table{border-collapse:collapse;width:100%}@media print{button{display:none}}</style></head>
@@ -364,24 +343,17 @@ export default function AgentDeliberations() {
       <table>
         <thead>
           <tr>
-            <th rowspan="3" style="border:1px solid #bbb;background:#e8e8f0;padding:5px 3px;font-size:9px">N°</th>
-            <th rowspan="3" style="border:1px solid #bbb;background:#e8e8f0;padding:5px 3px;font-size:9px">Matricule</th>
-            <th rowspan="3" style="border:1px solid #bbb;background:#e8e8f0;padding:5px 3px;font-size:9px">Nom et Prénom</th>
-            <th colspan="${sem1ColSpan}" style="border:1px solid #bbb;background:#bfdbfe;padding:5px;font-size:10px;text-align:center">${semestre}</th>
-            <th colspan="${sem2ColSpan}" style="border:1px solid #bbb;background:#bbf7d0;padding:5px;font-size:10px;text-align:center">${semestre2}</th>
-            <th rowspan="3" style="border:1px solid #bbb;background:#e8e8f0;padding:5px 3px;font-size:9px">Total Crédits</th>
-            <th rowspan="3" style="border:1px solid #bbb;background:#e8e8f0;padding:5px 3px;font-size:9px">Moy. Ann.</th>
-            <th rowspan="3" style="border:1px solid #bbb;background:#e8e8f0;padding:5px 3px;font-size:9px">Décision du jury</th>
+            <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px">N°</th>
+            <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px">Matricule</th>
+            <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px">Nom et Prénom</th>
+            <th style="border:1px solid #bbb;background:#bfdbfe;padding:6px 4px;font-size:10px;text-align:center">Moy ${semestre}</th>
+            <th style="border:1px solid #bbb;background:#bfdbfe;padding:6px 4px;font-size:10px;text-align:center">Crédits ${semestre}</th>
+            <th style="border:1px solid #bbb;background:#bbf7d0;padding:6px 4px;font-size:10px;text-align:center">Moy ${semestre2}</th>
+            <th style="border:1px solid #bbb;background:#bbf7d0;padding:6px 4px;font-size:10px;text-align:center">Crédits ${semestre2}</th>
+            <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px;text-align:center">Total Crédits</th>
+            <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px;text-align:center">Moy Ann.</th>
+            <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px;text-align:center">Décision du jury</th>
           </tr>
-          <tr>
-            ${sem1Headers}
-            <th rowspan="2" style="border:1px solid #bbb;background:#bfdbfe;padding:4px;font-size:9px;text-align:center">Moy S1</th>
-            <th rowspan="2" style="border:1px solid #bbb;background:#bfdbfe;padding:4px;font-size:9px;text-align:center">Crédits S1</th>
-            ${sem2Headers}
-            <th rowspan="2" style="border:1px solid #bbb;background:#bbf7d0;padding:4px;font-size:9px;text-align:center">Moy S2</th>
-            <th rowspan="2" style="border:1px solid #bbb;background:#bbf7d0;padding:4px;font-size:9px;text-align:center">Crédits S2</th>
-          </tr>
-          <tr>${sem1SubH}${sem2SubH}</tr>
         </thead>
         <tbody>${tableRows}</tbody>
       </table>
@@ -396,7 +368,7 @@ export default function AgentDeliberations() {
 
   const activeRows = typeDelib === "annuelle" ? annualRows : rows;
   const hasData = typeDelib === "annuelle"
-    ? (moduleList.length > 0 || moduleList2.length > 0)
+    ? studentsInGroupe.length > 0
     : moduleList.length > 0;
 
   return (
@@ -548,127 +520,48 @@ export default function AgentDeliberations() {
                   <p className="text-xs text-muted-foreground mt-1">Sélectionnez un groupe et un semestre pour lesquels des notes existent.</p>
                 </div>
               ) : typeDelib === "annuelle" ? (
-                // ── ANNUAL TABLE ──
+                // ── ANNUAL TABLE (simplified — summary only) ──
                 <div className="overflow-x-auto">
                   <table className="text-xs w-full border-collapse">
                     <thead>
                       <tr className="bg-muted/50">
-                        <th rowSpan={3} className="border border-border/60 px-2 py-2 font-semibold text-left w-8">N°</th>
-                        <th rowSpan={3} className="border border-border/60 px-3 py-2 font-semibold text-left">Matricule</th>
-                        <th rowSpan={3} className="border border-border/60 px-3 py-2 font-semibold text-left min-w-32">Nom et Prénom</th>
-                        {moduleList.length > 0 && (
-                          <th colSpan={moduleList.length * 2 + 2} className="border border-border/60 px-2 py-2 font-semibold text-center bg-blue-50 text-blue-800 text-[10px]">
-                            {semestre}
-                          </th>
-                        )}
-                        {moduleList2.length > 0 && (
-                          <th colSpan={moduleList2.length * 2 + 2} className="border border-border/60 px-2 py-2 font-semibold text-center bg-green-50 text-green-800 text-[10px]">
-                            {semestre2}
-                          </th>
-                        )}
-                        <th rowSpan={3} className="border border-border/60 px-2 py-2 font-semibold text-center bg-muted/30 text-[10px]">Total Crédits</th>
-                        <th rowSpan={3} className="border border-border/60 px-2 py-2 font-semibold text-center bg-muted/30 text-[10px]">Moy. Ann.</th>
-                        <th rowSpan={3} className="border border-border/60 px-3 py-2 font-semibold text-center bg-muted/30 min-w-28 text-[10px]">Décision du jury</th>
-                      </tr>
-                      <tr className="bg-muted/30">
-                        {moduleList.map(mod => (
-                          <th key={`s1-${mod}`} colSpan={2} className="border border-border/60 px-1 py-1 font-semibold text-center bg-blue-50/60 text-blue-800 text-[10px]">
-                            {mod.length > 14 ? mod.slice(0, 14) + "…" : mod}
-                          </th>
-                        ))}
-                        {moduleList.length > 0 && (
-                          <>
-                            <th rowSpan={2} className="border border-border/60 px-1 py-1 font-semibold text-center bg-blue-100/60 text-blue-800 text-[10px]">Moy S1</th>
-                            <th rowSpan={2} className="border border-border/60 px-1 py-1 font-semibold text-center bg-blue-100/60 text-blue-800 text-[10px]">Cr. S1</th>
-                          </>
-                        )}
-                        {moduleList2.map(mod => (
-                          <th key={`s2-${mod}`} colSpan={2} className="border border-border/60 px-1 py-1 font-semibold text-center bg-green-50/60 text-green-800 text-[10px]">
-                            {mod.length > 14 ? mod.slice(0, 14) + "…" : mod}
-                          </th>
-                        ))}
-                        {moduleList2.length > 0 && (
-                          <>
-                            <th rowSpan={2} className="border border-border/60 px-1 py-1 font-semibold text-center bg-green-100/60 text-green-800 text-[10px]">Moy S2</th>
-                            <th rowSpan={2} className="border border-border/60 px-1 py-1 font-semibold text-center bg-green-100/60 text-green-800 text-[10px]">Cr. S2</th>
-                          </>
-                        )}
-                      </tr>
-                      <tr className="bg-muted/20">
-                        {moduleList.map(mod => (
-                          <Fragment key={`s1sub-${mod}`}>
-                            <th className="border border-border/60 px-1 py-1 font-medium text-center text-muted-foreground">M</th>
-                            <th className="border border-border/60 px-1 py-1 font-medium text-center text-muted-foreground">C</th>
-                          </Fragment>
-                        ))}
-                        {moduleList2.map(mod => (
-                          <Fragment key={`s2sub-${mod}`}>
-                            <th className="border border-border/60 px-1 py-1 font-medium text-center text-muted-foreground">M</th>
-                            <th className="border border-border/60 px-1 py-1 font-medium text-center text-muted-foreground">C</th>
-                          </Fragment>
-                        ))}
+                        <th className="border border-border/60 px-2 py-2 font-semibold text-left w-8">N°</th>
+                        <th className="border border-border/60 px-3 py-2 font-semibold text-left">Matricule</th>
+                        <th className="border border-border/60 px-3 py-2 font-semibold text-left min-w-36">Nom et Prénom</th>
+                        <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-blue-50/60 text-blue-800">Moy {semestre}</th>
+                        <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-blue-50/60 text-blue-800">Crédits {semestre}</th>
+                        <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-green-50/60 text-green-800">Moy {semestre2}</th>
+                        <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-green-50/60 text-green-800">Crédits {semestre2}</th>
+                        <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-muted/30">Total Crédits</th>
+                        <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-muted/30">Moy Ann.</th>
+                        <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-muted/30 min-w-36">Décision du jury</th>
                       </tr>
                     </thead>
                     <tbody>
                       {annualRows.length === 0 ? (
-                        <tr><td colSpan={3 + (moduleList.length + moduleList2.length) * 2 + 6} className="text-center py-8 text-muted-foreground">Aucun étudiant dans ce groupe</td></tr>
-                      ) : annualRows.map((r, ri) => {
-                        const isComp = r.decision === "Admis par compensation";
-                        return (
-                          <tr key={r.matricule} className={`${ri % 2 === 0 ? "bg-background" : "bg-muted/10"} hover:bg-primary/5`}>
-                            <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{r.idx}</td>
-                            <td className="border border-border/40 px-3 py-2 font-mono">{r.matricule}</td>
-                            <td className="border border-border/40 px-3 py-2 font-medium">{r.prenom} {r.nom}</td>
-                            {r.moyennes1.map((moy, i) => {
-                              const comp = isComp && moy !== null && moy < 10 && moy >= 5;
-                              const credit = moy !== null && (moy >= 10 || comp) ? CREDIT_PER_MODULE : 0;
-                              return (
-                                <Fragment key={`r1-${i}`}>
-                                  <td className={`border border-border/40 px-2 py-2 text-center font-semibold ${moy === null ? "text-muted-foreground" : moy >= 10 ? "text-green-700" : comp ? "text-teal-600" : "text-red-600"}`}>
-                                    {moy !== null ? moy.toFixed(2) : "ABS"}
-                                  </td>
-                                  <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{credit}</td>
-                                </Fragment>
-                              );
-                            })}
-                            {moduleList.length > 0 && (
-                              <>
-                                <td className={`border border-border/40 px-2 py-2 text-center font-bold bg-blue-50/30 ${r.semMoy1 !== null && r.semMoy1 >= 10 ? "text-green-700" : "text-red-600"}`}>
-                                  {r.semMoy1 !== null ? r.semMoy1.toFixed(2) : "—"}
-                                </td>
-                                <td className="border border-border/40 px-2 py-2 text-center bg-blue-50/30">{r.credits1}</td>
-                              </>
-                            )}
-                            {r.moyennes2.map((moy, i) => {
-                              const comp = isComp && moy !== null && moy < 10 && moy >= 5;
-                              const credit = moy !== null && (moy >= 10 || comp) ? CREDIT_PER_MODULE : 0;
-                              return (
-                                <Fragment key={`r2-${i}`}>
-                                  <td className={`border border-border/40 px-2 py-2 text-center font-semibold ${moy === null ? "text-muted-foreground" : moy >= 10 ? "text-green-700" : comp ? "text-teal-600" : "text-red-600"}`}>
-                                    {moy !== null ? moy.toFixed(2) : "ABS"}
-                                  </td>
-                                  <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{credit}</td>
-                                </Fragment>
-                              );
-                            })}
-                            {moduleList2.length > 0 && (
-                              <>
-                                <td className={`border border-border/40 px-2 py-2 text-center font-bold bg-green-50/30 ${r.semMoy2 !== null && r.semMoy2 >= 10 ? "text-green-700" : "text-red-600"}`}>
-                                  {r.semMoy2 !== null ? r.semMoy2.toFixed(2) : "—"}
-                                </td>
-                                <td className="border border-border/40 px-2 py-2 text-center bg-green-50/30">{r.credits2}</td>
-                              </>
-                            )}
-                            <td className="border border-border/40 px-2 py-2 text-center font-bold">{r.totalCredits}</td>
-                            <td className={`border border-border/40 px-2 py-2 text-center font-bold ${r.annualMoy !== null && r.annualMoy >= 10 ? "text-green-700" : "text-red-600"}`}>
-                              {r.annualMoy !== null ? r.annualMoy.toFixed(2) : "—"}
-                            </td>
-                            <td className="border border-border/40 px-2 py-2 text-center">
-                              <Badge className={`text-[10px] border ${decisionStyle(r.decision)}`}>{r.decision}</Badge>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                        <tr><td colSpan={10} className="text-center py-8 text-muted-foreground">Aucun étudiant dans ce groupe</td></tr>
+                      ) : annualRows.map((r, ri) => (
+                        <tr key={r.matricule} className={`${ri % 2 === 0 ? "bg-background" : "bg-muted/10"} hover:bg-primary/5`}>
+                          <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{r.idx}</td>
+                          <td className="border border-border/40 px-3 py-2 font-mono">{r.matricule}</td>
+                          <td className="border border-border/40 px-3 py-2 font-medium">{r.prenom} {r.nom}</td>
+                          <td className={`border border-border/40 px-3 py-2 text-center font-bold bg-blue-50/30 ${r.semMoy1 !== null ? (r.semMoy1 >= 10 ? "text-green-700" : "text-red-600") : "text-muted-foreground"}`}>
+                            {r.semMoy1 !== null ? r.semMoy1.toFixed(2) : "—"}
+                          </td>
+                          <td className="border border-border/40 px-3 py-2 text-center bg-blue-50/30">{r.credits1}</td>
+                          <td className={`border border-border/40 px-3 py-2 text-center font-bold bg-green-50/30 ${r.semMoy2 !== null ? (r.semMoy2 >= 10 ? "text-green-700" : "text-red-600") : "text-muted-foreground"}`}>
+                            {r.semMoy2 !== null ? r.semMoy2.toFixed(2) : "—"}
+                          </td>
+                          <td className="border border-border/40 px-3 py-2 text-center bg-green-50/30">{r.credits2}</td>
+                          <td className="border border-border/40 px-3 py-2 text-center font-bold">{r.totalCredits}</td>
+                          <td className={`border border-border/40 px-3 py-2 text-center font-bold ${r.annualMoy !== null ? (r.annualMoy >= 10 ? "text-green-700" : "text-red-600") : "text-muted-foreground"}`}>
+                            {r.annualMoy !== null ? r.annualMoy.toFixed(2) : "—"}
+                          </td>
+                          <td className="border border-border/40 px-2 py-2 text-center">
+                            <Badge className={`text-[10px] border ${decisionStyle(r.decision)}`}>{r.decision}</Badge>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

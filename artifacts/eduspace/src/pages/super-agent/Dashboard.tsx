@@ -5,7 +5,7 @@ import { SuperAgentSidebar } from "@/components/SuperAgentSidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, BookOpen, ShieldCheck, CheckCircle, XCircle, ArrowRight } from "lucide-react";
-import { getAgents, getModules, NIVEAUX_LIST } from "@/lib/superAgentStore";
+import { getAgents, getProgrammes, NIVEAUX_LIST } from "@/lib/superAgentStore";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } };
 const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } };
@@ -13,19 +13,20 @@ const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } };
 export default function SuperAgentDashboard() {
   const [, setLocation] = useLocation();
 
-  const agents  = useMemo(() => getAgents(), []);
-  const modules = useMemo(() => getModules(), []);
+  const agents     = useMemo(() => getAgents(), []);
+  const programmes = useMemo(() => getProgrammes(), []);
 
-  const activeAgents   = agents.filter(a => a.active).length;
-  const inactiveAgents = agents.length - activeAgents;
-  const niveauxConfigured = modules.filter(p => p.semestres.some(s => s.modules.length > 0)).length;
-  const totalModules = modules.reduce((acc, p) => acc + p.semestres.reduce((a, s) => a + s.modules.length, 0), 0);
+  const activeAgents    = agents.filter(a => a.active).length;
+  const inactiveAgents  = agents.length - activeAgents;
+  const programmesConf  = programmes.filter(p => p.modules.length > 0).length;
+  const totalModules    = programmes.reduce((acc, p) => acc + p.modules.length, 0);
+  const niveauxCouverts = [...new Set(programmes.filter(p => p.modules.length > 0).map(p => p.niveau))].length;
 
   const stats = [
     { label: "Agents créés", value: agents.length, sub: `${activeAgents} actifs`, icon: Users, color: "bg-purple-50 text-purple-700", href: "/super-agent/comptes" },
     { label: "Agents actifs", value: activeAgents, sub: `${inactiveAgents} inactifs`, icon: CheckCircle, color: "bg-green-50 text-green-700", href: "/super-agent/comptes" },
-    { label: "Niveaux configurés", value: niveauxConfigured, sub: `sur ${NIVEAUX_LIST.length} niveaux`, icon: BookOpen, color: "bg-blue-50 text-blue-700", href: "/super-agent/modules" },
-    { label: "Total modules", value: totalModules, sub: "tous niveaux confondus", icon: ShieldCheck, color: "bg-amber-50 text-amber-700", href: "/super-agent/modules" },
+    { label: "Programmes configurés", value: programmesConf, sub: `${niveauxCouverts} niveaux couverts`, icon: BookOpen, color: "bg-blue-50 text-blue-700", href: "/super-agent/modules" },
+    { label: "Total modules", value: totalModules, sub: "toutes spécialités", icon: ShieldCheck, color: "bg-amber-50 text-amber-700", href: "/super-agent/modules" },
   ];
 
   return (
@@ -39,7 +40,7 @@ export default function SuperAgentDashboard() {
               <div>
                 <h1 className="text-2xl font-bold flex items-center gap-2">
                   <ShieldCheck className="w-6 h-6 text-purple-600" />
-                  Tableau de bord — Super Agent
+                  Accueil — Super Agent
                 </h1>
                 <p className="text-muted-foreground mt-1">Vue d'ensemble de l'administration centrale.</p>
               </div>
@@ -97,14 +98,14 @@ export default function SuperAgentDashboard() {
                   </Button>
                 </div>
                 <div className="space-y-2">
-                  {modules.map(p => {
-                    const total = p.semestres.reduce((a, s) => a + s.modules.length, 0);
+                  {NIVEAUX_LIST.map(niveau => {
+                    const total = programmes.filter(p => p.niveau === niveau).reduce((a, p) => a + p.modules.length, 0);
                     return (
-                      <div key={p.niveau} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
-                        <span className="font-medium w-16">{p.niveau}</span>
+                      <div key={niveau} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
+                        <span className="font-medium w-16">{niveau}</span>
                         <div className="flex-1 mx-3">
                           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.min((total / 8) * 100, 100)}%` }} />
+                            <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.min((total / 10) * 100, 100)}%` }} />
                           </div>
                         </div>
                         <span className="text-muted-foreground text-xs w-20 text-right">{total} module{total !== 1 ? "s" : ""}</span>

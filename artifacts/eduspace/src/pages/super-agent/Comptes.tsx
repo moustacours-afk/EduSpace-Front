@@ -12,13 +12,18 @@ import {
 } from "lucide-react";
 import {
   getAgents, createAgent, deleteAgent, toggleAgentActive,
-  WILAYAS, type AgentAccount,
+  WILAYAS, ETABLISSEMENTS_PAR_WILAYA, getFacultes, getDepartements,
+  type AgentAccount,
 } from "@/lib/superAgentStore";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
-const EMPTY_FORM = { nom: "", prenom: "", email: "", motDePasse: "", wilaya: "", etablissement: "", active: true };
+const EMPTY_FORM = {
+  nom: "", prenom: "", email: "", motDePasse: "",
+  wilaya: "", etablissement: "", faculte: "", departement: "",
+  active: true,
+};
 
 export default function SuperAgentComptes() {
   const [agents, setAgents] = useState<AgentAccount[]>(() => getAgents());
@@ -32,17 +37,34 @@ export default function SuperAgentComptes() {
   const refresh = useCallback(() => setAgents(getAgents()), []);
 
   const filtered = agents.filter(a =>
-    `${a.nom} ${a.prenom} ${a.email} ${a.wilaya}`.toLowerCase().includes(search.toLowerCase())
+    `${a.nom} ${a.prenom} ${a.email} ${a.wilaya} ${a.etablissement}`.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Cascading data
+  const etablissements = form.wilaya ? (ETABLISSEMENTS_PAR_WILAYA[form.wilaya] ?? []) : [];
+  const facultes = form.etablissement ? getFacultes(form.etablissement) : [];
+  const departements = form.faculte ? getDepartements(form.faculte) : [];
+
+  function handleWilayaChange(v: string) {
+    setForm(f => ({ ...f, wilaya: v, etablissement: "", faculte: "", departement: "" }));
+  }
+  function handleEtablissementChange(v: string) {
+    setForm(f => ({ ...f, etablissement: v, faculte: "", departement: "" }));
+  }
+  function handleFaculteChange(v: string) {
+    setForm(f => ({ ...f, faculte: v, departement: "" }));
+  }
 
   function validate() {
     const e: Partial<typeof EMPTY_FORM> = {};
-    if (!form.nom.trim())     e.nom          = "Nom requis";
-    if (!form.prenom.trim())  e.prenom       = "Prénom requis";
+    if (!form.nom.trim())    e.nom          = "Nom requis";
+    if (!form.prenom.trim()) e.prenom       = "Prénom requis";
     if (!form.email.trim() || !form.email.includes("@")) e.email = "Email valide requis";
     if (form.motDePasse.length < 6) e.motDePasse = "Min. 6 caractères";
-    if (!form.wilaya)         e.wilaya       = "Wilaya requise";
-    if (!form.etablissement.trim()) e.etablissement = "Établissement requis";
+    if (!form.wilaya)        e.wilaya       = "Wilaya requise";
+    if (!form.etablissement) e.etablissement = "Établissement requis";
+    if (!form.faculte)       e.faculte      = "Faculté requise";
+    if (!form.departement)   e.departement  = "Département requis";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -82,7 +104,8 @@ export default function SuperAgentComptes() {
                 </h1>
                 <p className="text-muted-foreground mt-1">Créez et gérez les comptes des agents pédagogiques.</p>
               </div>
-              <Button className="bg-purple-600 hover:bg-purple-700 gap-2" onClick={() => { setShowModal(true); setForm({ ...EMPTY_FORM }); setErrors({}); }}>
+              <Button className="bg-purple-600 hover:bg-purple-700 gap-2"
+                onClick={() => { setShowModal(true); setForm({ ...EMPTY_FORM }); setErrors({}); }}>
                 <Plus className="w-4 h-4" />Créer un agent
               </Button>
             </div>
@@ -91,7 +114,8 @@ export default function SuperAgentComptes() {
           <motion.div variants={item}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Rechercher par nom, email, wilaya…" value={search} onChange={e => setSearch(e.target.value)} />
+              <Input className="pl-9" placeholder="Rechercher par nom, email, wilaya…"
+                value={search} onChange={e => setSearch(e.target.value)} />
             </div>
           </motion.div>
 
@@ -121,7 +145,14 @@ export default function SuperAgentComptes() {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm">{agent.prenom} {agent.nom}</p>
                       <p className="text-xs text-muted-foreground">{agent.email}</p>
-                      <p className="text-xs text-muted-foreground">{agent.wilaya} — {agent.etablissement}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {agent.wilaya} — {agent.etablissement}
+                      </p>
+                      {agent.faculte && (
+                        <p className="text-xs text-muted-foreground">
+                          {agent.faculte}{agent.departement ? ` · ${agent.departement}` : ""}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge className={agent.active ? "bg-green-100 text-green-700 border-green-200" : "bg-red-100 text-red-700 border-red-200"}>
@@ -130,12 +161,14 @@ export default function SuperAgentComptes() {
                       <span className="text-xs text-muted-foreground hidden sm:inline">
                         {new Date(agent.createdAt).toLocaleDateString("fr-DZ")}
                       </span>
-                      <Button size="sm" variant="outline" className="h-8 px-2 gap-1 text-xs" onClick={() => handleToggle(agent.id)}
+                      <Button size="sm" variant="outline" className="h-8 px-2 gap-1 text-xs"
+                        onClick={() => handleToggle(agent.id)}
                         title={agent.active ? "Désactiver" : "Activer"}>
                         {agent.active ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
                         {agent.active ? "Désactiver" : "Activer"}
                       </Button>
-                      <Button size="sm" variant="outline" className="h-8 px-2 text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
+                      <Button size="sm" variant="outline"
+                        className="h-8 px-2 text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
                         onClick={() => setConfirmDelete(agent.id)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
@@ -166,33 +199,41 @@ export default function SuperAgentComptes() {
                 </div>
 
                 <div className="space-y-4">
+                  {/* Nom / Prénom */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-medium text-muted-foreground block mb-1">Prénom *</label>
-                      <Input placeholder="ex: Mohammed" value={form.prenom} onChange={e => setForm(f => ({ ...f, prenom: e.target.value }))} />
+                      <Input placeholder="ex: Mohammed" value={form.prenom}
+                        onChange={e => setForm(f => ({ ...f, prenom: e.target.value }))} />
                       {errors.prenom && <p className="text-xs text-red-500 mt-0.5">{errors.prenom}</p>}
                     </div>
                     <div>
                       <label className="text-xs font-medium text-muted-foreground block mb-1">Nom *</label>
-                      <Input placeholder="ex: Benali" value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} />
+                      <Input placeholder="ex: Benali" value={form.nom}
+                        onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} />
                       {errors.nom && <p className="text-xs text-red-500 mt-0.5">{errors.nom}</p>}
                     </div>
                   </div>
 
+                  {/* Email */}
                   <div>
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Adresse email *</label>
-                    <Input type="email" placeholder="ex: m.benali@univ.dz" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+                    <Input type="email" placeholder="ex: m.benali@univ.dz" value={form.email}
+                      onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
                     {errors.email && <p className="text-xs text-red-500 mt-0.5">{errors.email}</p>}
                   </div>
 
+                  {/* Password */}
                   <div>
                     <label className="text-xs font-medium text-muted-foreground block mb-1">
                       <KeyRound className="inline w-3 h-3 mr-1" />Mot de passe *
                     </label>
                     <div className="relative">
-                      <Input type={showPwd ? "text" : "password"} placeholder="Min. 6 caractères" value={form.motDePasse}
+                      <Input type={showPwd ? "text" : "password"} placeholder="Min. 6 caractères"
+                        value={form.motDePasse}
                         onChange={e => setForm(f => ({ ...f, motDePasse: e.target.value }))} className="pr-9" />
-                      <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      <button type="button"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         onClick={() => setShowPwd(v => !v)}>
                         {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -200,9 +241,10 @@ export default function SuperAgentComptes() {
                     {errors.motDePasse && <p className="text-xs text-red-500 mt-0.5">{errors.motDePasse}</p>}
                   </div>
 
+                  {/* Wilaya */}
                   <div>
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Wilaya *</label>
-                    <Select value={form.wilaya} onValueChange={v => setForm(f => ({ ...f, wilaya: v }))}>
+                    <Select value={form.wilaya} onValueChange={handleWilayaChange}>
                       <SelectTrigger className="w-full"><SelectValue placeholder="Sélectionner une wilaya" /></SelectTrigger>
                       <SelectContent className="max-h-52">
                         {WILAYAS.map(w => <SelectItem key={w} value={w}>{w}</SelectItem>)}
@@ -211,16 +253,56 @@ export default function SuperAgentComptes() {
                     {errors.wilaya && <p className="text-xs text-red-500 mt-0.5">{errors.wilaya}</p>}
                   </div>
 
+                  {/* Établissement */}
                   <div>
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Établissement *</label>
-                    <Input placeholder="ex: Université des Sciences d'Alger" value={form.etablissement}
-                      onChange={e => setForm(f => ({ ...f, etablissement: e.target.value }))} />
+                    <Select value={form.etablissement} onValueChange={handleEtablissementChange}
+                      disabled={!form.wilaya}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={form.wilaya ? "Sélectionner un établissement" : "Choisissez d'abord une wilaya"} />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-52">
+                        {etablissements.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                     {errors.etablissement && <p className="text-xs text-red-500 mt-0.5">{errors.etablissement}</p>}
+                  </div>
+
+                  {/* Faculté */}
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Faculté *</label>
+                    <Select value={form.faculte} onValueChange={handleFaculteChange}
+                      disabled={!form.etablissement}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={form.etablissement ? "Sélectionner une faculté" : "Choisissez d'abord un établissement"} />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-52">
+                        {facultes.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    {errors.faculte && <p className="text-xs text-red-500 mt-0.5">{errors.faculte}</p>}
+                  </div>
+
+                  {/* Département */}
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Département *</label>
+                    <Select value={form.departement}
+                      onValueChange={v => setForm(f => ({ ...f, departement: v }))}
+                      disabled={!form.faculte}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={form.faculte ? "Sélectionner un département" : "Choisissez d'abord une faculté"} />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-52">
+                        {departements.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    {errors.departement && <p className="text-xs text-red-500 mt-0.5">{errors.departement}</p>}
                   </div>
 
                   <div className="flex items-center gap-2">
                     <input type="checkbox" id="active-check" checked={form.active}
-                      onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} className="w-4 h-4 accent-purple-600" />
+                      onChange={e => setForm(f => ({ ...f, active: e.target.checked }))}
+                      className="w-4 h-4 accent-purple-600" />
                     <label htmlFor="active-check" className="text-sm">Compte actif dès la création</label>
                   </div>
                 </div>
@@ -237,14 +319,14 @@ export default function SuperAgentComptes() {
         )}
       </AnimatePresence>
 
-      {/* Confirm delete modal */}
+      {/* Confirm delete */}
       <AnimatePresence>
         {confirmDelete && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
               <Card className="p-6 max-w-sm w-full">
                 <h3 className="font-bold text-base mb-2">Supprimer ce compte ?</h3>
-                <p className="text-sm text-muted-foreground mb-4">Cette action est irréversible. Le compte agent sera définitivement supprimé.</p>
+                <p className="text-sm text-muted-foreground mb-4">Cette action est irréversible.</p>
                 <div className="flex gap-2">
                   <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(null)}>Annuler</Button>
                   <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => handleDelete(confirmDelete)}>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SuperAgentSidebar } from "@/components/SuperAgentSidebar";
 import { Card } from "@/components/ui/card";
@@ -6,47 +6,75 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BookOpen, Plus, Trash2, X, GraduationCap } from "lucide-react";
+import { BookOpen, Plus, Trash2, X, GraduationCap, ChevronRight } from "lucide-react";
 import {
-  getModules, addModule, removeModule,
+  getAllFacultes, getDepartements, getSpecialites,
+  getModulesForProgramme, addModuleToProgramme, removeModuleFromProgramme,
   NIVEAUX_LIST, SEMESTRES_PAR_NIVEAU,
-  type NiveauProgram, type ModuleEntry,
+  type ModuleEntry,
 } from "@/lib/superAgentStore";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
 const EMPTY_MOD = { nom: "", coefficient: 2, credits: 4, ue: "" };
-
 const UE_SUGGESTIONS = ["UEF 1.1","UEF 1.2","UEF 2.1","UEF 2.2","UEM 1.1","UEM 1.2","UEM 2.1","UET 1.1","UET 1.2","UEO 1.1","UEO 2.1"];
 
 export default function SuperAgentModules() {
-  const [programs, setPrograms] = useState<NiveauProgram[]>(() => getModules());
-  const [niveau, setNiveau]     = useState("L3");
-  const [semestre, setSemestre] = useState("S5");
-  const [showModal, setShowModal] = useState(false);
-  const [modForm, setModForm]   = useState({ ...EMPTY_MOD, ue: "" });
-  const [modErrors, setModErrors] = useState<Partial<typeof EMPTY_MOD>>({});
+  const [faculte, setFaculte]       = useState("");
+  const [departement, setDepartement] = useState("");
+  const [niveau, setNiveau]         = useState("L3");
+  const [specialite, setSpecialite] = useState("");
+  const [semestre, setSemestre]     = useState("S5");
+
+  const [showModal, setShowModal]   = useState(false);
+  const [modForm, setModForm]       = useState({ ...EMPTY_MOD, ue: "" });
+  const [modErrors, setModErrors]   = useState<Partial<typeof EMPTY_MOD>>({});
   const [confirmDel, setConfirmDel] = useState<{ mod: ModuleEntry } | null>(null);
+  const [modules, setModules]       = useState<ModuleEntry[]>([]);
 
-  const refresh = useCallback(() => setPrograms(getModules()), []);
+  const allFacultes   = getAllFacultes();
+  const departements  = faculte ? getDepartements(faculte) : [];
+  const semestres     = SEMESTRES_PAR_NIVEAU[niveau] ?? ["S1", "S2"];
+  const specialites   = (faculte && departement && niveau) ? getSpecialites(departement, niveau) : [];
+  const isAutoSpec    = niveau === "L1" || niveau === "L2";
+  const allFiltersSet = !!(faculte && departement && niveau && specialite && semestre);
 
-  const semestres = SEMESTRES_PAR_NIVEAU[niveau] ?? ["S1", "S2"];
+  // Refresh module list whenever filters change
+  const refreshModules = useCallback(() => {
+    if (faculte && departement && specialite && niveau && semestre) {
+      setModules(getModulesForProgramme(faculte, departement, specialite, niveau, semestre));
+    } else {
+      setModules([]);
+    }
+  }, [faculte, departement, specialite, niveau, semestre]);
 
-  const currentModules: ModuleEntry[] = programs
-    .find(p => p.niveau === niveau)
-    ?.semestres.find(s => s.semestre === semestre)
-    ?.modules ?? [];
+  useEffect(() => { refreshModules(); }, [refreshModules]);
 
-  const byUE = currentModules.reduce<Record<string, ModuleEntry[]>>((acc, m) => {
-    const ue = m.ue || "Sans UE";
-    acc[ue] = [...(acc[ue] ?? []), m];
-    return acc;
-  }, {});
+  // Auto-set specialite for L1/L2
+  useEffect(() => {
+    if (niveau === "L1" || niveau === "L2") {
+      setSpecialite("Tronc commun");
+    } else {
+      setSpecialite("");
+    }
+  }, [niveau, departement]);
+
+  function handleFaculteChange(v: string) {
+    setFaculte(v);
+    setDepartement("");
+    setSpecialite("");
+  }
+
+  function handleDepartementChange(v: string) {
+    setDepartement(v);
+    if (!isAutoSpec) setSpecialite("");
+  }
 
   function handleNiveauChange(v: string) {
     setNiveau(v);
-    setSemestre(SEMESTRES_PAR_NIVEAU[v]?.[0] ?? "S1");
+    const sems = SEMESTRES_PAR_NIVEAU[v] ?? ["S1", "S2"];
+    setSemestre(sems[0]);
   }
 
   function validateMod() {
@@ -61,25 +89,31 @@ export default function SuperAgentModules() {
 
   function handleAddModule() {
     if (!validateMod()) return;
-    addModule(niveau, semestre, {
+    addModuleToProgramme(faculte, departement, specialite, niveau, semestre, {
       nom: modForm.nom.trim(),
       coefficient: Number(modForm.coefficient),
       credits: Number(modForm.credits),
       ue: modForm.ue.trim(),
     });
-    refresh();
+    refreshModules();
     setShowModal(false);
     setModForm({ ...EMPTY_MOD, ue: "" });
     setModErrors({});
   }
 
   function handleRemove(mod: ModuleEntry) {
-    removeModule(niveau, semestre, mod.id);
-    refresh();
+    removeModuleFromProgramme(faculte, departement, specialite, niveau, semestre, mod.id);
+    refreshModules();
     setConfirmDel(null);
   }
 
-  const totalCredits = currentModules.reduce((a, m) => a + m.credits, 0);
+  const byUE = modules.reduce<Record<string, ModuleEntry[]>>((acc, m) => {
+    const ue = m.ue || "Sans UE";
+    acc[ue] = [...(acc[ue] ?? []), m];
+    return acc;
+  }, {});
+
+  const totalCredits = modules.reduce((a, m) => a + m.credits, 0);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -87,6 +121,7 @@ export default function SuperAgentModules() {
       <main className="flex-1 p-7 overflow-auto">
         <motion.div variants={container} initial="hidden" animate="show" className="max-w-5xl mx-auto space-y-6">
 
+          {/* Header */}
           <motion.div variants={item}>
             <div className="flex items-start justify-between flex-wrap gap-3">
               <div>
@@ -94,10 +129,16 @@ export default function SuperAgentModules() {
                   <BookOpen className="w-6 h-6 text-purple-600" />
                   Modules par Niveau
                 </h1>
-                <p className="text-muted-foreground mt-1">Définissez les modules et leur contenu pour chaque niveau et semestre.</p>
+                <p className="text-muted-foreground mt-1">
+                  Définissez les modules pour chaque spécialité, niveau et semestre.
+                </p>
               </div>
-              <Button className="bg-purple-600 hover:bg-purple-700 gap-2"
-                onClick={() => { setShowModal(true); setModForm({ ...EMPTY_MOD, ue: "" }); setModErrors({}); }}>
+              <Button
+                className="bg-purple-600 hover:bg-purple-700 gap-2 disabled:opacity-50"
+                disabled={!allFiltersSet}
+                title={!allFiltersSet ? "Veuillez remplir tous les filtres" : undefined}
+                onClick={() => { setShowModal(true); setModForm({ ...EMPTY_MOD, ue: "" }); setModErrors({}); }}
+              >
                 <Plus className="w-4 h-4" />Ajouter un module
               </Button>
             </div>
@@ -105,92 +146,181 @@ export default function SuperAgentModules() {
 
           {/* Filters */}
           <motion.div variants={item}>
-            <Card className="p-4">
-              <div className="flex flex-wrap gap-3 items-end">
+            <Card className="p-5 space-y-4">
+              {/* Row 1: Faculté + Département */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Niveau</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {NIVEAUX_LIST.map(n => (
-                      <button key={n} onClick={() => handleNiveauChange(n)}
-                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors border ${
-                          niveau === n ? "bg-purple-600 text-white border-purple-600" : "bg-background border-border hover:bg-muted"
-                        }`}>
-                        {n}
-                      </button>
-                    ))}
-                  </div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Faculté *</label>
+                  <Select value={faculte} onValueChange={handleFaculteChange}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Sélectionner une faculté" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {allFacultes.map(f => (
+                        <SelectItem key={f} value={f}>{f}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+
                 <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Semestre</label>
-                  <div className="flex gap-1.5">
-                    {semestres.map(s => (
-                      <button key={s} onClick={() => setSemestre(s)}
-                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors border ${
-                          semestre === s ? "bg-blue-600 text-white border-blue-600" : "bg-background border-border hover:bg-muted"
-                        }`}>
-                        {s}
-                      </button>
-                    ))}
-                  </div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Département *</label>
+                  <Select value={departement} onValueChange={handleDepartementChange} disabled={!faculte}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={faculte ? "Sélectionner un département" : "Choisissez d'abord une faculté"} />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-52">
+                      {departements.map(d => (
+                        <SelectItem key={d} value={d}>{d}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
+
+              {/* Row 2: Niveau chips */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Niveau</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {NIVEAUX_LIST.map(n => (
+                    <button key={n} onClick={() => handleNiveauChange(n)}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors border ${
+                        niveau === n
+                          ? "bg-purple-600 text-white border-purple-600"
+                          : "bg-background border-border hover:bg-muted"
+                      }`}>
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Row 3: Spécialité (appears once faculté + département + niveau are all set) */}
+              <AnimatePresence>
+                {faculte && departement && niveau && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <ChevronRight className="w-3 h-3 text-purple-500" />
+                      <label className="text-xs font-medium text-muted-foreground">Spécialité *</label>
+                    </div>
+                    {isAutoSpec ? (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-sm px-3 py-1 border-purple-300 text-purple-700 bg-purple-50">
+                          Tronc commun
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">(automatique pour {niveau})</span>
+                      </div>
+                    ) : (
+                      <Select value={specialite} onValueChange={setSpecialite}>
+                        <SelectTrigger className="w-full md:w-96">
+                          <SelectValue placeholder="Sélectionner une spécialité" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-52">
+                          {specialites.map(s => (
+                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Row 4: Semestre chips */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Semestre</label>
+                <div className="flex gap-1.5">
+                  {semestres.map(s => (
+                    <button key={s} onClick={() => setSemestre(s)}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors border ${
+                        semestre === s
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-background border-border hover:bg-muted"
+                      }`}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Filter hint */}
+              {!allFiltersSet && (
+                <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                  Remplissez tous les filtres (faculté, département, niveau, spécialité, semestre) pour gérer les modules.
+                </p>
+              )}
             </Card>
           </motion.div>
 
           {/* Stats bar */}
-          <motion.div variants={item}>
-            <div className="flex items-center gap-4 flex-wrap text-sm">
-              <Badge variant="outline" className="gap-1.5">
-                <GraduationCap className="w-3.5 h-3.5" />{niveau} — {semestre}
-              </Badge>
-              <span className="text-muted-foreground">{currentModules.length} module{currentModules.length !== 1 ? "s" : ""}</span>
-              <span className="text-muted-foreground">{totalCredits} crédit{totalCredits !== 1 ? "s" : ""} au total</span>
-              <span className="text-muted-foreground">{Object.keys(byUE).length} UE</span>
-            </div>
-          </motion.div>
-
-          {/* Modules grouped by UE */}
-          <motion.div variants={item}>
-            {currentModules.length === 0 ? (
-              <Card className="p-12 text-center">
-                <BookOpen className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-muted-foreground mb-3">Aucun module pour {niveau} — {semestre}.</p>
-                <Button size="sm" className="bg-purple-600 hover:bg-purple-700 gap-1"
-                  onClick={() => { setShowModal(true); setModForm({ ...EMPTY_MOD, ue: "" }); setModErrors({}); }}>
-                  <Plus className="w-3.5 h-3.5" />Ajouter le premier module
-                </Button>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {Object.entries(byUE).map(([ue, mods]) => (
-                  <div key={ue}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-2 h-2 rounded-full bg-purple-500" />
-                      <span className="text-sm font-semibold text-purple-700">{ue}</span>
-                      <span className="text-xs text-muted-foreground">({mods.reduce((a, m) => a + m.credits, 0)} crédits)</span>
-                    </div>
-                    <div className="space-y-2 ml-4">
-                      {mods.map(mod => (
-                        <Card key={mod.id} className="p-3 flex items-center gap-3 hover:shadow-sm transition-shadow">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm">{mod.nom}</p>
-                            <div className="flex gap-2 mt-1">
-                              <Badge variant="outline" className="text-xs px-1.5 py-0">Coef {mod.coefficient}</Badge>
-                              <Badge variant="outline" className="text-xs px-1.5 py-0">{mod.credits} cr.</Badge>
-                            </div>
-                          </div>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
-                            onClick={() => setConfirmDel({ mod })}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+          {allFiltersSet && (
+            <motion.div variants={item}>
+              <div className="flex items-center gap-4 flex-wrap text-sm">
+                <Badge variant="outline" className="gap-1.5">
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  {niveau} — {semestre} — {specialite}
+                </Badge>
+                <span className="text-muted-foreground">{modules.length} module{modules.length !== 1 ? "s" : ""}</span>
+                <span className="text-muted-foreground">{totalCredits} crédit{totalCredits !== 1 ? "s" : ""} au total</span>
+                <span className="text-muted-foreground">{Object.keys(byUE).length} UE</span>
               </div>
-            )}
-          </motion.div>
+            </motion.div>
+          )}
+
+          {/* Module list */}
+          {allFiltersSet && (
+            <motion.div variants={item}>
+              {modules.length === 0 ? (
+                <Card className="p-12 text-center">
+                  <BookOpen className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-muted-foreground mb-3">
+                    Aucun module pour {departement} — {specialite} — {niveau} {semestre}.
+                  </p>
+                  <Button size="sm" className="bg-purple-600 hover:bg-purple-700 gap-1"
+                    onClick={() => { setShowModal(true); setModForm({ ...EMPTY_MOD, ue: "" }); setModErrors({}); }}>
+                    <Plus className="w-3.5 h-3.5" />Ajouter le premier module
+                  </Button>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {Object.entries(byUE).map(([ue, mods]) => (
+                    <div key={ue}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-2 h-2 rounded-full bg-purple-500" />
+                        <span className="text-sm font-semibold text-purple-700">{ue}</span>
+                        <span className="text-xs text-muted-foreground">
+                          ({mods.reduce((a, m) => a + m.credits, 0)} crédits)
+                        </span>
+                      </div>
+                      <div className="space-y-2 ml-4">
+                        {mods.map(mod => (
+                          <Card key={mod.id} className="p-3 flex items-center gap-3 hover:shadow-sm transition-shadow">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm">{mod.nom}</p>
+                              <div className="flex gap-2 mt-1">
+                                <Badge variant="outline" className="text-xs px-1.5 py-0">Coef {mod.coefficient}</Badge>
+                                <Badge variant="outline" className="text-xs px-1.5 py-0">{mod.credits} cr.</Badge>
+                              </div>
+                            </div>
+                            <Button size="sm" variant="ghost"
+                              className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+                              onClick={() => setConfirmDel({ mod })}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
 
         </motion.div>
       </main>
@@ -210,6 +340,10 @@ export default function SuperAgentModules() {
                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setShowModal(false)}>
                     <X className="w-4 h-4" />
                   </Button>
+                </div>
+
+                <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 mb-4">
+                  {faculte} · {departement} · {specialite}
                 </div>
 
                 <div className="space-y-4">
@@ -261,7 +395,7 @@ export default function SuperAgentModules() {
         )}
       </AnimatePresence>
 
-      {/* Confirm delete module */}
+      {/* Confirm delete */}
       <AnimatePresence>
         {confirmDel && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

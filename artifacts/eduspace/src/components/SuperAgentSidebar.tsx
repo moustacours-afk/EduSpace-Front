@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { href: "/super-agent/dashboard", icon: LayoutDashboard, label: "Tableau de bord" },
+  { href: "/super-agent/dashboard", icon: LayoutDashboard, label: "Accueil" },
   { href: "/super-agent/comptes", icon: Users, label: "Comptes agents" },
   { href: "/super-agent/modules", icon: BookOpen, label: "Modules par niveau" },
 ];
