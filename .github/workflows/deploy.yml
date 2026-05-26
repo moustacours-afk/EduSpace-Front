@@ -37,8 +37,12 @@ jobs:
       - name: Copy index.html as 404.html for SPA routing
         run: cp artifacts/eduspace/dist/public/index.html artifacts/eduspace/dist/public/404.html
 
-      - name: Deploy to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          folder: artifacts/eduspace/dist/public
-          branch: gh-pages
+      - name: Deploy to gh-pages branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cd artifacts/eduspace/dist/public
+          git init
+          git add -A
+          git commit -m "Deploy: ${{ github.sha }}"
+          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:gh-pages
