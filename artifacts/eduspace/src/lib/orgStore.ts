@@ -9,6 +9,7 @@ export type OrgSection = {
   id: string;
   nom: string;
   niveau: string;
+  specialite?: string;
   maxStudents: number;
   nbGroupes: number;
   groupes: OrgGroup[];
@@ -53,4 +54,10 @@ export function getSectionsForNiveau(niveau: string): OrgSection[] {
 export function getGroupesForNiveau(niveau: string): string[] {
   const sections = getSectionsForNiveau(niveau);
   return sections.flatMap(s => s.groupes.map(g => g.nom));
+}
+
+export function getSectionsForNiveauAndSpecialite(niveau: string, specialite?: string): OrgSection[] {
+  const sections = getSectionsForNiveau(niveau);
+  if (!specialite || specialite === "all") return sections;
+  return sections.filter(s => s.specialite === specialite);
 }

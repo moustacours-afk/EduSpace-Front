@@ -13,9 +13,29 @@ const container = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } 
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
 const NIVEAUX   = ["L1", "L2", "L3", "M1", "M2"];
-const GROUPES   = ["Groupe 1", "Groupe 2", "Groupe 3", "Groupe 4"];
+const GROUPES   = ["Tous", "Groupe 1", "Groupe 2", "Groupe 3", "Groupe 4"];
 const SEMESTRES = ["S1", "S2", "S3", "S4", "S5", "S6"];
 const SESSIONS  = ["Normale", "Rattrapage"];
+
+// UE groupings for par matière view
+type UEInfo = { nom: string; modules: string[] };
+const UE_PAR_NIVEAU_SEMESTRE: Record<string, UEInfo[]> = {
+  "L3-S5": [
+    { nom: "UEF 1.1", modules: ["Algorithmique", "Structures de Données"] },
+    { nom: "UEF 1.2", modules: ["Base de Données", "Réseaux Informatiques"] },
+    { nom: "UET 1.1", modules: ["Systèmes d'Exploitation"] },
+    { nom: "UEM 1.1", modules: ["Analyse Mathématique"] },
+  ],
+  "L3-S6": [
+    { nom: "UEF 2.1", modules: ["Compilation", "Intelligence Artificielle"] },
+    { nom: "UEF 2.2", modules: ["Sécurité Informatique", "Génie Logiciel"] },
+    { nom: "UEO 2.1", modules: ["Développement Web"] },
+  ],
+};
+
+function getUEsForKey(key: string): UEInfo[] {
+  return UE_PAR_NIVEAU_SEMESTRE[key] ?? [];
+}
 
 function calcMoy(cc: number | null, exam: number | null) {
   if (cc === null && exam === null) return null;
@@ -43,12 +63,28 @@ function decisionStyle(d: DecisionType) {
   return "bg-red-100 text-red-800 border-red-200";
 }
 
+function avg(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  return Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100;
+}
+
+function computeCredits(moduleList: string[], moyennes: (number | null)[], isCompensated: boolean): number {
+  return moduleList.filter((_, i) => {
+    const moy = moyennes[i];
+    if (moy === null) return false;
+    if (moy >= 10) return true;
+    if (isCompensated && moy >= 5) return true;
+    return false;
+  }).length * CREDIT_PER_MODULE;
+}
+
 export default function AgentDeliberations() {
   const [niveau,   setNiveau]   = useState("L3");
   const [groupe,   setGroupe]   = useState("Groupe 2");
   const [semestre, setSemestre] = useState("S5");
   const [session,  setSession]  = useState("Normale");
-  const [showPV,   setShowPV]   = useState(false);
+  const [typeDelib, setTypeDelib] = useState<"par_matiere" | "annuelle">("par_matiere");
+  const [semestre2, setSemestre2] = useState("S6");
 
   const [juryPresident, setJuryPresident] = useState("Pr. Mohamed Hadj");
   const [juryMembers,   setJuryMembers]   = useState(["Dr. Amira Ziani", "Dr. Yacine Bouzid"]);
@@ -56,35 +92,47 @@ export default function AgentDeliberations() {
   const [draftPresident, setDraftPresident] = useState("");
   const [draftMembers,   setDraftMembers]   = useState<string[]>([]);
 
-  const semestreNum = parseInt(semestre.slice(1));
+  const semestreNum  = parseInt(semestre.slice(1));
+  const semestreNum2 = parseInt(semestre2.slice(1));
 
-  // Fetch submissions for this groupe + semestre label
+  // ── Students in groupe ──
+  const studentsInGroupe = useMemo(() => {
+    if (groupe === "Tous") {
+      return agentStudents.filter(s => s.niveau === niveau).map(s => ({ matricule: s.matricule, nom: s.nom, prenom: s.prenom }));
+    }
+    const fromList = agentStudents.filter(s => s.groupe === groupe && s.niveau === niveau);
+    if (fromList.length > 0) return fromList.map(s => ({ matricule: s.matricule, nom: s.nom, prenom: s.prenom }));
+    const byMatricule: Record<string, { matricule: string; nom: string; prenom: string }> = {};
+    gradeSubmissions
+      .filter(gs => gs.groupe === groupe && gs.niveau === niveau)
+      .forEach(sub => sub.students.forEach(st => {
+        byMatricule[st.matricule] = { matricule: st.matricule, nom: st.nom, prenom: st.prenom };
+      }));
+    return Object.values(byMatricule);
+  }, [groupe, niveau]);
+
+  // ── Submissions & grade maps ──
   const submissions = useMemo(() => {
-    const semLabel = `Semestre ${semestreNum}`;
+    const g = groupe === "Tous" ? undefined : groupe;
     return gradeSubmissions.filter(gs =>
-      gs.groupe === groupe &&
       gs.niveau === niveau &&
+      (g === undefined || gs.groupe === g) &&
       (gs.semestre?.includes(String(semestreNum)) ?? true)
     );
   }, [groupe, niveau, semestreNum]);
 
-  // Build student list: take from agentStudents for this groupe, or from submissions students
-  const studentsInGroupe = useMemo(() => {
-    // Prefer agentStudents filtered by groupe + niveau
-    const fromList = agentStudents.filter(s => s.groupe === groupe && s.niveau === niveau);
-    if (fromList.length > 0) return fromList.map(s => ({ matricule: s.matricule, nom: s.nom, prenom: s.prenom }));
-    // Fallback: union from submissions
-    const byMatricule: Record<string, { matricule: string; nom: string; prenom: string }> = {};
-    submissions.forEach(sub => sub.students.forEach(st => {
-      byMatricule[st.matricule] = { matricule: st.matricule, nom: st.nom, prenom: st.prenom };
-    }));
-    return Object.values(byMatricule);
-  }, [groupe, niveau, submissions]);
+  const submissions2 = useMemo(() => {
+    const g = groupe === "Tous" ? undefined : groupe;
+    return gradeSubmissions.filter(gs =>
+      gs.niveau === niveau &&
+      (g === undefined || gs.groupe === g) &&
+      (gs.semestre?.includes(String(semestreNum2)) ?? true)
+    );
+  }, [groupe, niveau, semestreNum2]);
 
-  // Build module list from submissions
-  const moduleList = submissions.map(sub => sub.module);
+  const moduleList  = [...new Set(submissions.map(sub => sub.module))];
+  const moduleList2 = [...new Set(submissions2.map(sub => sub.module))];
 
-  // Build grade map: matricule -> moduleId -> { moy }
   const gradeMap = useMemo(() => {
     const m: Record<string, Record<string, { moy: number | null; absent: boolean }>> = {};
     submissions.forEach(sub => {
@@ -96,12 +144,38 @@ export default function AgentDeliberations() {
     return m;
   }, [submissions]);
 
-  // Aggregate per student with compensation + mention logic
+  const gradeMap2 = useMemo(() => {
+    const m: Record<string, Record<string, { moy: number | null; absent: boolean }>> = {};
+    submissions2.forEach(sub => {
+      sub.students.forEach(st => {
+        if (!m[st.matricule]) m[st.matricule] = {};
+        m[st.matricule][sub.module] = { moy: st.absent ? null : calcMoy(st.noteCC, st.noteExam), absent: st.absent ?? false };
+      });
+    });
+    return m;
+  }, [submissions2]);
+
+  // ── UE groups for par matière ──
+  const uesForSem = useMemo(() => getUEsForKey(`${niveau}-${semestre}`), [niveau, semestre]);
+  const moduleListByUE = useMemo(() => {
+    if (uesForSem.length === 0) return [{ nom: "Modules", modules: moduleList }];
+    // Map each module to its UE, fallback UE for unknowns
+    const covered = new Set(uesForSem.flatMap(ue => ue.modules));
+    const uncovered = moduleList.filter(m => !covered.has(m));
+    const result = uesForSem.map(ue => ({
+      nom: ue.nom,
+      modules: ue.modules.filter(m => moduleList.includes(m)),
+    })).filter(ue => ue.modules.length > 0);
+    if (uncovered.length > 0) result.push({ nom: "Autres", modules: uncovered });
+    return result;
+  }, [uesForSem, moduleList]);
+
+  // ── Par matière rows ──
   const rows = useMemo(() => studentsInGroupe.map((s, idx) => {
     const grades = gradeMap[s.matricule] ?? {};
     const moyennes = moduleList.map(mod => grades[mod]?.moy ?? null);
     const validMoyennes = moyennes.filter(m => m !== null) as number[];
-    const semMoy = validMoyennes.length > 0 ? Math.round(validMoyennes.reduce((a, b) => a + b, 0) / validMoyennes.length * 100) / 100 : null;
+    const semMoy = validMoyennes.length > 0 ? avg(validMoyennes) : null;
 
     const allPassed = moyennes.every(m => m === null || m >= 10);
     let decision: DecisionType;
@@ -116,19 +190,52 @@ export default function AgentDeliberations() {
     }
 
     const isCompensated = semMoy !== null && semMoy >= 10;
-    const creditsAcquis = moduleList.filter((_, i) => {
-      const moy = moyennes[i];
-      if (moy === null) return false;
-      if (moy >= 10) return true;
-      if (isCompensated && moy >= 5) return true;
-      return false;
-    }).length * CREDIT_PER_MODULE;
-
+    const creditsAcquis = computeCredits(moduleList, moyennes, isCompensated);
     const mention = getMention(semMoy);
     return { idx: idx + 1, ...s, moyennes, semMoy, creditsAcquis, decision, mention };
   }), [studentsInGroupe, gradeMap, moduleList, session]);
 
+  // ── Annual rows ──
+  const annualRows = useMemo(() => studentsInGroupe.map((s, idx) => {
+    const grades1 = gradeMap[s.matricule] ?? {};
+    const grades2 = gradeMap2[s.matricule] ?? {};
+
+    const moyennes1 = moduleList.map(mod => grades1[mod]?.moy ?? null);
+    const moyennes2 = moduleList2.map(mod => grades2[mod]?.moy ?? null);
+
+    const valid1 = moyennes1.filter(m => m !== null) as number[];
+    const valid2 = moyennes2.filter(m => m !== null) as number[];
+
+    const semMoy1 = valid1.length > 0 ? avg(valid1) : null;
+    const semMoy2 = valid2.length > 0 ? avg(valid2) : null;
+
+    const isComp1 = semMoy1 !== null && semMoy1 >= 10;
+    const isComp2 = semMoy2 !== null && semMoy2 >= 10;
+    const credits1 = computeCredits(moduleList, moyennes1, isComp1);
+    const credits2 = computeCredits(moduleList2, moyennes2, isComp2);
+    const totalCredits = credits1 + credits2;
+
+    const allMoys = [...valid1, ...valid2];
+    const annualMoy = allMoys.length > 0 ? avg(allMoys) : null;
+
+    let decision: DecisionType;
+    if (annualMoy === null) {
+      decision = "Ajourné";
+    } else if (annualMoy >= 10) {
+      const allPassed = [...moyennes1, ...moyennes2].every(m => m === null || m >= 10);
+      decision = allPassed ? "Admis (session normale)" : "Admis par compensation";
+    } else if (session === "Rattrapage" && annualMoy >= 5) {
+      decision = "Admis (session rattrapage)";
+    } else {
+      decision = "Ajourné";
+    }
+
+    return { idx: idx + 1, ...s, moyennes1, moyennes2, semMoy1, semMoy2, credits1, credits2, totalCredits, annualMoy, decision };
+  }), [studentsInGroupe, gradeMap, gradeMap2, moduleList, moduleList2, session]);
+
+  // ── Print functions ──
   function printPV() {
+    if (typeDelib === "annuelle") { printAnnualPV(); return; }
     const win = window.open("", "_blank", "width=1100,height=800");
     if (!win) return;
 
@@ -196,6 +303,102 @@ export default function AgentDeliberations() {
     win.document.close();
   }
 
+  function printAnnualPV() {
+    const win = window.open("", "_blank", "width=1200,height=800");
+    if (!win) return;
+
+    const sem1Headers = moduleList.map(m => `<th colspan="2" style="border:1px solid #bbb;background:#dbeafe;padding:5px 3px;font-size:9px;text-align:center">${m}</th>`).join("");
+    const sem2Headers = moduleList2.map(m => `<th colspan="2" style="border:1px solid #bbb;background:#dcfce7;padding:5px 3px;font-size:9px;text-align:center">${m}</th>`).join("");
+    const sem1SubH = moduleList.map(() => `<th style="border:1px solid #bbb;background:#eff6ff;padding:3px;font-size:8px;text-align:center">M</th><th style="border:1px solid #bbb;background:#eff6ff;padding:3px;font-size:8px;text-align:center">C</th>`).join("");
+    const sem2SubH = moduleList2.map(() => `<th style="border:1px solid #bbb;background:#f0fdf4;padding:3px;font-size:8px;text-align:center">M</th><th style="border:1px solid #bbb;background:#f0fdf4;padding:3px;font-size:8px;text-align:center">C</th>`).join("");
+
+    const tableRows = annualRows.map(r => {
+      const isComp1 = r.decision === "Admis par compensation";
+      const cells1 = moduleList.map((_, i) => {
+        const moy = r.moyennes1[i];
+        const comp = isComp1 && moy !== null && moy < 10 && moy >= 5;
+        const credit = moy !== null && (moy >= 10 || comp) ? CREDIT_PER_MODULE : 0;
+        const color = moy === null ? "#aaa" : moy >= 10 ? "#166534" : comp ? "#0d9488" : "#991b1b";
+        return `<td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;color:${color}">${moy !== null ? moy.toFixed(2) : "ABS"}</td><td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px">${credit}</td>`;
+      }).join("");
+      const cells2 = moduleList2.map((_, i) => {
+        const moy = r.moyennes2[i];
+        const comp = isComp1 && moy !== null && moy < 10 && moy >= 5;
+        const credit = moy !== null && (moy >= 10 || comp) ? CREDIT_PER_MODULE : 0;
+        const color = moy === null ? "#aaa" : moy >= 10 ? "#166534" : comp ? "#0d9488" : "#991b1b";
+        return `<td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;color:${color}">${moy !== null ? moy.toFixed(2) : "ABS"}</td><td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px">${credit}</td>`;
+      }).join("");
+      const decColor = r.decision === "Admis (session normale)" ? "#166534" : r.decision === "Admis par compensation" ? "#0d9488" : r.decision === "Admis (session rattrapage)" ? "#854d0e" : "#991b1b";
+      return `<tr>
+        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px">${r.idx}</td>
+        <td style="border:1px solid #bbb;padding:3px;font-size:9px;font-family:monospace">${r.matricule}</td>
+        <td style="border:1px solid #bbb;padding:3px;font-size:9px;font-weight:bold">${r.prenom} ${r.nom}</td>
+        ${cells1}
+        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;font-weight:bold;background:#eff6ff">${r.semMoy1 !== null ? r.semMoy1.toFixed(2) : "—"}</td>
+        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;background:#eff6ff">${r.credits1}</td>
+        ${cells2}
+        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;font-weight:bold;background:#f0fdf4">${r.semMoy2 !== null ? r.semMoy2.toFixed(2) : "—"}</td>
+        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;background:#f0fdf4">${r.credits2}</td>
+        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;font-weight:bold">${r.totalCredits}</td>
+        <td style="border:1px solid #bbb;padding:3px;text-align:center;font-size:9px;font-weight:bold">${r.annualMoy !== null ? r.annualMoy.toFixed(2) : "—"}</td>
+        <td style="border:1px solid #bbb;padding:3px;font-size:9px;color:${decColor};font-weight:bold">${r.decision}</td>
+      </tr>`;
+    }).join("");
+
+    const memberSigsBlock = juryMembers.map(m => `<p style="font-size:11px">${m}</p>`).join("");
+    const sem1ColSpan = moduleList.length * 2 + 2;
+    const sem2ColSpan = moduleList2.length * 2 + 2;
+
+    win.document.write(`<html><head><title>PV Délibération Annuelle</title>
+    <style>body{font-family:Arial,sans-serif;padding:20px}table{border-collapse:collapse;width:100%}@media print{button{display:none}}</style></head>
+    <body>
+      <div style="text-align:center;margin-bottom:12px">
+        <p style="font-size:11px;color:#444">République Algérienne Démocratique et Populaire</p>
+        <p style="font-size:11px;color:#444">Ministère de l'Enseignement Supérieur et de la Recherche Scientifique</p>
+        <p style="font-size:13px;font-weight:bold;margin:4px 0">Université des Sciences et de la Technologie Houari Boumediene</p>
+        <p style="font-size:11px">Faculté d'Informatique — Département Informatique</p>
+        <p style="margin:8px 0;font-size:12px">Année Académique 2025-2026 &nbsp;|&nbsp; Filière : Informatique &nbsp;|&nbsp; Niveau : ${niveau} &nbsp;|&nbsp; Groupe : ${groupe}</p>
+        <p style="font-size:14px;font-weight:bold;margin:10px 0;text-decoration:underline">PV de délibération global — ${semestre} + ${semestre2} — Session ${session}</p>
+      </div>
+      <button onclick="window.print()" style="margin-bottom:12px;padding:8px 16px;background:#4f46e5;color:white;border:none;border-radius:6px;cursor:pointer">Imprimer</button>
+      <table>
+        <thead>
+          <tr>
+            <th rowspan="3" style="border:1px solid #bbb;background:#e8e8f0;padding:5px 3px;font-size:9px">N°</th>
+            <th rowspan="3" style="border:1px solid #bbb;background:#e8e8f0;padding:5px 3px;font-size:9px">Matricule</th>
+            <th rowspan="3" style="border:1px solid #bbb;background:#e8e8f0;padding:5px 3px;font-size:9px">Nom et Prénom</th>
+            <th colspan="${sem1ColSpan}" style="border:1px solid #bbb;background:#bfdbfe;padding:5px;font-size:10px;text-align:center">${semestre}</th>
+            <th colspan="${sem2ColSpan}" style="border:1px solid #bbb;background:#bbf7d0;padding:5px;font-size:10px;text-align:center">${semestre2}</th>
+            <th rowspan="3" style="border:1px solid #bbb;background:#e8e8f0;padding:5px 3px;font-size:9px">Total Crédits</th>
+            <th rowspan="3" style="border:1px solid #bbb;background:#e8e8f0;padding:5px 3px;font-size:9px">Moy. Ann.</th>
+            <th rowspan="3" style="border:1px solid #bbb;background:#e8e8f0;padding:5px 3px;font-size:9px">Décision du jury</th>
+          </tr>
+          <tr>
+            ${sem1Headers}
+            <th rowspan="2" style="border:1px solid #bbb;background:#bfdbfe;padding:4px;font-size:9px;text-align:center">Moy S1</th>
+            <th rowspan="2" style="border:1px solid #bbb;background:#bfdbfe;padding:4px;font-size:9px;text-align:center">Crédits S1</th>
+            ${sem2Headers}
+            <th rowspan="2" style="border:1px solid #bbb;background:#bbf7d0;padding:4px;font-size:9px;text-align:center">Moy S2</th>
+            <th rowspan="2" style="border:1px solid #bbb;background:#bbf7d0;padding:4px;font-size:9px;text-align:center">Crédits S2</th>
+          </tr>
+          <tr>${sem1SubH}${sem2SubH}</tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+      <div style="margin-top:40px;display:flex;justify-content:space-between">
+        <div><p style="font-size:11px;font-weight:bold">Le Président du Jury</p><p style="font-size:11px">${juryPresident}</p><br/><br/><p style="font-size:11px">Signature et cachet</p></div>
+        <div><p style="font-size:11px;font-weight:bold">Membres du Jury</p>${memberSigsBlock}<br/><p style="font-size:11px">Signatures</p></div>
+        <div><p style="font-size:11px;font-weight:bold">L'Agent Pédagogique</p><p style="font-size:11px">Ferhat Nadia</p><br/><br/><p style="font-size:11px">Signature</p></div>
+      </div>
+    </body></html>`);
+    win.document.close();
+  }
+
+  const activeRows = typeDelib === "annuelle" ? annualRows : rows;
+  const hasData = typeDelib === "annuelle"
+    ? (moduleList.length > 0 || moduleList2.length > 0)
+    : moduleList.length > 0;
+
   return (
     <div className="flex min-h-screen bg-background">
       <AgentSidebar />
@@ -240,12 +443,42 @@ export default function AgentDeliberations() {
                   </Select>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Semestre</label>
-                  <Select value={semestre} onValueChange={setSemestre}>
-                    <SelectTrigger className="w-28 h-9 text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>{SEMESTRES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  <label className="text-xs text-muted-foreground block mb-1">Type de délibération</label>
+                  <Select value={typeDelib} onValueChange={v => setTypeDelib(v as "par_matiere" | "annuelle")}>
+                    <SelectTrigger className="w-48 h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="par_matiere">Délibération par matière</SelectItem>
+                      <SelectItem value="annuelle">Délibération annuelle</SelectItem>
+                    </SelectContent>
                   </Select>
                 </div>
+                {typeDelib === "par_matiere" && (
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Semestre</label>
+                    <Select value={semestre} onValueChange={setSemestre}>
+                      <SelectTrigger className="w-28 h-9 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>{SEMESTRES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {typeDelib === "annuelle" && (
+                  <>
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Semestre 1</label>
+                      <Select value={semestre} onValueChange={setSemestre}>
+                        <SelectTrigger className="w-28 h-9 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>{SEMESTRES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Semestre 2</label>
+                      <Select value={semestre2} onValueChange={setSemestre2}>
+                        <SelectTrigger className="w-28 h-9 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>{SEMESTRES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Session</label>
                   <Select value={session} onValueChange={setSession}>
@@ -282,7 +515,9 @@ export default function AgentDeliberations() {
               </div>
               <div className="text-center">
                 <h2 className="text-lg font-bold underline">
-                  PV de délibération — {semestre} — 2025/2026 (Session : {session})
+                  {typeDelib === "annuelle"
+                    ? `PV de délibération global — ${semestre} + ${semestre2} — 2025/2026 (Session : ${session})`
+                    : `PV de délibération — ${semestre} — 2025/2026 (Session : ${session})`}
                 </h2>
               </div>
             </Card>
@@ -291,10 +526,10 @@ export default function AgentDeliberations() {
           {/* Results summary */}
           <motion.div variants={item} className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: "Total étudiants", value: rows.length, color: "text-foreground", sub: "" },
-              { label: "Admis (normale)", value: rows.filter(r => r.decision === "Admis (session normale)").length, color: "text-green-700", sub: "" },
-              { label: "Admis (compensation)", value: rows.filter(r => r.decision === "Admis par compensation").length, color: "text-teal-700", sub: "Moy. sem. ≥ 10" },
-              { label: "Ajournés", value: rows.filter(r => r.decision === "Ajourné").length, color: "text-red-700", sub: "" },
+              { label: "Total étudiants", value: activeRows.length, color: "text-foreground", sub: "" },
+              { label: "Admis (normale)", value: activeRows.filter(r => r.decision === "Admis (session normale)").length, color: "text-green-700", sub: "" },
+              { label: "Admis (compensation)", value: activeRows.filter(r => r.decision === "Admis par compensation").length, color: "text-teal-700", sub: "Moy. ≥ 10" },
+              { label: "Ajournés", value: activeRows.filter(r => r.decision === "Ajourné").length, color: "text-red-700", sub: "" },
             ].map(c => (
               <Card key={c.label} className="p-4 text-center">
                 <p className="text-xs text-muted-foreground">{c.label}</p>
@@ -307,36 +542,172 @@ export default function AgentDeliberations() {
           {/* PV Table */}
           <motion.div variants={item}>
             <Card className="overflow-hidden">
-              {moduleList.length === 0 ? (
+              {!hasData ? (
                 <div className="p-12 text-center">
                   <p className="text-muted-foreground text-sm">Aucune note soumise pour ce groupe / semestre.</p>
                   <p className="text-xs text-muted-foreground mt-1">Sélectionnez un groupe et un semestre pour lesquels des notes existent.</p>
                 </div>
-              ) : (
+              ) : typeDelib === "annuelle" ? (
+                // ── ANNUAL TABLE ──
                 <div className="overflow-x-auto">
                   <table className="text-xs w-full border-collapse">
                     <thead>
                       <tr className="bg-muted/50">
-                        <th rowSpan={2} className="border border-border/60 px-2 py-2 font-semibold text-left w-8">N°</th>
-                        <th rowSpan={2} className="border border-border/60 px-3 py-2 font-semibold text-left">Matricule</th>
-                        <th rowSpan={2} className="border border-border/60 px-3 py-2 font-semibold text-left min-w-32">Nom et Prénom</th>
-                        {moduleList.map(mod => (
-                          <th key={mod} colSpan={2} className="border border-border/60 px-1 py-2 font-semibold text-center bg-blue-50/60 text-blue-800 text-[10px]">
-                            {mod.length > 16 ? mod.slice(0, 16) + "…" : mod}
+                        <th rowSpan={3} className="border border-border/60 px-2 py-2 font-semibold text-left w-8">N°</th>
+                        <th rowSpan={3} className="border border-border/60 px-3 py-2 font-semibold text-left">Matricule</th>
+                        <th rowSpan={3} className="border border-border/60 px-3 py-2 font-semibold text-left min-w-32">Nom et Prénom</th>
+                        {moduleList.length > 0 && (
+                          <th colSpan={moduleList.length * 2 + 2} className="border border-border/60 px-2 py-2 font-semibold text-center bg-blue-50 text-blue-800 text-[10px]">
+                            {semestre}
                           </th>
-                        ))}
-                        <th rowSpan={2} className="border border-border/60 px-2 py-2 font-semibold text-center bg-muted/30">Crédits</th>
-                        <th rowSpan={2} className="border border-border/60 px-2 py-2 font-semibold text-center bg-muted/30">Moy. Sem.</th>
-                        <th rowSpan={2} className="border border-border/60 px-2 py-2 font-semibold text-center bg-muted/30">Mention</th>
-                        <th rowSpan={2} className="border border-border/60 px-3 py-2 font-semibold text-center bg-muted/30 min-w-28">Décision du jury</th>
+                        )}
+                        {moduleList2.length > 0 && (
+                          <th colSpan={moduleList2.length * 2 + 2} className="border border-border/60 px-2 py-2 font-semibold text-center bg-green-50 text-green-800 text-[10px]">
+                            {semestre2}
+                          </th>
+                        )}
+                        <th rowSpan={3} className="border border-border/60 px-2 py-2 font-semibold text-center bg-muted/30 text-[10px]">Total Crédits</th>
+                        <th rowSpan={3} className="border border-border/60 px-2 py-2 font-semibold text-center bg-muted/30 text-[10px]">Moy. Ann.</th>
+                        <th rowSpan={3} className="border border-border/60 px-3 py-2 font-semibold text-center bg-muted/30 min-w-28 text-[10px]">Décision du jury</th>
                       </tr>
                       <tr className="bg-muted/30">
                         {moduleList.map(mod => (
-                          <Fragment key={mod}>
+                          <th key={`s1-${mod}`} colSpan={2} className="border border-border/60 px-1 py-1 font-semibold text-center bg-blue-50/60 text-blue-800 text-[10px]">
+                            {mod.length > 14 ? mod.slice(0, 14) + "…" : mod}
+                          </th>
+                        ))}
+                        {moduleList.length > 0 && (
+                          <>
+                            <th rowSpan={2} className="border border-border/60 px-1 py-1 font-semibold text-center bg-blue-100/60 text-blue-800 text-[10px]">Moy S1</th>
+                            <th rowSpan={2} className="border border-border/60 px-1 py-1 font-semibold text-center bg-blue-100/60 text-blue-800 text-[10px]">Cr. S1</th>
+                          </>
+                        )}
+                        {moduleList2.map(mod => (
+                          <th key={`s2-${mod}`} colSpan={2} className="border border-border/60 px-1 py-1 font-semibold text-center bg-green-50/60 text-green-800 text-[10px]">
+                            {mod.length > 14 ? mod.slice(0, 14) + "…" : mod}
+                          </th>
+                        ))}
+                        {moduleList2.length > 0 && (
+                          <>
+                            <th rowSpan={2} className="border border-border/60 px-1 py-1 font-semibold text-center bg-green-100/60 text-green-800 text-[10px]">Moy S2</th>
+                            <th rowSpan={2} className="border border-border/60 px-1 py-1 font-semibold text-center bg-green-100/60 text-green-800 text-[10px]">Cr. S2</th>
+                          </>
+                        )}
+                      </tr>
+                      <tr className="bg-muted/20">
+                        {moduleList.map(mod => (
+                          <Fragment key={`s1sub-${mod}`}>
                             <th className="border border-border/60 px-1 py-1 font-medium text-center text-muted-foreground">M</th>
                             <th className="border border-border/60 px-1 py-1 font-medium text-center text-muted-foreground">C</th>
                           </Fragment>
                         ))}
+                        {moduleList2.map(mod => (
+                          <Fragment key={`s2sub-${mod}`}>
+                            <th className="border border-border/60 px-1 py-1 font-medium text-center text-muted-foreground">M</th>
+                            <th className="border border-border/60 px-1 py-1 font-medium text-center text-muted-foreground">C</th>
+                          </Fragment>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {annualRows.length === 0 ? (
+                        <tr><td colSpan={3 + (moduleList.length + moduleList2.length) * 2 + 6} className="text-center py-8 text-muted-foreground">Aucun étudiant dans ce groupe</td></tr>
+                      ) : annualRows.map((r, ri) => {
+                        const isComp = r.decision === "Admis par compensation";
+                        return (
+                          <tr key={r.matricule} className={`${ri % 2 === 0 ? "bg-background" : "bg-muted/10"} hover:bg-primary/5`}>
+                            <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{r.idx}</td>
+                            <td className="border border-border/40 px-3 py-2 font-mono">{r.matricule}</td>
+                            <td className="border border-border/40 px-3 py-2 font-medium">{r.prenom} {r.nom}</td>
+                            {r.moyennes1.map((moy, i) => {
+                              const comp = isComp && moy !== null && moy < 10 && moy >= 5;
+                              const credit = moy !== null && (moy >= 10 || comp) ? CREDIT_PER_MODULE : 0;
+                              return (
+                                <Fragment key={`r1-${i}`}>
+                                  <td className={`border border-border/40 px-2 py-2 text-center font-semibold ${moy === null ? "text-muted-foreground" : moy >= 10 ? "text-green-700" : comp ? "text-teal-600" : "text-red-600"}`}>
+                                    {moy !== null ? moy.toFixed(2) : "ABS"}
+                                  </td>
+                                  <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{credit}</td>
+                                </Fragment>
+                              );
+                            })}
+                            {moduleList.length > 0 && (
+                              <>
+                                <td className={`border border-border/40 px-2 py-2 text-center font-bold bg-blue-50/30 ${r.semMoy1 !== null && r.semMoy1 >= 10 ? "text-green-700" : "text-red-600"}`}>
+                                  {r.semMoy1 !== null ? r.semMoy1.toFixed(2) : "—"}
+                                </td>
+                                <td className="border border-border/40 px-2 py-2 text-center bg-blue-50/30">{r.credits1}</td>
+                              </>
+                            )}
+                            {r.moyennes2.map((moy, i) => {
+                              const comp = isComp && moy !== null && moy < 10 && moy >= 5;
+                              const credit = moy !== null && (moy >= 10 || comp) ? CREDIT_PER_MODULE : 0;
+                              return (
+                                <Fragment key={`r2-${i}`}>
+                                  <td className={`border border-border/40 px-2 py-2 text-center font-semibold ${moy === null ? "text-muted-foreground" : moy >= 10 ? "text-green-700" : comp ? "text-teal-600" : "text-red-600"}`}>
+                                    {moy !== null ? moy.toFixed(2) : "ABS"}
+                                  </td>
+                                  <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{credit}</td>
+                                </Fragment>
+                              );
+                            })}
+                            {moduleList2.length > 0 && (
+                              <>
+                                <td className={`border border-border/40 px-2 py-2 text-center font-bold bg-green-50/30 ${r.semMoy2 !== null && r.semMoy2 >= 10 ? "text-green-700" : "text-red-600"}`}>
+                                  {r.semMoy2 !== null ? r.semMoy2.toFixed(2) : "—"}
+                                </td>
+                                <td className="border border-border/40 px-2 py-2 text-center bg-green-50/30">{r.credits2}</td>
+                              </>
+                            )}
+                            <td className="border border-border/40 px-2 py-2 text-center font-bold">{r.totalCredits}</td>
+                            <td className={`border border-border/40 px-2 py-2 text-center font-bold ${r.annualMoy !== null && r.annualMoy >= 10 ? "text-green-700" : "text-red-600"}`}>
+                              {r.annualMoy !== null ? r.annualMoy.toFixed(2) : "—"}
+                            </td>
+                            <td className="border border-border/40 px-2 py-2 text-center">
+                              <Badge className={`text-[10px] border ${decisionStyle(r.decision)}`}>{r.decision}</Badge>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                // ── PAR MATIÈRE TABLE (with UE grouping) ──
+                <div className="overflow-x-auto">
+                  <table className="text-xs w-full border-collapse">
+                    <thead>
+                      <tr className="bg-muted/50">
+                        <th rowSpan={3} className="border border-border/60 px-2 py-2 font-semibold text-left w-8">N°</th>
+                        <th rowSpan={3} className="border border-border/60 px-3 py-2 font-semibold text-left">Matricule</th>
+                        <th rowSpan={3} className="border border-border/60 px-3 py-2 font-semibold text-left min-w-32">Nom et Prénom</th>
+                        {moduleListByUE.map(ue => (
+                          <th key={ue.nom} colSpan={ue.modules.length * 2}
+                            className="border border-border/60 px-2 py-2 font-semibold text-center bg-blue-50/60 text-blue-800 text-[10px]">
+                            {ue.nom}
+                          </th>
+                        ))}
+                        <th rowSpan={3} className="border border-border/60 px-2 py-2 font-semibold text-center bg-muted/30">Crédits</th>
+                        <th rowSpan={3} className="border border-border/60 px-2 py-2 font-semibold text-center bg-muted/30">Moy. Sem.</th>
+                        <th rowSpan={3} className="border border-border/60 px-2 py-2 font-semibold text-center bg-muted/30">Mention</th>
+                        <th rowSpan={3} className="border border-border/60 px-3 py-2 font-semibold text-center bg-muted/30 min-w-28">Décision du jury</th>
+                      </tr>
+                      <tr className="bg-muted/30">
+                        {moduleListByUE.flatMap(ue =>
+                          ue.modules.map(mod => (
+                            <th key={mod} colSpan={2} className="border border-border/60 px-1 py-1 font-semibold text-center text-[10px]">
+                              {mod.length > 14 ? mod.slice(0, 14) + "…" : mod}
+                            </th>
+                          ))
+                        )}
+                      </tr>
+                      <tr className="bg-muted/20">
+                        {moduleListByUE.flatMap(ue =>
+                          ue.modules.flatMap(mod => [
+                            <th key={`${mod}-m`} className="border border-border/60 px-1 py-1 font-medium text-center text-muted-foreground">M</th>,
+                            <th key={`${mod}-c`} className="border border-border/60 px-1 py-1 font-medium text-center text-muted-foreground">C</th>,
+                          ])
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -347,19 +718,23 @@ export default function AgentDeliberations() {
                           <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{r.idx}</td>
                           <td className="border border-border/40 px-3 py-2 font-mono">{r.matricule}</td>
                           <td className="border border-border/40 px-3 py-2 font-medium">{r.prenom} {r.nom}</td>
-                          {r.moyennes.map((moy, i) => {
-                            const isComp = r.decision === "Admis par compensation" && moy !== null && moy < 10 && moy >= 5;
-                            const credit = moy !== null && (moy >= 10 || isComp) ? CREDIT_PER_MODULE : 0;
-                            return (
-                              <Fragment key={i}>
-                                <td className={`border border-border/40 px-2 py-2 text-center font-semibold ${moy === null ? "text-muted-foreground" : moy >= 10 ? "text-green-700" : isComp ? "text-teal-600" : "text-red-600"}`}>
-                                  {moy !== null ? moy.toFixed(2) : "ABS"}
-                                  {isComp && <span className="text-[8px] ml-0.5 text-teal-500">C</span>}
-                                </td>
-                                <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{credit}</td>
-                              </Fragment>
-                            );
-                          })}
+                          {moduleListByUE.flatMap(ue =>
+                            ue.modules.map(mod => {
+                              const modIdx = moduleList.indexOf(mod);
+                              const moy = modIdx >= 0 ? r.moyennes[modIdx] : null;
+                              const isComp = r.decision === "Admis par compensation" && moy !== null && moy < 10 && moy >= 5;
+                              const credit = moy !== null && (moy >= 10 || isComp) ? CREDIT_PER_MODULE : 0;
+                              return (
+                                <Fragment key={mod}>
+                                  <td className={`border border-border/40 px-2 py-2 text-center font-semibold ${moy === null ? "text-muted-foreground" : moy >= 10 ? "text-green-700" : isComp ? "text-teal-600" : "text-red-600"}`}>
+                                    {moy !== null ? moy.toFixed(2) : "ABS"}
+                                    {isComp && <span className="text-[8px] ml-0.5 text-teal-500">C</span>}
+                                  </td>
+                                  <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{credit}</td>
+                                </Fragment>
+                              );
+                            })
+                          )}
                           <td className="border border-border/40 px-2 py-2 text-center font-bold">{r.creditsAcquis}</td>
                           <td className={`border border-border/40 px-2 py-2 text-center font-bold ${r.semMoy !== null && r.semMoy >= 10 ? "text-green-700" : "text-red-600"}`}>
                             {r.semMoy !== null ? r.semMoy.toFixed(2) : "—"}
@@ -379,8 +754,8 @@ export default function AgentDeliberations() {
             </Card>
           </motion.div>
 
-          {/* Jury composition + Signature area */}
-          {moduleList.length > 0 && (
+          {/* Jury composition */}
+          {hasData && (
             <motion.div variants={item}>
               <Card className="p-6">
                 <div className="flex items-center justify-between mb-4">

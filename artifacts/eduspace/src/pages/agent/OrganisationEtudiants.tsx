@@ -17,7 +17,17 @@ import {
   type OrgState, type OrgSection, type OrgGroup,
 } from "@/lib/orgStore";
 
-const NIVEAUX = ["L1", "L2", "L3", "M1", "M2"];
+const NIVEAUX = ["L1", "L2", "L3", "M1", "M2", "ING1", "ING2", "ING3"];
+const NIVEAUX_AVEC_SPECIALITE = ["M1", "M2", "ING1", "ING2", "ING3"];
+
+const SPECIALITES_PAR_NIVEAU: Record<string, string[]> = {
+  M1: ["Systèmes Informatiques", "Réseaux & Télécoms", "Base de Données & IA", "Génie Logiciel"],
+  M2: ["Systèmes Informatiques", "Réseaux & Télécoms", "Base de Données & IA", "Génie Logiciel"],
+  ING1: ["Génie des Systèmes", "Réseaux & Télécoms", "Sécurité Informatique"],
+  ING2: ["Génie des Systèmes", "Réseaux & Télécoms", "Sécurité Informatique"],
+  ING3: ["Génie des Systèmes", "Réseaux & Télécoms", "Sécurité Informatique"],
+};
+
 const AGENT_FILIERE = "Informatique";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
@@ -58,17 +68,17 @@ export default function AgentOrganisationEtudiants() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createSuccess, setCreateSuccess] = useState("");
   const [filterNiveau, setFilterNiveau] = useState("all");
+  const [filterSpecialite, setFilterSpecialite] = useState("all");
 
-  // Section edit modal
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editGroupsForm, setEditGroupsForm] = useState<{ id: string; nom: string; nbMax: number }[]>([]);
 
-  // Student reassignment modal
   const [reassignStudent, setReassignStudent] = useState<{ studentId: string; currentSectionId: string; currentGroupId: string } | null>(null);
   const [reassignTarget, setReassignTarget] = useState<{ sectionId: string; groupId: string }>({ sectionId: "", groupId: "" });
 
   const [form, setForm] = useState({
     niveau: "L3",
+    specialite: "",
     maxStudents: "200",
     nbGroupes: "4",
   });
@@ -76,6 +86,16 @@ export default function AgentOrganisationEtudiants() {
   useEffect(() => {
     setLocalOrg(getOrgState());
   }, []);
+
+  // Reset specialite when niveau changes in filter
+  useEffect(() => {
+    setFilterSpecialite("all");
+  }, [filterNiveau]);
+
+  // Reset specialite in form when niveau changes
+  useEffect(() => {
+    setForm(p => ({ ...p, specialite: "" }));
+  }, [form.niveau]);
 
   function saveOrg(state: OrgState) {
     setOrgState(state);
@@ -105,6 +125,7 @@ export default function AgentOrganisationEtudiants() {
       id: sectionId,
       nom: `Section ${sectionIndex}`,
       niveau: form.niveau,
+      specialite: NIVEAUX_AVEC_SPECIALITE.includes(form.niveau) ? (form.specialite || undefined) : undefined,
       maxStudents: max,
       nbGroupes: nb,
       groupes: buildGroups(toAssign, nb, sectionId),
@@ -115,7 +136,8 @@ export default function AgentOrganisationEtudiants() {
     setShowCreateModal(false);
     setExpandedSections(prev => new Set(prev).add(sectionId));
     const total = newSection.groupes.reduce((acc, g) => acc + g.studentIds.length, 0);
-    setCreateSuccess(`${newSection.nom} (${form.niveau}) créée — ${total} étudiant(s) réparti(s) en ${nb} groupe(s).`);
+    const specLabel = newSection.specialite ? ` — ${newSection.specialite}` : "";
+    setCreateSuccess(`${newSection.nom} (${form.niveau}${specLabel}) créée — ${total} étudiant(s) réparti(s) en ${nb} groupe(s).`);
     setTimeout(() => setCreateSuccess(""), 6000);
   }
 
@@ -140,7 +162,6 @@ export default function AgentOrganisationEtudiants() {
     });
   }
 
-  // Open section edit modal
   function openEditSection(section: OrgSection) {
     setEditingSectionId(section.id);
     setEditGroupsForm(section.groupes.map(g => ({ id: g.id, nom: g.nom, nbMax: g.nbMax })));
@@ -151,14 +172,12 @@ export default function AgentOrganisationEtudiants() {
     const newState: OrgState = {
       sections: orgState.sections.map(sec => {
         if (sec.id !== editingSectionId) return sec;
-        // Apply nbMax edits, handle group additions/removals
         const updatedGroupes = sec.groupes
           .filter(g => editGroupsForm.some(ef => ef.id === g.id))
           .map(g => {
             const ef = editGroupsForm.find(f => f.id === g.id)!;
             return { ...g, nom: ef.nom, nbMax: ef.nbMax };
           });
-        // Add any new groups (id starts with "new-")
         const newGroups = editGroupsForm
           .filter(ef => ef.id.startsWith("new-"))
           .map((ef, i) => ({
@@ -183,7 +202,6 @@ export default function AgentOrganisationEtudiants() {
     setEditGroupsForm(prev => prev.filter(g => g.id !== id));
   }
 
-  // Student reassignment
   function openReassign(studentId: string, sectionId: string, groupId: string) {
     setReassignStudent({ studentId, currentSectionId: sectionId, currentGroupId: groupId });
     setReassignTarget({ sectionId: "", groupId: "" });
@@ -195,11 +213,9 @@ export default function AgentOrganisationEtudiants() {
       sections: orgState.sections.map(sec => ({
         ...sec,
         groupes: sec.groupes.map(grp => {
-          // Remove from current
           if (grp.id === reassignStudent.currentGroupId) {
             return { ...grp, studentIds: grp.studentIds.filter(id => id !== reassignStudent.studentId) };
           }
-          // Add to target
           if (grp.id === reassignTarget.groupId) {
             return { ...grp, studentIds: [...grp.studentIds, reassignStudent.studentId] };
           }
@@ -213,16 +229,21 @@ export default function AgentOrganisationEtudiants() {
 
   const approxPerGroup = Math.ceil((parseInt(form.maxStudents) || 200) / (parseInt(form.nbGroupes) || 4));
 
-  const filteredSections = filterNiveau === "all"
-    ? orgState.sections
-    : orgState.sections.filter(s => s.niveau === filterNiveau);
+  const filteredSections = orgState.sections.filter(s => {
+    if (filterNiveau !== "all" && s.niveau !== filterNiveau) return false;
+    if (
+      filterNiveau !== "all" &&
+      NIVEAUX_AVEC_SPECIALITE.includes(filterNiveau) &&
+      filterSpecialite !== "all" &&
+      s.specialite !== filterSpecialite
+    ) return false;
+    return true;
+  });
 
   const editingSection = editingSectionId ? orgState.sections.find(s => s.id === editingSectionId) : null;
-
-  // Groups available for reassignment target
-  const reassignSectionOptions = orgState.sections.filter(s => s.id !== reassignStudent?.currentSectionId || true);
-  const reassignGroupOptions = reassignTarget.sectionId
-    ? (orgState.sections.find(s => s.id === reassignTarget.sectionId)?.groupes ?? []).filter(g => g.id !== reassignStudent?.currentGroupId)
+  const formSpecialites = NIVEAUX_AVEC_SPECIALITE.includes(form.niveau) ? (SPECIALITES_PAR_NIVEAU[form.niveau] ?? []) : [];
+  const filterSpecialites = filterNiveau !== "all" && NIVEAUX_AVEC_SPECIALITE.includes(filterNiveau)
+    ? (SPECIALITES_PAR_NIVEAU[filterNiveau] ?? [])
     : [];
 
   return (
@@ -245,7 +266,7 @@ export default function AgentOrganisationEtudiants() {
 
           {/* Niveau filter */}
           <motion.div variants={item}>
-            <Card className="p-3">
+            <Card className="p-3 space-y-3">
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                   <Filter className="w-3.5 h-3.5" />Filtrer par niveau :
@@ -260,6 +281,23 @@ export default function AgentOrganisationEtudiants() {
                 </div>
                 <span className="text-xs text-muted-foreground ml-auto">{filteredSections.length} section(s) affichée(s)</span>
               </div>
+
+              {/* Specialite filter — only for M1/M2/ING levels */}
+              {filterSpecialites.length > 0 && (
+                <div className="flex items-center gap-3 flex-wrap pt-1 border-t border-border/40">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <GraduationCap className="w-3.5 h-3.5" />Spécialité :
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    {["all", ...filterSpecialites].map(sp => (
+                      <button key={sp} onClick={() => setFilterSpecialite(sp)}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${filterSpecialite === sp ? "bg-indigo-600 text-white border-indigo-600" : "border-border text-muted-foreground hover:border-indigo-400/50 hover:text-foreground"}`}>
+                        {sp === "all" ? "Toutes les spécialités" : sp}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </Card>
           </motion.div>
 
@@ -307,7 +345,10 @@ export default function AgentOrganisationEtudiants() {
                         </div>
                         <div>
                           <p className="font-semibold">{section.nom}</p>
-                          <p className="text-xs text-muted-foreground">{AGENT_FILIERE} — {section.niveau}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {AGENT_FILIERE} — {section.niveau}
+                            {section.specialite ? ` — ${section.specialite}` : ""}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -316,6 +357,11 @@ export default function AgentOrganisationEtudiants() {
                           <p className="text-xs text-muted-foreground">{section.nbGroupes} groupe(s)</p>
                         </div>
                         <Badge className="text-xs bg-primary/10 text-primary border-primary/20">{section.niveau}</Badge>
+                        {section.specialite && (
+                          <Badge className="text-xs bg-indigo-100 text-indigo-700 border-indigo-200 hidden md:inline-flex">
+                            {section.specialite}
+                          </Badge>
+                        )}
                         <Button
                           size="sm" variant="ghost"
                           className="h-7 w-7 p-0 text-blue-500 hover:text-blue-700"
@@ -450,13 +496,26 @@ export default function AgentOrganisationEtudiants() {
                 <div className="space-y-4 text-sm">
                   <div>
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Niveau *</label>
-                    <Select value={form.niveau} onValueChange={v => setForm(p => ({ ...p, niveau: v }))}>
+                    <Select value={form.niveau} onValueChange={v => setForm(p => ({ ...p, niveau: v, specialite: "" }))}>
                       <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {NIVEAUX.map(n => <SelectItem key={n} value={n}>{n} — {AGENT_FILIERE}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Specialite — only for M1/M2/ING levels */}
+                  {formSpecialites.length > 0 && (
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground block mb-1">Spécialité *</label>
+                      <Select value={form.specialite} onValueChange={v => setForm(p => ({ ...p, specialite: v }))}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choisir une spécialité…" /></SelectTrigger>
+                        <SelectContent>
+                          {formSpecialites.map(sp => <SelectItem key={sp} value={sp}>{sp}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div>
                     <label className="text-xs font-medium text-muted-foreground block mb-1">
@@ -493,7 +552,10 @@ export default function AgentOrganisationEtudiants() {
                   <Button variant="outline" className="flex-1" onClick={() => setShowCreateModal(false)}>Annuler</Button>
                   <Button
                     className="flex-1 gap-2"
-                    disabled={!form.niveau || !form.maxStudents || !form.nbGroupes}
+                    disabled={
+                      !form.niveau || !form.maxStudents || !form.nbGroupes ||
+                      (formSpecialites.length > 0 && !form.specialite)
+                    }
                     onClick={createSection}
                   >
                     <Shuffle className="w-4 h-4" />Créer et répartir
@@ -514,7 +576,10 @@ export default function AgentOrganisationEtudiants() {
                 <div className="flex items-center justify-between mb-5">
                   <div>
                     <h3 className="font-bold text-base">Modifier {editingSection.nom}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">{AGENT_FILIERE} — {editingSection.niveau}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {AGENT_FILIERE} — {editingSection.niveau}
+                      {editingSection.specialite ? ` — ${editingSection.specialite}` : ""}
+                    </p>
                   </div>
                   <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditingSectionId(null)}>
                     <X className="w-4 h-4" />
@@ -590,7 +655,9 @@ export default function AgentOrganisationEtudiants() {
                         <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choisir une section…" /></SelectTrigger>
                         <SelectContent>
                           {orgState.sections.map(s => (
-                            <SelectItem key={s.id} value={s.id}>{s.nom} ({s.niveau})</SelectItem>
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.nom} ({s.niveau}{s.specialite ? ` — ${s.specialite}` : ""})
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

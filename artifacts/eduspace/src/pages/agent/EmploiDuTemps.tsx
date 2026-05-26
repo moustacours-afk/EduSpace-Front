@@ -28,7 +28,15 @@ const typeColors: Record<string, string> = {
 };
 
 type Session = typeof initialSeances[0];
-type Room    = typeof initialRooms[0];
+type Room = {
+  id: string;
+  nom: string;
+  capacite: number;
+  type: string;
+  disponible: boolean;
+  salleType: "cours" | "examen";
+  niveauSalle: string;
+};
 
 type NewSession = {
   jour: string; debut: string; fin: string;
@@ -74,9 +82,13 @@ export default function AgentEmploiDuTemps() {
   const [newSession, setNewSession]       = useState<NewSession>(() => defaultNewSession("Groupe 2", "L3"));
   const [saveSuccess, setSaveSuccess]     = useState(false);
 
-  const [rooms, setRooms]           = useState<Room[]>(initialRooms);
+  const [rooms, setRooms] = useState<Room[]>(
+    initialRooms.map(r => ({ ...r, salleType: "cours" as const, niveauSalle: "all" }))
+  );
   const [showAddRoom, setShowAddRoom]     = useState(false);
-  const [newRoom, setNewRoom]             = useState({ nom: "", capacite: "", type: "Salle TD" });
+  const [newRoom, setNewRoom]             = useState({ nom: "", capacite: "", type: "Salle TD", salleType: "cours" as "cours" | "examen", niveauSalle: "L3" });
+  const [roomTypeTab, setRoomTypeTab]     = useState<"cours" | "examen">("cours");
+  const [roomNiveauFilter, setRoomNiveauFilter] = useState("all");
 
   const [showAddGroup, setShowAddGroup]   = useState(false);
   const [newGroup, setNewGroup]           = useState({ nom: "", niveau: "L3" });
@@ -180,8 +192,16 @@ export default function AgentEmploiDuTemps() {
 
   function addRoom() {
     if (!newRoom.nom || !newRoom.capacite) return;
-    setRooms(prev => [...prev, { id: `r${Date.now()}`, nom: newRoom.nom, capacite: parseInt(newRoom.capacite) || 40, type: newRoom.type, disponible: true }]);
-    setNewRoom({ nom: "", capacite: "", type: "Salle TD" });
+    setRooms(prev => [...prev, {
+      id: `r${Date.now()}`,
+      nom: newRoom.nom,
+      capacite: parseInt(newRoom.capacite) || 40,
+      type: newRoom.type,
+      disponible: true,
+      salleType: newRoom.salleType,
+      niveauSalle: newRoom.niveauSalle,
+    }]);
+    setNewRoom({ nom: "", capacite: "", type: "Salle TD", salleType: "cours", niveauSalle: "L3" });
     setShowAddRoom(false);
   }
 
@@ -378,7 +398,31 @@ export default function AgentEmploiDuTemps() {
 
           {/* ── ROOMS TAB ── */}
           {activeTab === "rooms" && (
-            <motion.div variants={item}>
+            <motion.div variants={item} className="space-y-4">
+              {/* Sub-type tabs: cours vs examen */}
+              <div className="flex gap-2 flex-wrap items-center justify-between">
+                <div className="flex gap-2">
+                  {(["cours", "examen"] as const).map(t => (
+                    <button key={t} onClick={() => setRoomTypeTab(t)}
+                      className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-all ${roomTypeTab === t ? "bg-primary text-white border-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}>
+                      {t === "cours" ? "Salles de cours" : "Salles d'examens"}
+                      <span className="ml-1.5 opacity-70">({rooms.filter(r => r.salleType === t).length})</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Niveau :</span>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {["all", "L1", "L2", "L3", "M1", "M2", "ING1", "ING2", "ING3"].map(n => (
+                      <button key={n} onClick={() => setRoomNiveauFilter(n)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${roomNiveauFilter === n ? "bg-indigo-600 text-white border-indigo-600" : "border-border text-muted-foreground hover:border-indigo-400/50"}`}>
+                        {n === "all" ? "Tous" : n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <Card className="overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -387,36 +431,52 @@ export default function AgentEmploiDuTemps() {
                         <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs">Salle</th>
                         <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Capacité</th>
                         <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs">Type</th>
+                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Niveau</th>
                         <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Disponibilité</th>
                         <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Occupation sem.</th>
                         <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {rooms.map(r => {
-                        const occupation = sessions.filter(s => s.salle === r.nom).length;
-                        return (
-                          <tr key={r.id} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
-                            <td className="px-4 py-3 font-semibold">{r.nom}</td>
-                            <td className="px-4 py-3 text-center">{r.capacite} places</td>
-                            <td className="px-4 py-3">
-                              <Badge className={`text-xs border ${r.type === "Amphithéâtre" ? "bg-purple-100 text-purple-700 border-purple-200" : r.type === "Laboratoire" ? "bg-teal-100 text-teal-700 border-teal-200" : "bg-blue-100 text-blue-700 border-blue-200"}`}>{r.type}</Badge>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <Badge className={`text-xs border ${r.disponible ? "bg-green-100 text-green-800 border-green-200" : "bg-red-100 text-red-800 border-red-200"}`}>{r.disponible ? "Disponible" : "Indisponible"}</Badge>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={`font-semibold ${occupation > 3 ? "text-amber-600" : ""}`}>{occupation}</span>
-                              <span className="text-xs text-muted-foreground"> séance(s)</span>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => toggleRoomAvailability(r.id)}>
-                                {r.disponible ? "Désactiver" : "Activer"}
-                              </Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {rooms
+                        .filter(r =>
+                          r.salleType === roomTypeTab &&
+                          (roomNiveauFilter === "all" || r.niveauSalle === "all" || r.niveauSalle === roomNiveauFilter)
+                        )
+                        .map(r => {
+                          const occupation = sessions.filter(s => s.salle === r.nom).length;
+                          return (
+                            <tr key={r.id} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
+                              <td className="px-4 py-3 font-semibold">{r.nom}</td>
+                              <td className="px-4 py-3 text-center">{r.capacite} places</td>
+                              <td className="px-4 py-3">
+                                <Badge className={`text-xs border ${r.type === "Amphithéâtre" ? "bg-purple-100 text-purple-700 border-purple-200" : r.type === "Laboratoire" ? "bg-teal-100 text-teal-700 border-teal-200" : "bg-blue-100 text-blue-700 border-blue-200"}`}>{r.type}</Badge>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <Badge className="text-xs bg-primary/10 text-primary border-primary/20">{r.niveauSalle === "all" ? "Tous" : r.niveauSalle}</Badge>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <Badge className={`text-xs border ${r.disponible ? "bg-green-100 text-green-800 border-green-200" : "bg-red-100 text-red-800 border-red-200"}`}>{r.disponible ? "Disponible" : "Indisponible"}</Badge>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className={`font-semibold ${occupation > 3 ? "text-amber-600" : ""}`}>{occupation}</span>
+                                <span className="text-xs text-muted-foreground"> séance(s)</span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => toggleRoomAvailability(r.id)}>
+                                  {r.disponible ? "Désactiver" : "Activer"}
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      {rooms.filter(r => r.salleType === roomTypeTab && (roomNiveauFilter === "all" || r.niveauSalle === "all" || r.niveauSalle === roomNiveauFilter)).length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                            Aucune {roomTypeTab === "cours" ? "salle de cours" : "salle d'examen"} trouvée pour ce filtre.
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -635,7 +695,7 @@ export default function AgentEmploiDuTemps() {
                         <Select value={newSession.salle} onValueChange={v => setNewSession(prev => ({ ...prev, salle: v }))}>
                           <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choisir une salle…" /></SelectTrigger>
                           <SelectContent>
-                            {rooms.filter(r => r.disponible).map(r => <SelectItem key={r.id} value={r.nom}>{r.nom} ({r.capacite} places)</SelectItem>)}
+                            {rooms.filter(r => r.disponible && r.salleType === "cours").map(r => <SelectItem key={r.id} value={r.nom}>{r.nom} ({r.capacite} places)</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
@@ -679,10 +739,33 @@ export default function AgentEmploiDuTemps() {
                   <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowAddRoom(false)}><X className="w-4 h-4" /></Button>
                 </div>
                 <div className="space-y-3 text-sm">
+                  {/* Salle type toggle */}
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Usage *</label>
+                    <div className="flex gap-2">
+                      {(["cours", "examen"] as const).map(t => (
+                        <button key={t} type="button"
+                          onClick={() => setNewRoom(p => ({ ...p, salleType: t }))}
+                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${newRoom.salleType === t ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted/30"}`}>
+                          {t === "cours" ? "Salle normale" : "Salle d'examen"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Niveau associé *</label>
+                    <Select value={newRoom.niveauSalle} onValueChange={v => setNewRoom(p => ({ ...p, niveauSalle: v }))}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les niveaux</SelectItem>
+                        {["L1","L2","L3","M1","M2","ING1","ING2","ING3"].map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div><label className="text-xs font-medium text-muted-foreground block mb-1">Nom / Numéro *</label><Input placeholder="Ex: C112" value={newRoom.nom} onChange={e => setNewRoom(p => ({ ...p, nom: e.target.value }))} className="h-9 text-sm" /></div>
                   <div><label className="text-xs font-medium text-muted-foreground block mb-1">Capacité *</label><Input type="number" placeholder="40" value={newRoom.capacite} onChange={e => setNewRoom(p => ({ ...p, capacite: e.target.value }))} className="h-9 text-sm" /></div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">Type</label>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Type de salle</label>
                     <Select value={newRoom.type} onValueChange={v => setNewRoom(p => ({ ...p, type: v }))}>
                       <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>
