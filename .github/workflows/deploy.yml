@@ -18,9 +18,8 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: true
+      - name: Checkout (unauthenticated, repo is public)
+        run: git clone --depth 1 https://github.com/${{ github.repository }}.git . && git checkout ${{ github.sha }}
 
       - uses: actions/setup-node@v4
         with:
