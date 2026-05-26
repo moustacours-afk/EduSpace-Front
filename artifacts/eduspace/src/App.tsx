@@ -34,6 +34,11 @@ import AgentNotifications from "@/pages/agent/Notifications";
 import AgentOrganisationEtudiants from "@/pages/agent/OrganisationEtudiants";
 import AgentFeuilles from "@/pages/agent/Sheets";
 
+import LoginSuperAgent from "@/pages/LoginSuperAgent";
+import SuperAgentDashboard from "@/pages/super-agent/Dashboard";
+import SuperAgentComptes from "@/pages/super-agent/Comptes";
+import SuperAgentModules from "@/pages/super-agent/Modules";
+
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -42,10 +47,17 @@ function isAgentLoggedIn() {
   return sessionStorage.getItem("agentLoggedIn") === "true";
 }
 
+function isSuperAgentLoggedIn() {
+  return sessionStorage.getItem("superAgentLoggedIn") === "true";
+}
+
 function AgentGuard({ component: Component }: { component: React.ComponentType }) {
-  if (!isAgentLoggedIn()) {
-    return <Redirect to="/login/agent" />;
-  }
+  if (!isAgentLoggedIn()) return <Redirect to="/login/agent" />;
+  return <Component />;
+}
+
+function SuperAgentGuard({ component: Component }: { component: React.ComponentType }) {
+  if (!isSuperAgentLoggedIn()) return <Redirect to="/login/super-agent" />;
   return <Component />;
 }
 
@@ -107,6 +119,17 @@ function Router() {
       </Route>
       <Route path="/agent/feuilles">
         <AgentGuard component={AgentFeuilles} />
+      </Route>
+
+      <Route path="/login/super-agent" component={LoginSuperAgent} />
+      <Route path="/super-agent/dashboard">
+        <SuperAgentGuard component={SuperAgentDashboard} />
+      </Route>
+      <Route path="/super-agent/comptes">
+        <SuperAgentGuard component={SuperAgentComptes} />
+      </Route>
+      <Route path="/super-agent/modules">
+        <SuperAgentGuard component={SuperAgentModules} />
       </Route>
 
       <Route component={NotFound} />

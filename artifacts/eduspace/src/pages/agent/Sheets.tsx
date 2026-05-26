@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  FileSpreadsheet, Download, Users, CalendarDays, FileText,
-  ClipboardList, BookOpen, ListChecks, ScrollText,
+  FileSpreadsheet, Download, Users, CalendarDays,
+  ClipboardList, ListChecks,
   Printer, Filter,
 } from "lucide-react";
 import { groupesParNiveau, semestresParNiveau } from "@/data/mockData";
@@ -81,44 +81,6 @@ const DOC_SECTIONS: { label: string; icon: React.ElementType; docs: DocCard[] }[
         icon: CalendarDays,
         color: "bg-amber-50 text-amber-700 border-amber-200",
         needsNiveau: true, needsSection: true, needsSemestre: true,
-      },
-    ],
-  },
-  {
-    label: "Notes",
-    icon: BookOpen,
-    docs: [
-      {
-        id: "fiche-notes-vierge",
-        titre: "Fiche de notes vierge",
-        description: "Tableau vierge à remettre à l'enseignant pour saisir les notes CC et examen.",
-        icon: FileText,
-        color: "bg-indigo-50 text-indigo-700 border-indigo-200",
-        needsNiveau: true, needsGroupe: true, needsSemestre: true,
-      },
-      {
-        id: "pv-saisie-notes",
-        titre: "PV de saisie des notes",
-        description: "Procès-verbal récapitulatif des notes soumises par les enseignants.",
-        icon: FileText,
-        color: "bg-indigo-50 text-indigo-700 border-indigo-200",
-        needsNiveau: true, needsGroupe: true, needsSemestre: true,
-      },
-      {
-        id: "releve-notes-prov",
-        titre: "Relevé de notes provisoire",
-        description: "Relevé individuel non officiel à distribuer aux étudiants après délibération.",
-        icon: ScrollText,
-        color: "bg-indigo-50 text-indigo-700 border-indigo-200",
-        needsNiveau: true, needsGroupe: true, needsSemestre: true,
-      },
-      {
-        id: "releve-notes-officiel",
-        titre: "Relevé de notes officiel",
-        description: "Document officiel cacheté remis à l'étudiant sur demande.",
-        icon: ScrollText,
-        color: "bg-indigo-50 text-indigo-700 border-indigo-200",
-        needsNiveau: true, needsGroupe: true, needsSemestre: true,
       },
     ],
   },

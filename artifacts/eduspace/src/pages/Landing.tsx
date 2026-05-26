@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { GraduationCap, BookOpen, Users, ArrowRight } from "lucide-react";
+import { GraduationCap, BookOpen, Users, ShieldCheck, ArrowRight } from "lucide-react";
 
 const roles = [
   {
@@ -32,6 +32,16 @@ const roles = [
     iconBg: "bg-violet-600",
     badge: "Administration",
     badgeColor: "bg-violet-50 text-violet-700",
+  },
+  {
+    href: "/login/super-agent",
+    icon: ShieldCheck,
+    title: "Super Agent",
+    description: "Créez les comptes agents et définissez les modules par niveau.",
+    accent: "#7c3aed",
+    iconBg: "bg-purple-700",
+    badge: "Administration Centrale",
+    badgeColor: "bg-purple-50 text-purple-700",
   },
 ];
 
