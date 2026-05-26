@@ -38,7 +38,9 @@ jobs:
           BASE_PATH: /EduSpace-Front/
 
       - name: Copy index.html as 404.html for SPA routing
-        run: cp artifacts/eduspace/dist/public/index.html artifacts/eduspace/dist/public/404.html
+        run: |
+          cp artifacts/eduspace/dist/public/index.html artifacts/eduspace/dist/public/404.html
+          touch artifacts/eduspace/dist/public/.nojekyll
 
       - name: Deploy to gh-pages branch
         env:
