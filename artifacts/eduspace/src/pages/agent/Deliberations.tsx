@@ -6,7 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Printer, Filter, Users, Edit, Plus, Trash2, X, Save } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { FileText, Printer, Filter, Users, Edit, Plus, Trash2, X, Save, ChevronDown } from "lucide-react";
 import { gradeSubmissions, agentStudents } from "@/data/mockData";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
@@ -79,21 +81,42 @@ function computeCredits(moduleList: string[], moyennes: (number | null)[], isCom
 }
 
 export default function AgentDeliberations() {
-  const [niveau,   setNiveau]   = useState("L3");
-  const [groupe,   setGroupe]   = useState("Groupe 2");
-  const [semestre, setSemestre] = useState("S5");
-  const [session,  setSession]  = useState("Normale");
-  const [typeDelib, setTypeDelib] = useState<"par_matiere" | "annuelle">("par_matiere");
-  const [semestre2, setSemestre2] = useState("S6");
+  const [niveau,            setNiveau]            = useState("L3");
+  const [groupe,            setGroupe]            = useState("Groupe 2");
+  const [semestre,          setSemestre]          = useState("S5");
+  const [session,           setSession]           = useState("Normale");
+  const [typeDelib,         setTypeDelib]         = useState<"par_matiere" | "annuelle">("par_matiere");
+  const [selectedSemestres, setSelectedSemestres] = useState<string[]>(["S5", "S6"]);
+  const [semestresOpen,     setSemestresOpen]     = useState(false);
 
-  const [juryPresident, setJuryPresident] = useState("Pr. Mohamed Hadj");
-  const [juryMembers,   setJuryMembers]   = useState(["Dr. Amira Ziani", "Dr. Yacine Bouzid"]);
-  const [showEditJury,  setShowEditJury]  = useState(false);
+  const [juryPresident,  setJuryPresident]  = useState("Pr. Mohamed Hadj");
+  const [juryMembers,    setJuryMembers]    = useState(["Dr. Amira Ziani", "Dr. Yacine Bouzid"]);
+  const [showEditJury,   setShowEditJury]   = useState(false);
   const [draftPresident, setDraftPresident] = useState("");
   const [draftMembers,   setDraftMembers]   = useState<string[]>([]);
 
-  const semestreNum  = parseInt(semestre.slice(1));
-  const semestreNum2 = parseInt(semestre2.slice(1));
+  const semestreNum = parseInt(semestre.slice(1));
+
+  // Active semesters for annuelle mode (all if none selected)
+  const activeSems = useMemo(() =>
+    selectedSemestres.length === 0 ? SEMESTRES : [...selectedSemestres].sort(),
+    [selectedSemestres]
+  );
+
+  function toggleSemestre(s: string) {
+    if (s === "Tout") {
+      setSelectedSemestres(prev => prev.length === SEMESTRES.length ? [] : [...SEMESTRES]);
+    } else {
+      setSelectedSemestres(prev =>
+        prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
+      );
+    }
+  }
+
+  const semestresLabel =
+    selectedSemestres.length === 0 || selectedSemestres.length === SEMESTRES.length
+      ? "Tout"
+      : [...selectedSemestres].sort().join(", ");
 
   // ── Students in groupe ──
   const studentsInGroupe = useMemo(() => {
@@ -111,7 +134,7 @@ export default function AgentDeliberations() {
     return Object.values(byMatricule);
   }, [groupe, niveau]);
 
-  // ── Submissions & grade maps ──
+  // ── Submissions for par_matiere ──
   const submissions = useMemo(() => {
     const g = groupe === "Tous" ? undefined : groupe;
     return gradeSubmissions.filter(gs =>
@@ -121,17 +144,23 @@ export default function AgentDeliberations() {
     );
   }, [groupe, niveau, semestreNum]);
 
-  const submissions2 = useMemo(() => {
+  // ── Submissions per semester for annuelle (multi-select) ──
+  const submissionsPerSem = useMemo(() => {
+    if (typeDelib !== "annuelle") return {} as Record<string, typeof gradeSubmissions>;
     const g = groupe === "Tous" ? undefined : groupe;
-    return gradeSubmissions.filter(gs =>
-      gs.niveau === niveau &&
-      (g === undefined || gs.groupe === g) &&
-      (gs.semestre?.includes(String(semestreNum2)) ?? true)
-    );
-  }, [groupe, niveau, semestreNum2]);
+    const result: Record<string, typeof gradeSubmissions> = {};
+    activeSems.forEach(sem => {
+      const sNum = parseInt(sem.slice(1));
+      result[sem] = gradeSubmissions.filter(gs =>
+        gs.niveau === niveau &&
+        (g === undefined || gs.groupe === g) &&
+        (gs.semestre?.includes(String(sNum)) ?? true)
+      );
+    });
+    return result;
+  }, [typeDelib, groupe, niveau, activeSems]);
 
-  const moduleList  = [...new Set(submissions.map(sub => sub.module))];
-  const moduleList2 = [...new Set(submissions2.map(sub => sub.module))];
+  const moduleList = [...new Set(submissions.map(sub => sub.module))];
 
   const gradeMap = useMemo(() => {
     const m: Record<string, Record<string, { moy: number | null; absent: boolean }>> = {};
@@ -144,22 +173,10 @@ export default function AgentDeliberations() {
     return m;
   }, [submissions]);
 
-  const gradeMap2 = useMemo(() => {
-    const m: Record<string, Record<string, { moy: number | null; absent: boolean }>> = {};
-    submissions2.forEach(sub => {
-      sub.students.forEach(st => {
-        if (!m[st.matricule]) m[st.matricule] = {};
-        m[st.matricule][sub.module] = { moy: st.absent ? null : calcMoy(st.noteCC, st.noteExam), absent: st.absent ?? false };
-      });
-    });
-    return m;
-  }, [submissions2]);
-
   // ── UE groups for par matière ──
   const uesForSem = useMemo(() => getUEsForKey(`${niveau}-${semestre}`), [niveau, semestre]);
   const moduleListByUE = useMemo(() => {
     if (uesForSem.length === 0) return [{ nom: "Modules", modules: moduleList }];
-    // Map each module to its UE, fallback UE for unknowns
     const covered = new Set(uesForSem.flatMap(ue => ue.modules));
     const uncovered = moduleList.filter(m => !covered.has(m));
     const result = uesForSem.map(ue => ({
@@ -195,34 +212,33 @@ export default function AgentDeliberations() {
     return { idx: idx + 1, ...s, moyennes, semMoy, creditsAcquis, decision, mention };
   }), [studentsInGroupe, gradeMap, moduleList, session]);
 
-  // ── Annual rows ──
+  // ── Annual rows (dynamic per selected semestres) ──
   const annualRows = useMemo(() => studentsInGroupe.map((s, idx) => {
-    const grades1 = gradeMap[s.matricule] ?? {};
-    const grades2 = gradeMap2[s.matricule] ?? {};
+    const perSem = activeSems.map(sem => {
+      const subs = submissionsPerSem[sem] ?? [];
+      const mods = [...new Set(subs.map(sub => sub.module))];
+      const moyennes = mods.map(mod => {
+        const sub = subs.find(s2 => s2.module === mod);
+        const st = sub?.students.find(st => st.matricule === s.matricule);
+        if (!st || st.absent) return null;
+        return calcMoy(st.noteCC, st.noteExam);
+      });
+      const valid = moyennes.filter(m => m !== null) as number[];
+      const semMoy = valid.length > 0 ? avg(valid) : null;
+      const isComp = semMoy !== null && semMoy >= 10;
+      const credits = computeCredits(mods, moyennes, isComp);
+      return { sem, semMoy, credits };
+    });
 
-    const moyennes1 = moduleList.map(mod => grades1[mod]?.moy ?? null);
-    const moyennes2 = moduleList2.map(mod => grades2[mod]?.moy ?? null);
-
-    const valid1 = moyennes1.filter(m => m !== null) as number[];
-    const valid2 = moyennes2.filter(m => m !== null) as number[];
-
-    const semMoy1 = valid1.length > 0 ? avg(valid1) : null;
-    const semMoy2 = valid2.length > 0 ? avg(valid2) : null;
-
-    const isComp1 = semMoy1 !== null && semMoy1 >= 10;
-    const isComp2 = semMoy2 !== null && semMoy2 >= 10;
-    const credits1 = computeCredits(moduleList, moyennes1, isComp1);
-    const credits2 = computeCredits(moduleList2, moyennes2, isComp2);
-    const totalCredits = credits1 + credits2;
-
-    const allMoys = [...valid1, ...valid2];
-    const annualMoy = allMoys.length > 0 ? avg(allMoys) : null;
+    const allValid = perSem.flatMap(p => p.semMoy !== null ? [p.semMoy] : []);
+    const annualMoy = allValid.length > 0 ? avg(allValid) : null;
+    const totalCredits = perSem.reduce((a, p) => a + p.credits, 0);
 
     let decision: DecisionType;
     if (annualMoy === null) {
       decision = "Ajourné";
     } else if (annualMoy >= 10) {
-      const allPassed = [...moyennes1, ...moyennes2].every(m => m === null || m >= 10);
+      const allPassed = perSem.every(p => p.semMoy === null || p.semMoy >= 10);
       decision = allPassed ? "Admis (session normale)" : "Admis par compensation";
     } else if (session === "Rattrapage" && annualMoy >= 5) {
       decision = "Admis (session rattrapage)";
@@ -230,8 +246,8 @@ export default function AgentDeliberations() {
       decision = "Ajourné";
     }
 
-    return { idx: idx + 1, ...s, moyennes1, moyennes2, semMoy1, semMoy2, credits1, credits2, totalCredits, annualMoy, decision };
-  }), [studentsInGroupe, gradeMap, gradeMap2, moduleList, moduleList2, session]);
+    return { idx: idx + 1, ...s, perSem, totalCredits, annualMoy, decision };
+  }), [studentsInGroupe, submissionsPerSem, activeSems, session]);
 
   // ── Print functions ──
   function printPV() {
@@ -307,19 +323,24 @@ export default function AgentDeliberations() {
     const win = window.open("", "_blank", "width=1100,height=800");
     if (!win) return;
 
+    const semHeaders = activeSems.map(sem =>
+      `<th style="border:1px solid #bbb;background:#bfdbfe;padding:6px 4px;font-size:10px;text-align:center">Moy ${sem}</th>
+       <th style="border:1px solid #bbb;background:#bfdbfe;padding:6px 4px;font-size:10px;text-align:center">Crédits ${sem}</th>`
+    ).join("");
+
     const tableRows = annualRows.map(r => {
+      const semCells = r.perSem.map(p => {
+        const c = p.semMoy !== null ? (p.semMoy >= 10 ? "#166534" : "#991b1b") : "#aaa";
+        return `<td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold;color:${c}">${p.semMoy !== null ? p.semMoy.toFixed(2) : "—"}</td>
+                <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px">${p.credits}</td>`;
+      }).join("");
       const decColor = r.decision === "Admis (session normale)" ? "#166534" : r.decision === "Admis par compensation" ? "#0d9488" : r.decision === "Admis (session rattrapage)" ? "#854d0e" : "#991b1b";
-      const moy1Color = r.semMoy1 !== null ? (r.semMoy1 >= 10 ? "#166534" : "#991b1b") : "#aaa";
-      const moy2Color = r.semMoy2 !== null ? (r.semMoy2 >= 10 ? "#166534" : "#991b1b") : "#aaa";
-      const annColor  = r.annualMoy !== null ? (r.annualMoy >= 10 ? "#166534" : "#991b1b") : "#aaa";
+      const annColor = r.annualMoy !== null ? (r.annualMoy >= 10 ? "#166534" : "#991b1b") : "#aaa";
       return `<tr>
         <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px">${r.idx}</td>
         <td style="border:1px solid #bbb;padding:4px;font-size:10px;font-family:monospace">${r.matricule}</td>
         <td style="border:1px solid #bbb;padding:4px;font-size:10px;font-weight:bold">${r.prenom} ${r.nom}</td>
-        <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold;background:#eff6ff;color:${moy1Color}">${r.semMoy1 !== null ? r.semMoy1.toFixed(2) : "—"}</td>
-        <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;background:#eff6ff">${r.credits1}</td>
-        <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold;background:#f0fdf4;color:${moy2Color}">${r.semMoy2 !== null ? r.semMoy2.toFixed(2) : "—"}</td>
-        <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;background:#f0fdf4">${r.credits2}</td>
+        ${semCells}
         <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold">${r.totalCredits}</td>
         <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold;color:${annColor}">${r.annualMoy !== null ? r.annualMoy.toFixed(2) : "—"}</td>
         <td style="border:1px solid #bbb;padding:4px;font-size:10px;color:${decColor};font-weight:bold">${r.decision}</td>
@@ -337,7 +358,7 @@ export default function AgentDeliberations() {
         <p style="font-size:13px;font-weight:bold;margin:4px 0">Université des Sciences et de la Technologie Houari Boumediene</p>
         <p style="font-size:11px">Faculté d'Informatique — Département Informatique</p>
         <p style="margin:8px 0;font-size:12px">Année Académique 2025-2026 &nbsp;|&nbsp; Filière : Informatique &nbsp;|&nbsp; Niveau : ${niveau} &nbsp;|&nbsp; Groupe : ${groupe}</p>
-        <p style="font-size:14px;font-weight:bold;margin:10px 0;text-decoration:underline">PV de délibération global — ${semestre} + ${semestre2} — Session ${session}</p>
+        <p style="font-size:14px;font-weight:bold;margin:10px 0;text-decoration:underline">PV de délibération global — ${semestresLabel} — Session ${session}</p>
       </div>
       <button onclick="window.print()" style="margin-bottom:12px;padding:8px 16px;background:#4f46e5;color:white;border:none;border-radius:6px;cursor:pointer">Imprimer</button>
       <table>
@@ -346,10 +367,7 @@ export default function AgentDeliberations() {
             <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px">N°</th>
             <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px">Matricule</th>
             <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px">Nom et Prénom</th>
-            <th style="border:1px solid #bbb;background:#bfdbfe;padding:6px 4px;font-size:10px;text-align:center">Moy ${semestre}</th>
-            <th style="border:1px solid #bbb;background:#bfdbfe;padding:6px 4px;font-size:10px;text-align:center">Crédits ${semestre}</th>
-            <th style="border:1px solid #bbb;background:#bbf7d0;padding:6px 4px;font-size:10px;text-align:center">Moy ${semestre2}</th>
-            <th style="border:1px solid #bbb;background:#bbf7d0;padding:6px 4px;font-size:10px;text-align:center">Crédits ${semestre2}</th>
+            ${semHeaders}
             <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px;text-align:center">Total Crédits</th>
             <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px;text-align:center">Moy Ann.</th>
             <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px;text-align:center">Décision du jury</th>
@@ -399,7 +417,9 @@ export default function AgentDeliberations() {
                 <Filter className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm font-medium">Paramètres du PV</span>
               </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3 items-end">
+
+                {/* Niveau */}
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Niveau</label>
                   <Select value={niveau} onValueChange={setNiveau}>
@@ -407,6 +427,8 @@ export default function AgentDeliberations() {
                     <SelectContent>{NIVEAUX.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
+
+                {/* Groupe */}
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Groupe</label>
                   <Select value={groupe} onValueChange={setGroupe}>
@@ -414,16 +436,20 @@ export default function AgentDeliberations() {
                     <SelectContent>{GROUPES.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
+
+                {/* Type de délibération */}
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Type de délibération</label>
                   <Select value={typeDelib} onValueChange={v => setTypeDelib(v as "par_matiere" | "annuelle")}>
-                    <SelectTrigger className="w-48 h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-52 h-9 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="par_matiere">Délibération par matière</SelectItem>
                       <SelectItem value="annuelle">Délibération annuelle</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Semestre single — par_matiere mode */}
                 {typeDelib === "par_matiere" && (
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">Semestre</label>
@@ -433,24 +459,44 @@ export default function AgentDeliberations() {
                     </Select>
                   </div>
                 )}
+
+                {/* Semestres multi-select — annuelle mode */}
                 {typeDelib === "annuelle" && (
-                  <>
-                    <div>
-                      <label className="text-xs text-muted-foreground block mb-1">Semestre 1</label>
-                      <Select value={semestre} onValueChange={setSemestre}>
-                        <SelectTrigger className="w-28 h-9 text-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent>{SEMESTRES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground block mb-1">Semestre 2</label>
-                      <Select value={semestre2} onValueChange={setSemestre2}>
-                        <SelectTrigger className="w-28 h-9 text-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent>{SEMESTRES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                  </>
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Semestres</label>
+                    <Popover open={semestresOpen} onOpenChange={setSemestresOpen}>
+                      <PopoverTrigger asChild>
+                        <button className="flex h-9 w-48 items-center justify-between rounded-md border border-input bg-background px-3 text-sm shadow-sm hover:bg-accent transition-colors">
+                          <span className="truncate">{semestresLabel}</span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-48 p-2">
+                        <div className="space-y-1">
+                          <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent">
+                            <Checkbox
+                              checked={selectedSemestres.length === SEMESTRES.length}
+                              onCheckedChange={() => toggleSemestre("Tout")}
+                            />
+                            <span>Tout</span>
+                          </label>
+                          <div className="my-1 h-px bg-border" />
+                          {SEMESTRES.map(s => (
+                            <label key={s} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent">
+                              <Checkbox
+                                checked={selectedSemestres.includes(s)}
+                                onCheckedChange={() => toggleSemestre(s)}
+                              />
+                              <span>Semestre {s.slice(1)}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 )}
+
+                {/* Session */}
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Session</label>
                   <Select value={session} onValueChange={setSession}>
@@ -458,6 +504,7 @@ export default function AgentDeliberations() {
                     <SelectContent>{SESSIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
+
               </div>
             </Card>
           </motion.div>
@@ -488,7 +535,7 @@ export default function AgentDeliberations() {
               <div className="text-center">
                 <h2 className="text-lg font-bold underline">
                   {typeDelib === "annuelle"
-                    ? `PV de délibération global — ${semestre} + ${semestre2} — 2025/2026 (Session : ${session})`
+                    ? `PV de délibération global — ${semestresLabel} — 2025/2026 (Session : ${session})`
                     : `PV de délibération — ${semestre} — 2025/2026 (Session : ${session})`}
                 </h2>
               </div>
@@ -520,7 +567,7 @@ export default function AgentDeliberations() {
                   <p className="text-xs text-muted-foreground mt-1">Sélectionnez un groupe et un semestre pour lesquels des notes existent.</p>
                 </div>
               ) : typeDelib === "annuelle" ? (
-                // ── ANNUAL TABLE (simplified — summary only) ──
+                // ── ANNUAL TABLE (dynamic per selected semestres) ──
                 <div className="overflow-x-auto">
                   <table className="text-xs w-full border-collapse">
                     <thead>
@@ -528,10 +575,12 @@ export default function AgentDeliberations() {
                         <th className="border border-border/60 px-2 py-2 font-semibold text-left w-8">N°</th>
                         <th className="border border-border/60 px-3 py-2 font-semibold text-left">Matricule</th>
                         <th className="border border-border/60 px-3 py-2 font-semibold text-left min-w-36">Nom et Prénom</th>
-                        <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-blue-50/60 text-blue-800">Moy {semestre}</th>
-                        <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-blue-50/60 text-blue-800">Crédits {semestre}</th>
-                        <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-green-50/60 text-green-800">Moy {semestre2}</th>
-                        <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-green-50/60 text-green-800">Crédits {semestre2}</th>
+                        {activeSems.map(sem => (
+                          <Fragment key={sem}>
+                            <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-blue-50/60 text-blue-800">Moy {sem}</th>
+                            <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-blue-50/60 text-blue-800">Crédits {sem}</th>
+                          </Fragment>
+                        ))}
                         <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-muted/30">Total Crédits</th>
                         <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-muted/30">Moy Ann.</th>
                         <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-muted/30 min-w-36">Décision du jury</th>
@@ -539,20 +588,20 @@ export default function AgentDeliberations() {
                     </thead>
                     <tbody>
                       {annualRows.length === 0 ? (
-                        <tr><td colSpan={10} className="text-center py-8 text-muted-foreground">Aucun étudiant dans ce groupe</td></tr>
+                        <tr><td colSpan={3 + activeSems.length * 2 + 3} className="text-center py-8 text-muted-foreground">Aucun étudiant dans ce groupe</td></tr>
                       ) : annualRows.map((r, ri) => (
                         <tr key={r.matricule} className={`${ri % 2 === 0 ? "bg-background" : "bg-muted/10"} hover:bg-primary/5`}>
                           <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{r.idx}</td>
                           <td className="border border-border/40 px-3 py-2 font-mono">{r.matricule}</td>
                           <td className="border border-border/40 px-3 py-2 font-medium">{r.prenom} {r.nom}</td>
-                          <td className={`border border-border/40 px-3 py-2 text-center font-bold bg-blue-50/30 ${r.semMoy1 !== null ? (r.semMoy1 >= 10 ? "text-green-700" : "text-red-600") : "text-muted-foreground"}`}>
-                            {r.semMoy1 !== null ? r.semMoy1.toFixed(2) : "—"}
-                          </td>
-                          <td className="border border-border/40 px-3 py-2 text-center bg-blue-50/30">{r.credits1}</td>
-                          <td className={`border border-border/40 px-3 py-2 text-center font-bold bg-green-50/30 ${r.semMoy2 !== null ? (r.semMoy2 >= 10 ? "text-green-700" : "text-red-600") : "text-muted-foreground"}`}>
-                            {r.semMoy2 !== null ? r.semMoy2.toFixed(2) : "—"}
-                          </td>
-                          <td className="border border-border/40 px-3 py-2 text-center bg-green-50/30">{r.credits2}</td>
+                          {r.perSem.map(p => (
+                            <Fragment key={p.sem}>
+                              <td className={`border border-border/40 px-3 py-2 text-center font-bold bg-blue-50/30 ${p.semMoy !== null ? (p.semMoy >= 10 ? "text-green-700" : "text-red-600") : "text-muted-foreground"}`}>
+                                {p.semMoy !== null ? p.semMoy.toFixed(2) : "—"}
+                              </td>
+                              <td className="border border-border/40 px-3 py-2 text-center bg-blue-50/30">{p.credits}</td>
+                            </Fragment>
+                          ))}
                           <td className="border border-border/40 px-3 py-2 text-center font-bold">{r.totalCredits}</td>
                           <td className={`border border-border/40 px-3 py-2 text-center font-bold ${r.annualMoy !== null ? (r.annualMoy >= 10 ? "text-green-700" : "text-red-600") : "text-muted-foreground"}`}>
                             {r.annualMoy !== null ? r.annualMoy.toFixed(2) : "—"}
