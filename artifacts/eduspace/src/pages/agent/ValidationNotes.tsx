@@ -8,9 +8,20 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   CheckCircle, XCircle, Clock, Send, Eye, X, AlertTriangle,
-  Search, FileText, ChevronRight, ArrowLeft, UserX,
+  Search, FileText, ChevronRight, ArrowLeft, UserX, Flag,
 } from "lucide-react";
 import { gradeSubmissions, type GradeSubmission, type GradeStatus } from "@/data/mockData";
+import {
+  getAcceptedAppealsForAgent, agentValidateAppeal,
+  type Appeal, type AppealNoteType,
+} from "@/lib/appealStore";
+
+const appealNoteTypeLabels: Record<AppealNoteType, string> = {
+  exam: "Note Examen",
+  controle: "Note Contrôle",
+  tp: "Note TP",
+  generale: "Moyenne",
+};
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
 const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } };
@@ -38,6 +49,8 @@ export default function AgentValidationNotes() {
   const [rejectModal, setRejectModal] = useState<{ id: string; reason: string } | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ action: "valider" | "publier"; id: string } | null>(null);
   const [publishAll, setPublishAll] = useState(false);
+  const [pendingAppeals, setPendingAppeals] = useState<Appeal[]>(() => getAcceptedAppealsForAgent());
+  const [appealConfirm, setAppealConfirm] = useState<Appeal | null>(null);
 
   const filtered = submissions.filter((s) => {
     if (filterStatut !== "all" && s.statut !== filterStatut) return false;
@@ -396,8 +409,126 @@ export default function AgentValidationNotes() {
             </Card>
           </motion.div>
 
+          {/* ── Recours section ── */}
+          <motion.div variants={item}>
+            <div className="flex items-center gap-2 mb-3">
+              <Flag className="w-4 h-4 text-primary" />
+              <h2 className="font-semibold text-base">Recours acceptés — en attente de validation</h2>
+              {pendingAppeals.length > 0 && (
+                <span className="bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold px-2 py-0.5 rounded-full">
+                  {pendingAppeals.length}
+                </span>
+              )}
+            </div>
+            {pendingAppeals.length === 0 ? (
+              <Card className="p-6 text-center">
+                <Flag className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Aucun recours en attente de validation agent.</p>
+              </Card>
+            ) : (
+              <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40 border-b border-border">
+                      <tr>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs">Étudiant</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs">Module</th>
+                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Type</th>
+                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Note actuelle</th>
+                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Nouvelle note</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs">Commentaire enseignant</th>
+                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingAppeals.map((a, i) => (
+                        <motion.tr
+                          key={a.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: i * 0.04 }}
+                          className="border-b border-border/50 hover:bg-muted/10 transition-colors"
+                        >
+                          <td className="px-4 py-3">
+                            <p className="font-medium">{a.studentNom} {a.studentPrenom}</p>
+                            <p className="text-xs text-muted-foreground font-mono">{a.studentMatricule}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-medium">{a.moduleName}</p>
+                            <p className="text-xs text-muted-foreground">{a.semestre}</p>
+                          </td>
+                          <td className="text-center px-4 py-3">
+                            <Badge className="text-xs border bg-blue-50 text-blue-700 border-blue-200">
+                              {appealNoteTypeLabels[a.noteType]}
+                            </Badge>
+                          </td>
+                          <td className="text-center px-4 py-3 font-semibold text-red-500">{a.currentNote}/20</td>
+                          <td className="text-center px-4 py-3 font-bold text-green-600">
+                            {a.proposedNote !== undefined ? `${a.proposedNote}/20` : <span className="text-muted-foreground">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground italic max-w-[180px]">
+                            {a.teacherComment ?? "—"}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Button
+                              size="sm"
+                              className="gap-1.5 text-xs bg-green-600 hover:bg-green-700"
+                              onClick={() => setAppealConfirm(a)}
+                            >
+                              <CheckCircle className="w-3 h-3" />Valider
+                            </Button>
+                          </td>
+                        </motion.tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
+          </motion.div>
+
         </motion.div>
       </main>
+
+      {/* Appeal confirm modal */}
+      <AnimatePresence>
+        {appealConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
+              <Card className="p-6 max-w-sm w-full space-y-3">
+                <h3 className="font-bold text-base flex items-center gap-2">
+                  <Flag className="w-4 h-4 text-primary" />
+                  Valider le recours
+                </h3>
+                <div className="p-3 bg-muted/40 rounded-lg text-sm space-y-1">
+                  <p><span className="text-muted-foreground">Étudiant :</span> <strong>{appealConfirm.studentNom} {appealConfirm.studentPrenom}</strong></p>
+                  <p><span className="text-muted-foreground">Module :</span> <strong>{appealConfirm.moduleName}</strong></p>
+                  <p>
+                    <span className="text-muted-foreground">Changement :</span>{" "}
+                    <span className="text-red-500 font-semibold">{appealConfirm.currentNote}/20</span>
+                    {" → "}
+                    <span className="text-green-600 font-bold">{appealConfirm.proposedNote ?? "?"}/20</span>
+                  </p>
+                </div>
+                <p className="text-sm text-muted-foreground">En validant, la nouvelle note sera officielle et l'étudiant en sera notifié.</p>
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1" onClick={() => setAppealConfirm(null)}>Annuler</Button>
+                  <Button
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    onClick={() => {
+                      agentValidateAppeal(appealConfirm.id);
+                      setPendingAppeals(getAcceptedAppealsForAgent());
+                      setAppealConfirm(null);
+                    }}
+                  >
+                    Confirmer
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Confirm modal */}
       <AnimatePresence>

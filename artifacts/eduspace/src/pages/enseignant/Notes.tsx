@@ -5,22 +5,38 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import {
   ClipboardList, CheckCircle, Send, Download, Upload,
   FileText, UserX, ChevronRight, BookOpen, ShieldCheck, Lock,
+  Flag, Clock, XCircle, MessageSquare,
 } from "lucide-react";
 import {
   niveauxFiliere, semestresParNiveau, teacherAssignments, studentsDB,
   type TeacherRole,
 } from "@/data/mockData";
+import {
+  getPendingTeacherAppeals, teacherDecideAppeal,
+  type Appeal, type AppealNoteType,
+} from "@/lib/appealStore";
+
+const noteTypeLabels: Record<AppealNoteType, string> = {
+  exam: "Note Examen",
+  controle: "Note Contrôle",
+  tp: "Note TP",
+  generale: "Moyenne générale",
+};
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
 const item = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } };
 
 type Student = { id: string; matricule: string; nom: string; prenom: string; groupe: string };
 type NoteEntry = { cc: string; tp: string; absent: boolean; observation: string };
-type TabType = "cc" | "examen";
+type TabType = "cc" | "examen" | "recours";
 
 type Assignment = typeof teacherAssignments[number];
 
@@ -93,6 +109,12 @@ export default function EnseignantNotes() {
   const [grades, setGrades] = useState<Record<string, NoteEntry>>({});
   const [submitted, setSubmitted] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
+
+  // Recours state
+  const [appeals, setAppeals] = useState<Appeal[]>(() => getPendingTeacherAppeals());
+  const [appealDecision, setAppealDecision] = useState<{
+    appeal: Appeal; accepted: boolean; comment: string; proposedNote: string;
+  } | null>(null);
 
   const semestres = niveau ? semestresParNiveau[niveau] ?? [] : [];
 
@@ -171,6 +193,20 @@ export default function EnseignantNotes() {
                 {t === "cc" ? "Contrôle Continu & TP" : "Examen"}
               </button>
             ))}
+            <button
+              onClick={() => { setTab("recours"); setAppeals(getPendingTeacherAppeals()); }}
+              className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-all -mb-px flex items-center gap-2 ${
+                tab === "recours" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Flag className="w-3.5 h-3.5" />
+              Recours
+              {getPendingTeacherAppeals().length > 0 && (
+                <span className="bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                  {getPendingTeacherAppeals().length}
+                </span>
+              )}
+            </button>
           </motion.div>
 
           {/* Examen notice */}
@@ -495,8 +531,168 @@ export default function EnseignantNotes() {
             )}
           </AnimatePresence>
 
+          {/* ── Recours tab ── */}
+          {tab === "recours" && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              {appeals.length === 0 ? (
+                <Card className="p-10 text-center">
+                  <Flag className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
+                  <p className="font-semibold text-muted-foreground">Aucun recours en attente</p>
+                  <p className="text-sm text-muted-foreground/70 mt-1">Les recours soumis par les étudiants apparaîtront ici.</p>
+                </Card>
+              ) : (
+                <Card>
+                  <div className="p-4 border-b border-border flex items-center gap-2">
+                    <Flag className="w-4 h-4 text-primary" />
+                    <span className="font-semibold text-sm">Recours en attente — {appeals.length} recours</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30 border-b border-border">
+                        <tr>
+                          <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Étudiant</th>
+                          <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Module</th>
+                          <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Semestre</th>
+                          <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Type</th>
+                          <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Note actuelle</th>
+                          <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Motif</th>
+                          <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Date</th>
+                          <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {appeals.map((a, i) => (
+                          <motion.tr
+                            key={a.id}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: i * 0.04 }}
+                            className="border-b border-border/50 hover:bg-muted/10 transition-colors"
+                          >
+                            <td className="px-4 py-3">
+                              <p className="font-medium">{a.studentNom} {a.studentPrenom}</p>
+                              <p className="text-xs text-muted-foreground font-mono">{a.studentMatricule}</p>
+                            </td>
+                            <td className="px-4 py-3 font-medium">{a.moduleName}</td>
+                            <td className="text-center px-4 py-3 text-muted-foreground">{a.semestre}</td>
+                            <td className="text-center px-4 py-3">
+                              <Badge className="text-xs border bg-blue-50 text-blue-700 border-blue-200">
+                                {noteTypeLabels[a.noteType]}
+                              </Badge>
+                            </td>
+                            <td className="text-center px-4 py-3">
+                              <span className="font-semibold">{a.currentNote}/20</span>
+                            </td>
+                            <td className="px-4 py-3 max-w-[200px]">
+                              <p className="text-sm text-muted-foreground line-clamp-2">{a.reason}</p>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                              {new Date(a.createdAt).toLocaleDateString("fr-DZ")}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex gap-2 justify-center">
+                                <Button
+                                  size="sm"
+                                  className="gap-1.5 text-xs bg-green-600 hover:bg-green-700"
+                                  onClick={() => setAppealDecision({ appeal: a, accepted: true, comment: "", proposedNote: String(a.currentNote) })}
+                                >
+                                  <CheckCircle className="w-3 h-3" />Accepter
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  className="gap-1.5 text-xs"
+                                  onClick={() => setAppealDecision({ appeal: a, accepted: false, comment: "", proposedNote: "" })}
+                                >
+                                  <XCircle className="w-3 h-3" />Refuser
+                                </Button>
+                              </div>
+                            </td>
+                          </motion.tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+            </motion.div>
+          )}
+
         </motion.div>
       </main>
+
+      {/* Decision dialog */}
+      <Dialog open={!!appealDecision} onOpenChange={(open) => { if (!open) setAppealDecision(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {appealDecision?.accepted
+                ? <><CheckCircle className="w-4 h-4 text-green-600" />Accepter le recours</>
+                : <><XCircle className="w-4 h-4 text-red-500" />Refuser le recours</>
+              }
+            </DialogTitle>
+          </DialogHeader>
+          {appealDecision && (
+            <div className="space-y-4">
+              <div className="p-3 bg-muted/40 rounded-lg text-sm space-y-1">
+                <p><span className="text-muted-foreground">Étudiant :</span> <span className="font-semibold">{appealDecision.appeal.studentNom} {appealDecision.appeal.studentPrenom}</span></p>
+                <p><span className="text-muted-foreground">Module :</span> <span className="font-semibold">{appealDecision.appeal.moduleName}</span></p>
+                <p><span className="text-muted-foreground">{noteTypeLabels[appealDecision.appeal.noteType]} :</span> <span className="font-semibold">{appealDecision.appeal.currentNote}/20</span></p>
+                <p className="text-muted-foreground">Motif : <em>"{appealDecision.appeal.reason}"</em></p>
+              </div>
+
+              {appealDecision.accepted && (
+                <div>
+                  <label className="text-sm font-medium block mb-1.5">Nouvelle note proposée (/20)</label>
+                  <Input
+                    type="number" min="0" max="20" step="0.25"
+                    value={appealDecision.proposedNote}
+                    onChange={(e) => setAppealDecision((prev) => prev ? { ...prev, proposedNote: e.target.value } : null)}
+                    className="w-32 text-center"
+                    placeholder="—"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">La note sera transmise à l'agent pédagogique pour validation finale.</p>
+                </div>
+              )}
+
+              <div>
+                <label className="text-sm font-medium block mb-1.5 flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  {appealDecision.accepted ? "Commentaire (optionnel)" : "Motif du refus (optionnel)"}
+                </label>
+                <Textarea
+                  value={appealDecision.comment}
+                  onChange={(e) => setAppealDecision((prev) => prev ? { ...prev, comment: e.target.value } : null)}
+                  placeholder={appealDecision.accepted ? "Explication de la correction…" : "Raison du refus…"}
+                  rows={3}
+                  className="resize-none"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAppealDecision(null)}>Annuler</Button>
+            <Button
+              onClick={() => {
+                if (!appealDecision) return;
+                const note = appealDecision.accepted ? parseFloat(appealDecision.proposedNote) : undefined;
+                teacherDecideAppeal(
+                  appealDecision.appeal.id,
+                  appealDecision.accepted,
+                  appealDecision.comment || undefined,
+                  appealDecision.accepted ? note : undefined,
+                );
+                setAppeals(getPendingTeacherAppeals());
+                setAppealDecision(null);
+              }}
+              className={appealDecision?.accepted ? "bg-green-600 hover:bg-green-700" : ""}
+              variant={appealDecision?.accepted ? "default" : "destructive"}
+            >
+              {appealDecision?.accepted ? "Confirmer l'acceptation" : "Confirmer le refus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
