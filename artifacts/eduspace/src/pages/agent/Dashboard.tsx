@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { AgentSidebar } from "@/components/AgentSidebar";
 import { Card } from "@/components/ui/card";
@@ -6,59 +6,65 @@ import { Button } from "@/components/ui/button";
 import {
   GraduationCap, Users, CheckSquare, AlertTriangle,
   Clock, CheckCircle, XCircle, Zap, CalendarDays, FileText,
-  DoorOpen, AlertOctagon, Building2, School,
+  School,
 } from "lucide-react";
-import {
-  agentStudents, agentTeachers, gradeSubmissions, agentRooms, seances,
-} from "@/data/mockData";
+import { agent as api } from "@/lib/api";
+import { getUser } from "@/lib/auth";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const item = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } };
 
-function detectConflicts() {
-  const seen: Record<string, string> = {};
-  let count = 0;
-  for (const s of seances) {
-    const timeKey = `${s.jour}-${s.heureDebut}`;
-    const salleKey = `${timeKey}-salle-${s.salle}`;
-    const ensKey = `${timeKey}-ens-${s.enseignant}`;
-    if (seen[salleKey]) count++;
-    else seen[salleKey] = s.id;
-    if (seen[ensKey]) count++;
-    else seen[ensKey] = s.id;
-  }
-  return count;
+interface Stats {
+  totalStudents: number;
+  totalTeachers: number;
+  gradeStats: { en_attente: number; soumis: number; valide: number; publie: number };
+  pendingRecours: number;
 }
 
 export default function AgentDashboard() {
+  const user = getUser();
+  const profile = (user?.profile ?? {}) as Record<string, string>;
+
+  const [stats, setStats] = useState<Stats>({
+    totalStudents: 0, totalTeachers: 0,
+    gradeStats: { en_attente: 0, soumis: 0, valide: 0, publie: 0 },
+    pendingRecours: 0,
+  });
   const [bulkValidated, setBulkValidated] = useState(false);
   const [bulkPublished, setBulkPublished] = useState(false);
   const [showValidateModal, setShowValidateModal] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
 
-  const totalStudents = agentStudents.length;
-  const totalTeachers = agentTeachers.length;
-  const totalFaculty = [...new Set(agentTeachers.map(t => t.departement.split(",")[0].trim()))].length;
-  const totalDepts = [...new Set(agentTeachers.map(t => t.departement))].length;
+  useEffect(() => {
+    api.stats().then((d) => setStats(d as unknown as Stats)).catch(() => {});
+  }, []);
 
-  const availableRooms = agentRooms.filter(r => r.disponible).length;
-  const cancelledSessions = seances.filter(s => s.statut === "annule" || s.statut === "reporte").length;
-  const conflictsCount = detectConflicts();
-
-  const gradesSoumis = gradeSubmissions.filter((g) => g.statut === "soumis").length;
-  const gradesValides = gradeSubmissions.filter((g) => g.statut === "valide").length;
-  const gradesPublies = gradeSubmissions.filter((g) => g.statut === "publie").length;
-  const gradesAttente = gradeSubmissions.filter((g) => g.statut === "en_attente").length;
-  const studentsWithMissingGrades = 4;
+  const gradesSoumis  = stats.gradeStats?.soumis ?? 0;
+  const gradesValides = stats.gradeStats?.valide ?? 0;
+  const gradesPublies = stats.gradeStats?.publie ?? 0;
 
   const alerts = [
     ...(gradesSoumis > 0 ? [`${gradesSoumis} module(s) avec notes soumises en attente de validation`] : []),
-    ...(gradesAttente > 0 ? [`${gradesAttente} module(s) sans notes — délai de soumission dépassé possible`] : []),
-    ...(conflictsCount > 0 ? [`${conflictsCount} conflit(s) de salle ou d'enseignant détecté(s)`] : []),
-    ...(agentTeachers.filter(t => t.schedule.length === 0).length > 0
-      ? [`${agentTeachers.filter(t => t.schedule.length === 0).length} enseignant(s) sans séances planifiées cette semaine`]
-      : []),
+    ...(stats.pendingRecours > 0 ? [`${stats.pendingRecours} recours accepté(s) en attente de validation agent`] : []),
   ];
+
+  async function handleBulkValidate() {
+    const submissions = await api.gradeSubmissions() as Array<{ id: number; statut: string }>;
+    const toValidate = submissions.filter((s) => s.statut === "soumis");
+    await Promise.all(toValidate.map((s) => api.validateGrade(s.id)));
+    setBulkValidated(true);
+    setShowValidateModal(false);
+    api.stats().then((d) => setStats(d as unknown as Stats)).catch(() => {});
+  }
+
+  async function handleBulkPublish() {
+    const submissions = await api.gradeSubmissions() as Array<{ id: number; statut: string }>;
+    const toPublish = submissions.filter((s) => s.statut === "valide");
+    await Promise.all(toPublish.map((s) => api.publishGrade(s.id)));
+    setBulkPublished(true);
+    setShowPublishModal(false);
+    api.stats().then((d) => setStats(d as unknown as Stats)).catch(() => {});
+  }
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -66,7 +72,6 @@ export default function AgentDashboard() {
       <main className="flex-1 p-7 overflow-auto">
         <motion.div variants={container} initial="hidden" animate="show" className="max-w-6xl mx-auto space-y-6">
 
-          {/* ── HEADER ── */}
           <motion.div variants={item}>
             <Card className="p-5">
               <div className="flex items-center justify-between flex-wrap gap-4">
@@ -81,21 +86,20 @@ export default function AgentDashboard() {
                     <School className="w-5 h-5 text-primary" />
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-sm">Ferhat Nadia</p>
-                    <p className="text-xs text-muted-foreground">Agent Pédagogique — Scolarité · Informatique</p>
+                    <p className="font-semibold text-sm">{profile.prenom} {profile.nom}</p>
+                    <p className="text-xs text-muted-foreground">Agent Pédagogique — {profile.departement}</p>
                   </div>
                 </div>
               </div>
             </Card>
           </motion.div>
 
-          {/* BLOCK 1 — Comptes */}
           <motion.div variants={item}>
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Comptes</p>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: "Total étudiants", value: totalStudents, icon: GraduationCap, color: "text-blue-600", bg: "bg-blue-50" },
-                { label: "Total enseignants", value: totalTeachers, icon: Users, color: "text-indigo-600", bg: "bg-indigo-50" },
+                { label: "Total étudiants",   value: stats.totalStudents,  icon: GraduationCap, color: "text-blue-600",   bg: "bg-blue-50" },
+                { label: "Total enseignants", value: stats.totalTeachers,  icon: Users,         color: "text-indigo-600", bg: "bg-indigo-50" },
               ].map((s) => (
                 <Card key={s.label} className="p-4">
                   <div className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center mb-2`}>
@@ -108,35 +112,14 @@ export default function AgentDashboard() {
             </div>
           </motion.div>
 
-          {/* BLOCK 2 — Emplois du temps */}
-          <motion.div variants={item}>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Emplois du temps</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {[
-                { label: "Salles disponibles", value: availableRooms, icon: DoorOpen, color: "text-cyan-600", bg: "bg-cyan-50" },
-                { label: "Séances reportées / annulées", value: cancelledSessions, icon: XCircle, color: cancelledSessions > 0 ? "text-amber-600" : "text-gray-400", bg: cancelledSessions > 0 ? "bg-amber-50" : "bg-gray-50" },
-                { label: "Conflits détectés", value: conflictsCount, icon: AlertOctagon, color: conflictsCount > 0 ? "text-red-600" : "text-gray-400", bg: conflictsCount > 0 ? "bg-red-50" : "bg-gray-50" },
-              ].map((s) => (
-                <Card key={s.label} className="p-4">
-                  <div className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center mb-2`}>
-                    <s.icon className={`w-4 h-4 ${s.color}`} />
-                  </div>
-                  <p className="text-xl font-bold">{s.value}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{s.label}</p>
-                </Card>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* BLOCK 3 — Notes */}
           <motion.div variants={item}>
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Notes & Publication</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { label: "Soumis (à valider)", value: gradesSoumis, icon: Clock, color: "text-amber-600", bg: "bg-amber-50" },
-                { label: "Validés (à publier)", value: gradesValides, icon: CheckSquare, color: "text-blue-600", bg: "bg-blue-50" },
-                { label: "Publiés officiellement", value: gradesPublies, icon: CheckCircle, color: "text-green-600", bg: "bg-green-50" },
-                { label: "Étudiants sans note", value: studentsWithMissingGrades, icon: XCircle, color: "text-gray-500", bg: "bg-gray-50" },
+                { label: "Soumis (à valider)",    value: gradesSoumis,  icon: Clock,        color: "text-amber-600", bg: "bg-amber-50" },
+                { label: "Validés (à publier)",   value: gradesValides, icon: CheckSquare,  color: "text-blue-600",  bg: "bg-blue-50" },
+                { label: "Publiés officiellement",value: gradesPublies, icon: CheckCircle,  color: "text-green-600", bg: "bg-green-50" },
+                { label: "En attente (non soumis)",value: stats.gradeStats?.en_attente ?? 0, icon: XCircle, color: "text-gray-500", bg: "bg-gray-50" },
               ].map((s) => (
                 <Card key={s.label} className="p-4">
                   <div className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center mb-2`}>
@@ -149,7 +132,6 @@ export default function AgentDashboard() {
             </div>
           </motion.div>
 
-          {/* Alerts + Quick Actions */}
           <motion.div variants={item} className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <Card className="p-5">
               <div className="flex items-center gap-2 mb-4">
@@ -186,7 +168,7 @@ export default function AgentDashboard() {
                   </Button>
                 ) : (
                   <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                    <CheckCircle className="w-4 h-4" />{gradesSoumis} modules validés avec succès.
+                    <CheckCircle className="w-4 h-4" />Notes validées avec succès.
                   </div>
                 )}
                 {!bulkPublished ? (
@@ -217,7 +199,7 @@ export default function AgentDashboard() {
               <p className="text-sm text-muted-foreground mb-4">Voulez-vous valider les notes de <strong>{gradesSoumis} module(s)</strong> soumis ?</p>
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1" onClick={() => setShowValidateModal(false)}>Annuler</Button>
-                <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={() => { setBulkValidated(true); setShowValidateModal(false); }}>Confirmer</Button>
+                <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={handleBulkValidate}>Confirmer</Button>
               </div>
             </Card>
           </motion.div>
@@ -232,7 +214,7 @@ export default function AgentDashboard() {
               <p className="text-sm text-muted-foreground mb-4">Les notes validées seront <strong>visibles par tous les étudiants</strong>.</p>
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1" onClick={() => setShowPublishModal(false)}>Annuler</Button>
-                <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={() => { setBulkPublished(true); setShowPublishModal(false); }}>Publier</Button>
+                <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={handleBulkPublish}>Publier</Button>
               </div>
             </Card>
           </motion.div>

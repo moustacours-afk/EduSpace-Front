@@ -3,43 +3,45 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Module extends Model
 {
-    use SoftDeletes;
+    protected $fillable = ['code', 'intitule', 'credits', 'filiere', 'niveau', 'semestre', 'enseignant_id'];
 
-    protected $fillable = [
-        'nom', 'code', 'semestre', 'niveau', 'type_ue', 'nature',
-        'coefficient', 'credits', 'vhs',
-        'has_cours', 'duree_cours',
-        'has_td',    'duree_td',
-        'has_tp',    'duree_tp',
-        'pct_examen', 'pct_td', 'pct_tp',
-    ];
-
-    protected $casts = [
-        'semestre'    => 'integer',
-        'coefficient' => 'integer',
-        'credits'     => 'integer',
-        'vhs'         => 'integer',
-        'has_cours'   => 'boolean',
-        'has_td'      => 'boolean',
-        'has_tp'      => 'boolean',
-        'pct_examen'  => 'integer',
-        'pct_td'      => 'integer',
-        'pct_tp'      => 'integer',
-    ];
-
-    // Exam-only when no TD and no TP sessions
-    public function getIsExamOnlyAttribute(): bool
+    public function enseignantResponsable()
     {
-        return !$this->has_td && !$this->has_tp;
+        return $this->belongsTo(Enseignant::class, 'enseignant_id');
     }
 
-    // Verify percentages sum to 100 (helper used by controller)
-    public function totalPct(): int
+    public function enseignants()
     {
-        return $this->pct_examen + $this->pct_td + ($this->has_tp ? $this->pct_tp : 0);
+        return $this->belongsToMany(Enseignant::class, 'enseignant_module')
+            ->withPivot('role', 'responsable', 'groupes')
+            ->withTimestamps();
+    }
+
+    public function notes()
+    {
+        return $this->hasMany(Note::class);
+    }
+
+    public function recours()
+    {
+        return $this->hasMany(Recour::class);
+    }
+
+    public function supports()
+    {
+        return $this->hasMany(Support::class);
+    }
+
+    public function seances()
+    {
+        return $this->hasMany(Seance::class);
+    }
+
+    public function soumissionsNotes()
+    {
+        return $this->hasMany(SoumissionNote::class);
     }
 }

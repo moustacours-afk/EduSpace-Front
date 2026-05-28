@@ -1,32 +1,48 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { SuperAgentSidebar } from "@/components/SuperAgentSidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, BookOpen, ShieldCheck, CheckCircle, XCircle, ArrowRight } from "lucide-react";
-import { getAgents, getProgrammes, NIVEAUX_LIST } from "@/lib/superAgentStore";
+import { superAgent as api } from "@/lib/api";
+import { NIVEAUX_LIST } from "@/lib/superAgentStore";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } };
 const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } };
 
+interface Stats {
+  totalAgents: number;
+  totalModules: number;
+  totalEtudiants: number;
+  totalEnseignants: number;
+}
+
+interface AgentRecord { id: number; nom: string; prenom: string; email: string; departement: string }
+interface ModuleRecord { id: number; intitule: string; niveau: string; filiere: string }
+
 export default function SuperAgentDashboard() {
   const [, setLocation] = useLocation();
+  const [stats, setStats] = useState<Stats>({ totalAgents: 0, totalModules: 0, totalEtudiants: 0, totalEnseignants: 0 });
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
+  const [modules, setModules] = useState<ModuleRecord[]>([]);
 
-  const agents     = useMemo(() => getAgents(), []);
-  const programmes = useMemo(() => getProgrammes(), []);
+  useEffect(() => {
+    api.stats().then((d) => setStats(d as unknown as Stats)).catch(() => {});
+    api.agents().then((d) => setAgents(d as AgentRecord[])).catch(() => {});
+    api.modules().then((d) => setModules(d as ModuleRecord[])).catch(() => {});
+  }, []);
 
-  const activeAgents    = agents.filter(a => a.active).length;
-  const inactiveAgents  = agents.length - activeAgents;
-  const programmesConf  = programmes.filter(p => p.modules.length > 0).length;
-  const totalModules    = programmes.reduce((acc, p) => acc + p.modules.length, 0);
-  const niveauxCouverts = [...new Set(programmes.filter(p => p.modules.length > 0).map(p => p.niveau))].length;
+  const modulesByNiveau = NIVEAUX_LIST.reduce<Record<string, number>>((acc, n) => {
+    acc[n] = modules.filter((m) => m.niveau === n).length;
+    return acc;
+  }, {});
 
-  const stats = [
-    { label: "Agents créés", value: agents.length, sub: `${activeAgents} actifs`, icon: Users, color: "bg-purple-50 text-purple-700", href: "/super-agent/comptes" },
-    { label: "Agents actifs", value: activeAgents, sub: `${inactiveAgents} inactifs`, icon: CheckCircle, color: "bg-green-50 text-green-700", href: "/super-agent/comptes" },
-    { label: "Programmes configurés", value: programmesConf, sub: `${niveauxCouverts} niveaux couverts`, icon: BookOpen, color: "bg-blue-50 text-blue-700", href: "/super-agent/modules" },
-    { label: "Total modules", value: totalModules, sub: "toutes spécialités", icon: ShieldCheck, color: "bg-amber-50 text-amber-700", href: "/super-agent/modules" },
+  const statCards = [
+    { label: "Agents créés",          value: stats.totalAgents,     sub: "comptes actifs",       icon: Users,      color: "bg-purple-50 text-purple-700", href: "/super-agent/comptes" },
+    { label: "Total étudiants",       value: stats.totalEtudiants,  sub: "inscrits",             icon: CheckCircle, color: "bg-green-50 text-green-700",   href: "/super-agent/comptes" },
+    { label: "Total modules",         value: stats.totalModules,    sub: "toutes spécialités",   icon: BookOpen,   color: "bg-blue-50 text-blue-700",     href: "/super-agent/modules" },
+    { label: "Total enseignants",     value: stats.totalEnseignants, sub: "dans l'établissement", icon: ShieldCheck, color: "bg-amber-50 text-amber-700",  href: "/super-agent/modules" },
   ];
 
   return (
@@ -48,7 +64,7 @@ export default function SuperAgentDashboard() {
           </motion.div>
 
           <motion.div variants={item} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {stats.map(s => (
+            {statCards.map((s) => (
               <Card key={s.label} className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => setLocation(s.href)}>
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${s.color}`}>
                   <s.icon className="w-5 h-5" />
@@ -73,15 +89,13 @@ export default function SuperAgentDashboard() {
                   <p className="text-sm text-muted-foreground text-center py-6">Aucun agent créé pour l'instant.</p>
                 ) : (
                   <div className="space-y-2">
-                    {agents.slice(-4).reverse().map(a => (
+                    {agents.slice(-4).reverse().map((a) => (
                       <div key={a.id} className="flex items-center justify-between text-sm py-1.5 border-b last:border-0">
                         <div>
                           <span className="font-medium">{a.prenom} {a.nom}</span>
-                          <span className="text-muted-foreground ml-2 text-xs">{a.wilaya}</span>
+                          {a.departement && <span className="text-muted-foreground ml-2 text-xs">{a.departement}</span>}
                         </div>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${a.active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                          {a.active ? "Actif" : "Inactif"}
-                        </span>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Actif</span>
                       </div>
                     ))}
                   </div>
@@ -98,8 +112,8 @@ export default function SuperAgentDashboard() {
                   </Button>
                 </div>
                 <div className="space-y-2">
-                  {NIVEAUX_LIST.map(niveau => {
-                    const total = programmes.filter(p => p.niveau === niveau).reduce((a, p) => a + p.modules.length, 0);
+                  {NIVEAUX_LIST.map((niveau) => {
+                    const total = modulesByNiveau[niveau] ?? 0;
                     return (
                       <div key={niveau} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
                         <span className="font-medium w-16">{niveau}</span>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -7,24 +8,42 @@ import { BookOpen, ArrowLeft, Lock, User } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { login } from "@/lib/api";
+import { setAuth } from "@/lib/auth";
 
 const schema = z.object({
-  username: z.string().min(3, "Nom d'utilisateur requis"),
-  motDePasse: z.string().min(4, "Mot de passe requis"),
+  email: z.string().min(3, "Identifiant requis"),
+  motDePasse: z.string().min(1, "Mot de passe requis"),
 });
 
 type FormValues = z.infer<typeof schema>;
 
 export default function LoginEnseignant() {
   const [, setLocation] = useLocation();
+  const [loginError, setLoginError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { username: "", motDePasse: "" },
+    defaultValues: { email: "", motDePasse: "" },
   });
 
-  function onSubmit() {
-    setLocation("/enseignant/dashboard");
+  async function onSubmit(values: FormValues) {
+    setLoginError("");
+    setLoading(true);
+    try {
+      const { token, user } = await login(values.email, values.motDePasse);
+      if (user.role !== "enseignant") {
+        setLoginError("Ce compte n'est pas un compte enseignant.");
+        return;
+      }
+      setAuth(token, user);
+      setLocation("/enseignant/dashboard");
+    } catch (err: unknown) {
+      setLoginError(err instanceof Error ? err.message : "Identifiants incorrects.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -45,7 +64,7 @@ export default function LoginEnseignant() {
         </button>
 
         <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <div className="flex items-center gap-3 mb-8">
+          <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/30">
               <BookOpen className="w-6 h-6 text-white" />
             </div>
@@ -55,18 +74,29 @@ export default function LoginEnseignant() {
             </div>
           </div>
 
+          {/* Demo credentials hint */}
+          <div className="bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mb-5 text-xs text-emerald-700">
+            <span className="font-semibold">Compte démo :</span> username = <span className="font-mono">m.hadj@univ-alger.dz</span> — mot de passe: <span className="font-mono">password</span>
+          </div>
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField
                 control={form.control}
-                name="username"
+                name="email"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-gray-700 font-medium">Nom d'utilisateur</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <Input {...field} type="text" className="pl-10" placeholder="ex: m.hadj" data-testid="input-username" />
+                        <Input
+                          {...field}
+                          type="text"
+                          className="pl-10"
+                          placeholder="ex: m.hadj"
+                          data-testid="input-username"
+                        />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -82,15 +112,33 @@ export default function LoginEnseignant() {
                     <FormControl>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <Input {...field} type="password" className="pl-10" placeholder="••••••••" data-testid="input-mot-de-passe" />
+                        <Input
+                          {...field}
+                          type="password"
+                          className="pl-10"
+                          placeholder="••••••••"
+                          data-testid="input-mot-de-passe"
+                        />
                       </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold py-5 rounded-xl shadow-lg" data-testid="button-submit-login">
-                Se connecter
+
+              {loginError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">
+                  {loginError}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold py-5 rounded-xl shadow-lg"
+                data-testid="button-submit-login"
+              >
+                {loading ? "Connexion…" : "Se connecter"}
               </Button>
             </form>
           </Form>

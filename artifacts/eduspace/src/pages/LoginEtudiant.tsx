@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -7,24 +8,42 @@ import { GraduationCap, ArrowLeft, Lock, Hash } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { login } from "@/lib/api";
+import { setAuth } from "@/lib/auth";
 
 const schema = z.object({
-  matricule: z.string().min(8, "Numéro matricule invalide"),
-  motDePasse: z.string().min(4, "Mot de passe requis"),
+  email: z.string().min(3, "Identifiant requis"),
+  motDePasse: z.string().min(1, "Mot de passe requis"),
 });
 
 type FormValues = z.infer<typeof schema>;
 
 export default function LoginEtudiant() {
   const [, setLocation] = useLocation();
+  const [loginError, setLoginError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { matricule: "", motDePasse: "" },
+    defaultValues: { email: "", motDePasse: "" },
   });
 
-  function onSubmit() {
-    setLocation("/etudiant/dashboard");
+  async function onSubmit(values: FormValues) {
+    setLoginError("");
+    setLoading(true);
+    try {
+      const { token, user } = await login(values.email, values.motDePasse);
+      if (user.role !== "etudiant") {
+        setLoginError("Ce compte n'est pas un compte étudiant.");
+        return;
+      }
+      setAuth(token, user);
+      setLocation("/etudiant/dashboard");
+    } catch (err: unknown) {
+      setLoginError(err instanceof Error ? err.message : "Identifiants incorrects.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -45,7 +64,7 @@ export default function LoginEtudiant() {
         </button>
 
         <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-8">
-          <div className="flex items-center gap-3 mb-8">
+          <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center shadow-md">
               <GraduationCap className="w-6 h-6 text-white" />
             </div>
@@ -55,11 +74,16 @@ export default function LoginEtudiant() {
             </div>
           </div>
 
+          {/* Demo credentials hint */}
+          <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-5 text-xs text-blue-700">
+            <span className="font-semibold">Compte démo :</span> matricule = <span className="font-mono">k.bensalem@univ-alger.dz</span> — mot de passe: <span className="font-mono">password</span>
+          </div>
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField
                 control={form.control}
-                name="matricule"
+                name="email"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-gray-700 font-medium">Numéro Matricule</FormLabel>
@@ -102,12 +126,19 @@ export default function LoginEtudiant() {
                 )}
               />
 
+              {loginError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">
+                  {loginError}
+                </div>
+              )}
+
               <Button
                 type="submit"
+                disabled={loading}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-5 rounded-xl transition-all"
                 data-testid="button-submit-login"
               >
-                Se connecter
+                {loading ? "Connexion…" : "Se connecter"}
               </Button>
             </form>
           </Form>

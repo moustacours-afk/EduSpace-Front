@@ -9,34 +9,43 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { login } from "@/lib/api";
+import { setAuth } from "@/lib/auth";
 
 const schema = z.object({
-  matricule: z.string().min(1, "Matricule requis"),
+  email: z.string().min(1, "Matricule requis"),
   motDePasse: z.string().min(1, "Mot de passe requis"),
 });
 
 type FormValues = z.infer<typeof schema>;
 
-const AGENT_MATRICULE = "agent001";
-const AGENT_PASSWORD = "Agent@2025";
-
 export default function LoginAgent() {
   const [, setLocation] = useLocation();
   const [loginError, setLoginError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { matricule: "", motDePasse: "" },
+    defaultValues: { email: "", motDePasse: "" },
   });
 
-  function onSubmit(values: FormValues) {
+  async function onSubmit(values: FormValues) {
     setLoginError("");
-    if (values.matricule === AGENT_MATRICULE && values.motDePasse === AGENT_PASSWORD) {
+    setLoading(true);
+    try {
+      const { token, user } = await login(values.email, values.motDePasse);
+      if (user.role !== "agent") {
+        setLoginError("Ce compte n'est pas un compte agent pédagogique.");
+        return;
+      }
+      setAuth(token, user);
       sessionStorage.setItem("agentLoggedIn", "true");
       setLocation("/agent/dashboard");
-    } else {
-      setLoginError("Matricule ou mot de passe incorrect.");
+    } catch (err: unknown) {
+      setLoginError(err instanceof Error ? err.message : "Identifiants incorrects.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -57,7 +66,7 @@ export default function LoginAgent() {
         </button>
 
         <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <div className="flex items-center gap-3 mb-8">
+          <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center shadow-lg shadow-purple-500/30">
               <Users className="w-6 h-6 text-white" />
             </div>
@@ -67,18 +76,23 @@ export default function LoginAgent() {
             </div>
           </div>
 
+          {/* Demo credentials hint */}
+          <div className="bg-purple-50 border border-purple-100 rounded-lg px-3 py-2 mb-5 text-xs text-purple-700">
+            <span className="font-semibold">Compte démo :</span> matricule = <span className="font-mono">n.ferhat@univ-alger.dz</span> — mot de passe: <span className="font-mono">password</span>
+          </div>
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField
                 control={form.control}
-                name="matricule"
+                name="email"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-gray-700 font-medium">Matricule agent</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <IdCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <Input {...field} className="pl-10" placeholder="ex: agent001" autoComplete="username" />
+                        <Input {...field} type="text" className="pl-10" placeholder="ex: agent001" autoComplete="username" />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -119,9 +133,10 @@ export default function LoginAgent() {
 
               <Button
                 type="submit"
+                disabled={loading}
                 className="w-full bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white font-semibold py-5 rounded-xl shadow-lg"
               >
-                Se connecter
+                {loading ? "Connexion…" : "Se connecter"}
               </Button>
             </form>
           </Form>

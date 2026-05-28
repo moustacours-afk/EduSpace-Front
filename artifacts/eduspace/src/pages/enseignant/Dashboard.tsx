@@ -1,18 +1,36 @@
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { TeacherSidebar } from "@/components/TeacherSidebar";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Upload, ClipboardList, CalendarClock, Users } from "lucide-react";
-import { currentTeacher, modules, supports, seances, studentsForTeacher } from "@/data/mockData";
+import { BookOpen, Upload, ClipboardList, Users } from "lucide-react";
+import { enseignant as api } from "@/lib/api";
+import { getUser } from "@/lib/auth";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } };
 const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } };
 
-const teacherModules = modules.filter((m) => m.enseignant.includes("Hadj"));
-const teacherSupports = supports.filter((s) => s.enseignantId === "t1");
-const upcomingSeances = seances.filter((s) => s.statut !== "annule").slice(0, 4);
+interface Module { id: number; intitule: string; code: string; niveau: string; semestre: string; credits: number }
+interface Student { id: number; nom: string; prenom: string; matricule: string }
+interface Support { id: number; nom: string; module: string; uploadDate: string; format: string }
+interface Soumission { id: number; statut: string }
 
 export default function EnseignantDashboard() {
+  const user = getUser();
+  const profile = (user?.profile ?? {}) as Record<string, string>;
+
+  const [modules, setModules] = useState<Module[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [soumissions, setSoumissions] = useState<Soumission[]>([]);
+
+  useEffect(() => {
+    api.modules().then((d) => setModules(d as Module[])).catch(() => {});
+    api.students().then((d) => setStudents(d as Student[])).catch(() => {});
+    api.soumissions().then((d) => setSoumissions(d as Soumission[])).catch(() => {});
+  }, []);
+
+  const pendingSoumissions = soumissions.filter((s) => s.statut === "en_attente").length;
+
   return (
     <div className="flex min-h-screen bg-background">
       <TeacherSidebar />
@@ -20,17 +38,17 @@ export default function EnseignantDashboard() {
         <motion.div variants={container} initial="hidden" animate="show" className="max-w-5xl mx-auto space-y-6">
           <motion.div variants={item} className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Bonjour, Dr. {currentTeacher.prenom} {currentTeacher.nom}</h1>
-              <p className="text-muted-foreground mt-1">{currentTeacher.grade} — {currentTeacher.departement}</p>
+              <h1 className="text-2xl font-bold">Bonjour, Dr. {profile.prenom} {profile.nom}</h1>
+              <p className="text-muted-foreground mt-1">{profile.grade} — {profile.departement}</p>
             </div>
           </motion.div>
 
           <motion.div variants={item} className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: "Modules enseignés", value: teacherModules.length, icon: BookOpen, color: "text-blue-600", bg: "bg-blue-50" },
-              { label: "Supports déposés", value: teacherSupports.length, icon: Upload, color: "text-emerald-600", bg: "bg-emerald-50" },
-              { label: "Séances à venir", value: upcomingSeances.length, icon: CalendarClock, color: "text-indigo-600", bg: "bg-indigo-50" },
-              { label: "Étudiants", value: studentsForTeacher.length, icon: Users, color: "text-purple-600", bg: "bg-purple-50" },
+              { label: "Modules enseignés", value: modules.length,        icon: BookOpen,      color: "text-blue-600",   bg: "bg-blue-50" },
+              { label: "À soumettre",       value: pendingSoumissions,    icon: Upload,        color: "text-amber-600",  bg: "bg-amber-50" },
+              { label: "Total soumissions", value: soumissions.length,    icon: ClipboardList, color: "text-indigo-600", bg: "bg-indigo-50" },
+              { label: "Étudiants",         value: students.length,       icon: Users,         color: "text-purple-600", bg: "bg-purple-50" },
             ].map((stat) => (
               <Card key={stat.label} className="p-5">
                 <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center mb-3`}>
@@ -49,69 +67,56 @@ export default function EnseignantDashboard() {
                   <BookOpen className="w-4 h-4 text-blue-500" />
                   Mes modules
                 </h2>
-                <div className="space-y-3">
-                  {teacherModules.map((m) => (
-                    <div key={m.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors" data-testid={`module-${m.id}`}>
-                      <div>
-                        <p className="font-medium text-sm">{m.intitule}</p>
-                        <p className="text-xs text-muted-foreground">{m.code} — {m.niveau}</p>
+                {modules.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">Aucun module assigné.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {modules.map((m) => (
+                      <div key={m.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors" data-testid={`module-${m.id}`}>
+                        <div>
+                          <p className="font-medium text-sm">{m.intitule}</p>
+                          <p className="text-xs text-muted-foreground">{m.code} — {m.niveau}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Badge variant="outline" className="text-xs">{m.semestre}</Badge>
+                          <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">{m.credits} cr.</Badge>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Badge variant="outline" className="text-xs">{m.semestre}</Badge>
-                        <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">{m.credits} cr.</Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </Card>
             </motion.div>
 
             <motion.div variants={item}>
               <Card className="p-6">
                 <h2 className="font-semibold mb-4 flex items-center gap-2">
-                  <CalendarClock className="w-4 h-4 text-indigo-500" />
-                  Prochaines séances
+                  <ClipboardList className="w-4 h-4 text-indigo-500" />
+                  Soumissions de notes
                 </h2>
-                <div className="space-y-3">
-                  {upcomingSeances.map((s) => (
-                    <div key={s.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/20" data-testid={`seance-teacher-${s.id}`}>
-                      <div className="text-center min-w-[52px]">
-                        <p className="text-xs font-bold text-primary">{s.heureDebut}</p>
-                        <p className="text-xs text-muted-foreground">{s.jour}</p>
+                {soumissions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">Aucune soumission.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {soumissions.slice(0, 5).map((s: Soumission & Record<string, unknown>) => (
+                      <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20" data-testid={`soumission-${s.id}`}>
+                        <div>
+                          <p className="text-sm font-medium">{String(s.module ?? "—")}</p>
+                          <p className="text-xs text-muted-foreground">{String(s.groupe ?? "")} — {String(s.niveau ?? "")}</p>
+                        </div>
+                        <Badge className={`text-xs ${
+                          s.statut === "soumis"     ? "bg-amber-100 text-amber-800 border-amber-200" :
+                          s.statut === "valide"     ? "bg-blue-100 text-blue-800 border-blue-200" :
+                          s.statut === "publie"     ? "bg-green-100 text-green-800 border-green-200" :
+                          "bg-gray-100 text-gray-700 border-gray-200"
+                        }`}>{String(s.statut)}</Badge>
                       </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{s.module}</p>
-                        <p className="text-xs text-muted-foreground">{s.salle} — {s.groupes.join(", ")}</p>
-                      </div>
-                      <Badge className="text-xs bg-teal-100 text-teal-800 border-teal-200">{s.type}</Badge>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </Card>
             </motion.div>
           </div>
-
-          <motion.div variants={item}>
-            <Card className="p-6">
-              <h2 className="font-semibold mb-4 flex items-center gap-2">
-                <Upload className="w-4 h-4 text-emerald-500" />
-                Derniers supports déposés
-              </h2>
-              <div className="space-y-2">
-                {teacherSupports.slice(0, 4).map((s) => (
-                  <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/20 text-sm" data-testid={`support-teacher-${s.id}`}>
-                    <div>
-                      <p className="font-medium">{s.nom}</p>
-                      <p className="text-xs text-muted-foreground">{s.module} — {s.uploadDate}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Badge className="text-xs bg-blue-100 text-blue-800 border-blue-200 uppercase">{s.format}</Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </motion.div>
         </motion.div>
       </main>
     </div>

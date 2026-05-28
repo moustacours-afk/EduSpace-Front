@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { StudentSidebar } from "@/components/StudentSidebar";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Clock } from "lucide-react";
-import { seances } from "@/data/mockData";
+import { etudiant as api } from "@/lib/api";
+import { getUser } from "@/lib/auth";
 
 const jours = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Samedi"];
 const creneaux = [
@@ -19,11 +21,21 @@ const typeColors: Record<string, string> = {
   TP: "bg-teal-100 text-teal-800 border-teal-200",
 };
 
-function getSeance(jour: string, debut: string) {
-  return seances.find((s) => s.jour === jour && s.heureDebut === debut);
-}
+interface Seance { id: number; module: string; type: string; jour: string; heureDebut: string; heureFin: string; salle: string; enseignant: string; statut: string }
 
 export default function EtudiantEmploiDuTemps() {
+  const [seances, setSeances] = useState<Seance[]>([]);
+  const user = getUser();
+  const profile = (user?.profile ?? {}) as Record<string, string>;
+
+  useEffect(() => {
+    api.emploiDuTemps().then((d) => setSeances(d as Seance[])).catch(() => {});
+  }, []);
+
+  function getSeance(jour: string, debut: string) {
+    return seances.find((s) => s.jour === jour && s.heureDebut === debut);
+  }
+
   const changed = seances.filter((s) => s.statut !== "normal");
 
   return (
@@ -33,7 +45,7 @@ export default function EtudiantEmploiDuTemps() {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="max-w-7xl mx-auto space-y-6">
           <div>
             <h1 className="text-2xl font-bold">Emploi du temps</h1>
-            <p className="text-muted-foreground mt-1">Semestre 5 — Groupe 2 — Informatique L3</p>
+            <p className="text-muted-foreground mt-1">{profile.niveau} — {profile.groupe} — {profile.filiere}</p>
           </div>
 
           {changed.length > 0 && (
@@ -95,7 +107,7 @@ export default function EtudiantEmploiDuTemps() {
                               <p className="font-semibold text-xs leading-tight">{s.module}</p>
                               <p className="text-xs text-muted-foreground mt-0.5">{s.salle}</p>
                               <div className="flex items-center gap-1 mt-1 flex-wrap">
-                                <Badge className={`text-xs border ${typeColors[s.type]}`}>{s.type}</Badge>
+                                <Badge className={`text-xs border ${typeColors[s.type] ?? "bg-gray-100 text-gray-800 border-gray-200"}`}>{s.type}</Badge>
                                 {s.statut !== "normal" && (
                                   <Badge className="text-xs border bg-red-100 text-red-800 border-red-200">{s.statut}</Badge>
                                 )}
