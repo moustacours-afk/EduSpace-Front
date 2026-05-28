@@ -15,9 +15,21 @@ export type AgentAccount = {
 export type ModuleEntry = {
   id: string;
   nom: string;
+  code: string;
   coefficient: number;
   credits: number;
   ue: string;
+  nature: "obligatoire" | "optionnelle";
+  vhs: number;
+  has_cours: boolean;
+  duree_cours: string;
+  has_td: boolean;
+  duree_td: string;
+  has_tp: boolean;
+  duree_tp: string;
+  pct_examen: number;
+  pct_td: number;
+  pct_tp: number;
 };
 
 export type ProgrammeEntry = {

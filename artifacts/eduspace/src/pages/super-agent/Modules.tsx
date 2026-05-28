@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SuperAgentSidebar } from "@/components/SuperAgentSidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BookOpen, Plus, Trash2, X, GraduationCap, ChevronRight } from "lucide-react";
+import { BookOpen, Plus, Trash2, GraduationCap, ChevronRight } from "lucide-react";
+import AjoutModule from "./AjoutModule";
 import {
   getAllFacultes, getDepartements, getSpecialites,
   getModulesForProgramme, addModuleToProgramme, removeModuleFromProgramme,
@@ -17,8 +17,6 @@ import {
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
-const EMPTY_MOD = { nom: "", coefficient: 2, credits: 4, ue: "" };
-const UE_SUGGESTIONS = ["UEF 1.1","UEF 1.2","UEF 2.1","UEF 2.2","UEM 1.1","UEM 1.2","UEM 2.1","UET 1.1","UET 1.2","UEO 1.1","UEO 2.1"];
 
 export default function SuperAgentModules() {
   const [faculte, setFaculte]       = useState("");
@@ -28,8 +26,6 @@ export default function SuperAgentModules() {
   const [semestre, setSemestre]     = useState("S5");
 
   const [showModal, setShowModal]   = useState(false);
-  const [modForm, setModForm]       = useState({ ...EMPTY_MOD, ue: "" });
-  const [modErrors, setModErrors]   = useState<Partial<typeof EMPTY_MOD>>({});
   const [confirmDel, setConfirmDel] = useState<{ mod: ModuleEntry } | null>(null);
   const [modules, setModules]       = useState<ModuleEntry[]>([]);
 
@@ -77,28 +73,10 @@ export default function SuperAgentModules() {
     setSemestre(sems[0]);
   }
 
-  function validateMod() {
-    const e: Partial<typeof EMPTY_MOD> = {};
-    if (!modForm.nom.trim()) e.nom = "Nom requis";
-    if (modForm.coefficient < 1 || modForm.coefficient > 6) e.coefficient = "Entre 1 et 6" as unknown as number;
-    if (modForm.credits < 1 || modForm.credits > 12) e.credits = "Entre 1 et 12" as unknown as number;
-    if (!modForm.ue.trim()) e.ue = "UE requise";
-    setModErrors(e);
-    return Object.keys(e).length === 0;
-  }
-
-  function handleAddModule() {
-    if (!validateMod()) return;
-    addModuleToProgramme(faculte, departement, specialite, niveau, semestre, {
-      nom: modForm.nom.trim(),
-      coefficient: Number(modForm.coefficient),
-      credits: Number(modForm.credits),
-      ue: modForm.ue.trim(),
-    });
+  function handleAddModule(mod: Omit<ModuleEntry, "id">) {
+    addModuleToProgramme(faculte, departement, specialite, niveau, semestre, mod);
     refreshModules();
     setShowModal(false);
-    setModForm({ ...EMPTY_MOD, ue: "" });
-    setModErrors({});
   }
 
   function handleRemove(mod: ModuleEntry) {
@@ -326,74 +304,12 @@ export default function SuperAgentModules() {
       </main>
 
       {/* Add module modal */}
-      <AnimatePresence>
-        {showModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-5">
-                  <h2 className="font-bold text-lg flex items-center gap-2">
-                    <Plus className="w-5 h-5 text-purple-600" />Ajouter un module
-                    <Badge variant="outline" className="text-xs ml-1">{niveau} — {semestre}</Badge>
-                  </h2>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setShowModal(false)}>
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 mb-4">
-                  {faculte} · {departement} · {specialite}
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">Nom du module *</label>
-                    <Input placeholder="ex: Algorithmique Avancée" value={modForm.nom}
-                      onChange={e => setModForm(f => ({ ...f, nom: e.target.value }))} />
-                    {modErrors.nom && <p className="text-xs text-red-500 mt-0.5">{modErrors.nom}</p>}
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">Unité d'Enseignement (UE) *</label>
-                    <Select value={modForm.ue} onValueChange={v => setModForm(f => ({ ...f, ue: v }))}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="Sélectionner une UE" /></SelectTrigger>
-                      <SelectContent>
-                        {UE_SUGGESTIONS.map(ue => <SelectItem key={ue} value={ue}>{ue}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Input className="mt-1.5" placeholder="Ou saisir manuellement…" value={modForm.ue}
-                      onChange={e => setModForm(f => ({ ...f, ue: e.target.value }))} />
-                    {modErrors.ue && <p className="text-xs text-red-500 mt-0.5">{modErrors.ue}</p>}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1">Coefficient (1–6) *</label>
-                      <Input type="number" min={1} max={6} value={modForm.coefficient}
-                        onChange={e => setModForm(f => ({ ...f, coefficient: Number(e.target.value) }))} />
-                      {modErrors.coefficient && <p className="text-xs text-red-500 mt-0.5">{String(modErrors.coefficient)}</p>}
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1">Crédits (1–12) *</label>
-                      <Input type="number" min={1} max={12} value={modForm.credits}
-                        onChange={e => setModForm(f => ({ ...f, credits: Number(e.target.value) }))} />
-                      {modErrors.credits && <p className="text-xs text-red-500 mt-0.5">{String(modErrors.credits)}</p>}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 mt-6">
-                  <Button variant="outline" className="flex-1" onClick={() => setShowModal(false)}>Annuler</Button>
-                  <Button className="flex-1 bg-purple-600 hover:bg-purple-700" onClick={handleAddModule}>
-                    <Plus className="w-4 h-4 mr-1" />Ajouter
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <AjoutModule
+        open={showModal}
+        contextLabel={`${faculte} · ${departement} · ${specialite} — ${niveau} ${semestre}`}
+        onClose={() => setShowModal(false)}
+        onSave={handleAddModule}
+      />
 
       {/* Confirm delete */}
       <AnimatePresence>

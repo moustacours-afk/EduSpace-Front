@@ -19,6 +19,13 @@ const GROUPES   = ["Tous", "Groupe 1", "Groupe 2", "Groupe 3", "Groupe 4"];
 const SEMESTRES = ["S1", "S2", "S3", "S4", "S5", "S6"];
 const SESSIONS  = ["Normale", "Rattrapage"];
 
+// Niveau groupings for annuelle view: each pair of semesters forms one academic year
+const NIVEAU_GROUPS: { label: string; sems: string[] }[] = [
+  { label: "L1", sems: ["S1", "S2"] },
+  { label: "L2", sems: ["S3", "S4"] },
+  { label: "L3", sems: ["S5", "S6"] },
+];
+
 // UE groupings for par matière view
 type UEInfo = { nom: string; modules: string[] };
 const UE_PAR_NIVEAU_SEMESTRE: Record<string, UEInfo[]> = {
@@ -101,6 +108,15 @@ export default function AgentDeliberations() {
   const activeSems = useMemo(() =>
     selectedSemestres.length === 0 ? SEMESTRES : [...selectedSemestres].sort(),
     [selectedSemestres]
+  );
+
+  // Niveau groups that have at least one active semester
+  const activeNiveauGroups = useMemo(() =>
+    NIVEAU_GROUPS.map(ng => ({
+      ...ng,
+      activeSems: ng.sems.filter(s => activeSems.includes(s)),
+    })).filter(ng => ng.activeSems.length > 0),
+    [activeSems]
   );
 
   function toggleSemestre(s: string) {
@@ -246,8 +262,19 @@ export default function AgentDeliberations() {
       decision = "Ajourné";
     }
 
-    return { idx: idx + 1, ...s, perSem, totalCredits, annualMoy, decision };
-  }), [studentsInGroupe, submissionsPerSem, activeSems, session]);
+    // Per-niveau summary (L1=S1+S2, L2=S3+S4, L3=S5+S6)
+    const perNiveauSummary = activeNiveauGroups.map(ng => {
+      const semData = ng.activeSems.map(sem =>
+        perSem.find(p => p.sem === sem) ?? { sem, semMoy: null as number | null, credits: 0 }
+      );
+      const validMoys = semData.flatMap(p => p.semMoy !== null ? [p.semMoy] : []);
+      const moyGen = validMoys.length > 0 ? avg(validMoys) : null;
+      const totalCreds = semData.reduce((a, p) => a + p.credits, 0);
+      return { label: ng.label, semData, moyGen, totalCreds };
+    });
+
+    return { idx: idx + 1, ...s, perSem, perNiveauSummary, totalCredits, annualMoy, decision };
+  }), [studentsInGroupe, submissionsPerSem, activeSems, activeNiveauGroups, session]);
 
   // ── Print functions ──
   function printPV() {
@@ -323,16 +350,27 @@ export default function AgentDeliberations() {
     const win = window.open("", "_blank", "width=1100,height=800");
     if (!win) return;
 
-    const semHeaders = activeSems.map(sem =>
-      `<th style="border:1px solid #bbb;background:#bfdbfe;padding:6px 4px;font-size:10px;text-align:center">Moy ${sem}</th>
-       <th style="border:1px solid #bbb;background:#bfdbfe;padding:6px 4px;font-size:10px;text-align:center">Crédits ${sem}</th>`
-    ).join("");
+    const niveauHeaders = activeNiveauGroups.map(ng => {
+      const semCols = ng.activeSems.map(sem =>
+        `<th style="border:1px solid #bbb;background:#bfdbfe;padding:6px 4px;font-size:10px;text-align:center">Moy ${sem}</th>
+         <th style="border:1px solid #bbb;background:#bfdbfe;padding:6px 4px;font-size:10px;text-align:center">Crédits ${sem}</th>`
+      ).join("");
+      return semCols +
+        `<th style="border:1px solid #bbb;background:#818cf8;color:#fff;padding:6px 4px;font-size:10px;text-align:center">Moy gén. ${ng.label}</th>
+         <th style="border:1px solid #bbb;background:#818cf8;color:#fff;padding:6px 4px;font-size:10px;text-align:center">Total crédits ${ng.label}</th>`;
+    }).join("");
 
     const tableRows = annualRows.map(r => {
-      const semCells = r.perSem.map(p => {
-        const c = p.semMoy !== null ? (p.semMoy >= 10 ? "#166534" : "#991b1b") : "#aaa";
-        return `<td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold;color:${c}">${p.semMoy !== null ? p.semMoy.toFixed(2) : "—"}</td>
-                <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px">${p.credits}</td>`;
+      const semCells = r.perNiveauSummary.map(ns => {
+        const sdCells = ns.semData.map(p => {
+          const c = p.semMoy !== null ? (p.semMoy >= 10 ? "#166534" : "#991b1b") : "#aaa";
+          return `<td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold;color:${c}">${p.semMoy !== null ? p.semMoy.toFixed(2) : "—"}</td>
+                  <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px">${p.credits}</td>`;
+        }).join("");
+        const gc = ns.moyGen !== null ? (ns.moyGen >= 10 ? "#166534" : "#991b1b") : "#aaa";
+        return sdCells +
+          `<td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold;background:#ede9fe;color:${gc}">${ns.moyGen !== null ? ns.moyGen.toFixed(2) : "—"}</td>
+           <td style="border:1px solid #bbb;padding:4px;text-align:center;font-size:10px;font-weight:bold;background:#ede9fe">${ns.totalCreds}</td>`;
       }).join("");
       const decColor = r.decision === "Admis (session normale)" ? "#166534" : r.decision === "Admis par compensation" ? "#0d9488" : r.decision === "Admis (session rattrapage)" ? "#854d0e" : "#991b1b";
       const annColor = r.annualMoy !== null ? (r.annualMoy >= 10 ? "#166534" : "#991b1b") : "#aaa";
@@ -367,7 +405,7 @@ export default function AgentDeliberations() {
             <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px">N°</th>
             <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px">Matricule</th>
             <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px">Nom et Prénom</th>
-            ${semHeaders}
+            ${niveauHeaders}
             <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px;text-align:center">Total Crédits</th>
             <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px;text-align:center">Moy Ann.</th>
             <th style="border:1px solid #bbb;background:#e8e8f0;padding:6px 4px;font-size:10px;text-align:center">Décision du jury</th>
@@ -575,10 +613,16 @@ export default function AgentDeliberations() {
                         <th className="border border-border/60 px-2 py-2 font-semibold text-left w-8">N°</th>
                         <th className="border border-border/60 px-3 py-2 font-semibold text-left">Matricule</th>
                         <th className="border border-border/60 px-3 py-2 font-semibold text-left min-w-36">Nom et Prénom</th>
-                        {activeSems.map(sem => (
-                          <Fragment key={sem}>
-                            <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-blue-50/60 text-blue-800">Moy {sem}</th>
-                            <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-blue-50/60 text-blue-800">Crédits {sem}</th>
+                        {activeNiveauGroups.map(ng => (
+                          <Fragment key={ng.label}>
+                            {ng.activeSems.map(sem => (
+                              <Fragment key={sem}>
+                                <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-blue-50/60 text-blue-800">Moy {sem}</th>
+                                <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-blue-50/60 text-blue-800">Crédits {sem}</th>
+                              </Fragment>
+                            ))}
+                            <th className="border border-border/60 px-3 py-2 font-bold text-center bg-indigo-100/80 text-indigo-800 whitespace-nowrap">Moy gén. {ng.label}</th>
+                            <th className="border border-border/60 px-3 py-2 font-bold text-center bg-indigo-100/80 text-indigo-800 whitespace-nowrap">Total crédits {ng.label}</th>
                           </Fragment>
                         ))}
                         <th className="border border-border/60 px-3 py-2 font-semibold text-center bg-muted/30">Total Crédits</th>
@@ -588,18 +632,26 @@ export default function AgentDeliberations() {
                     </thead>
                     <tbody>
                       {annualRows.length === 0 ? (
-                        <tr><td colSpan={3 + activeSems.length * 2 + 3} className="text-center py-8 text-muted-foreground">Aucun étudiant dans ce groupe</td></tr>
+                        <tr><td colSpan={3 + activeSems.length * 2 + activeNiveauGroups.length * 2 + 3} className="text-center py-8 text-muted-foreground">Aucun étudiant dans ce groupe</td></tr>
                       ) : annualRows.map((r, ri) => (
                         <tr key={r.matricule} className={`${ri % 2 === 0 ? "bg-background" : "bg-muted/10"} hover:bg-primary/5`}>
                           <td className="border border-border/40 px-2 py-2 text-center text-muted-foreground">{r.idx}</td>
                           <td className="border border-border/40 px-3 py-2 font-mono">{r.matricule}</td>
                           <td className="border border-border/40 px-3 py-2 font-medium">{r.prenom} {r.nom}</td>
-                          {r.perSem.map(p => (
-                            <Fragment key={p.sem}>
-                              <td className={`border border-border/40 px-3 py-2 text-center font-bold bg-blue-50/30 ${p.semMoy !== null ? (p.semMoy >= 10 ? "text-green-700" : "text-red-600") : "text-muted-foreground"}`}>
-                                {p.semMoy !== null ? p.semMoy.toFixed(2) : "—"}
+                          {r.perNiveauSummary.map(ns => (
+                            <Fragment key={ns.label}>
+                              {ns.semData.map(p => (
+                                <Fragment key={p.sem}>
+                                  <td className={`border border-border/40 px-3 py-2 text-center font-bold bg-blue-50/30 ${p.semMoy !== null ? (p.semMoy >= 10 ? "text-green-700" : "text-red-600") : "text-muted-foreground"}`}>
+                                    {p.semMoy !== null ? p.semMoy.toFixed(2) : "—"}
+                                  </td>
+                                  <td className="border border-border/40 px-3 py-2 text-center bg-blue-50/30">{p.credits}</td>
+                                </Fragment>
+                              ))}
+                              <td className={`border border-border/40 px-3 py-2 text-center font-bold bg-indigo-50/60 ${ns.moyGen !== null ? (ns.moyGen >= 10 ? "text-green-700" : "text-red-600") : "text-muted-foreground"}`}>
+                                {ns.moyGen !== null ? ns.moyGen.toFixed(2) : "—"}
                               </td>
-                              <td className="border border-border/40 px-3 py-2 text-center bg-blue-50/30">{p.credits}</td>
+                              <td className="border border-border/40 px-3 py-2 text-center font-bold bg-indigo-50/60">{ns.totalCreds}</td>
                             </Fragment>
                           ))}
                           <td className="border border-border/40 px-3 py-2 text-center font-bold">{r.totalCredits}</td>
