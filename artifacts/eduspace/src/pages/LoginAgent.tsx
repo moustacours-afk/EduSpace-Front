@@ -9,11 +9,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { login } from "@/lib/api";
+import { loginWithMatricule } from "@/lib/api";
 import { setAuth } from "@/lib/auth";
 
 const schema = z.object({
-  email: z.string().min(1, "Matricule requis"),
+  username: z.string().min(1, "Nom d'utilisateur requis"),
   motDePasse: z.string().min(1, "Mot de passe requis"),
 });
 
@@ -27,14 +27,14 @@ export default function LoginAgent() {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: "", motDePasse: "" },
+    defaultValues: { username: "", motDePasse: "" },
   });
 
   async function onSubmit(values: FormValues) {
     setLoginError("");
     setLoading(true);
     try {
-      const { token, user } = await login(values.email, values.motDePasse);
+      const { token, user } = await loginWithMatricule(values.username, values.motDePasse);
       if (user.role !== "agent") {
         setLoginError("Ce compte n'est pas un compte agent pédagogique.");
         return;
@@ -78,21 +78,21 @@ export default function LoginAgent() {
 
           {/* Demo credentials hint */}
           <div className="bg-purple-50 border border-purple-100 rounded-lg px-3 py-2 mb-5 text-xs text-purple-700">
-            <span className="font-semibold">Compte démo :</span> matricule = <span className="font-mono">n.ferhat@univ-alger.dz</span> — mot de passe: <span className="font-mono">password</span>
+            <span className="font-semibold">Compte démo :</span> nom d'utilisateur = <span className="font-mono">n.ferhat@univ-alger.dz</span> — mot de passe: <span className="font-mono">password</span>
           </div>
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField
                 control={form.control}
-                name="email"
+                name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-gray-700 font-medium">Matricule agent</FormLabel>
+                    <FormLabel className="text-gray-700 font-medium">Nom d'utilisateur</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <IdCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <Input {...field} type="text" className="pl-10" placeholder="ex: agent001" autoComplete="username" />
+                        <Input {...field} type="text" className="pl-10" placeholder="ex: mbenali.agent" autoComplete="username" />
                       </div>
                     </FormControl>
                     <FormMessage />

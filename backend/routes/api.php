@@ -50,7 +50,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/soumissions/{id}/submit', [EnseignantController::class, 'soumettrNotes']);
 
         // Supports
+        Route::get('/supports', [EnseignantController::class, 'mySupports']);
         Route::post('/supports', [EnseignantController::class, 'uploadSupport']);
+        Route::delete('/supports/{id}', [EnseignantController::class, 'deleteSupport']);
+
+        // Grades (direct submit, creates soumission if needed)
+        Route::post('/grades', [EnseignantController::class, 'submitGrades']);
+
+        // Announcements (teacher-authored)
+        Route::post('/annonces', [EnseignantController::class, 'storeAnnonce']);
 
         // Recours
         Route::get('/recours', [EnseignantController::class, 'recours']);

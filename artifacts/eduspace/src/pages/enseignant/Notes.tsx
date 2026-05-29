@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TeacherSidebar } from "@/components/TeacherSidebar";
 import { Card } from "@/components/ui/card";
@@ -13,12 +13,10 @@ import {
 import {
   ClipboardList, CheckCircle, Send, Download, Upload,
   FileText, UserX, ChevronRight, BookOpen, ShieldCheck, Lock,
-  Flag, Clock, XCircle, MessageSquare,
+  Flag, Clock, XCircle, MessageSquare, Loader2,
 } from "lucide-react";
-import {
-  niveauxFiliere, semestresParNiveau, teacherAssignments, studentsDB,
-  type TeacherRole,
-} from "@/data/mockData";
+import { niveauxFiliere, semestresParNiveau } from "@/data/mockData";
+import { enseignant as api } from "@/lib/api";
 import {
   getPendingTeacherAppeals, teacherDecideAppeal,
   type Appeal, type AppealNoteType,
@@ -37,8 +35,18 @@ const item = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } };
 type Student = { id: string; matricule: string; nom: string; prenom: string; groupe: string };
 type NoteEntry = { cc: string; tp: string; absent: boolean; observation: string };
 type TabType = "cc" | "examen" | "recours";
+type TeacherRole = "cc" | "tp" | "cc+tp";
 
-type Assignment = typeof teacherAssignments[number];
+interface Assignment {
+  id: number;
+  key: string;
+  intitule: string;
+  niveau: string;
+  semestre: string;
+  responsable: boolean;
+  role: TeacherRole;
+  groupes: string[];
+}
 
 function roleLabel(role: TeacherRole) {
   if (role === "cc") return { text: "Contrôle seulement", color: "bg-blue-100 text-blue-800 border-blue-200" };
@@ -108,7 +116,14 @@ export default function EnseignantNotes() {
   const [selectedGroupe, setSelectedGroupe] = useState("");
   const [grades, setGrades] = useState<Record<string, NoteEntry>>({});
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
+
+  // Real data from API
+  const [allAssignments, setAllAssignments] = useState<Assignment[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
 
   // Recours state
   const [appeals, setAppeals] = useState<Appeal[]>(() => getPendingTeacherAppeals());
@@ -116,17 +131,53 @@ export default function EnseignantNotes() {
     appeal: Appeal; accepted: boolean; comment: string; proposedNote: string;
   } | null>(null);
 
+  // Load teacher module assignments
+  useEffect(() => {
+    api.modules().then(data => {
+      setAllAssignments((data as Record<string, unknown>[]).map(m => ({
+        id:          Number(m.id),
+        key:         String(m.key ?? m.id),
+        intitule:    String(m.intitule ?? ""),
+        niveau:      String(m.niveau ?? ""),
+        semestre:    String(m.semestre ?? ""),
+        responsable: Boolean(m.responsable),
+        role:        (m.role as TeacherRole) ?? "cc+tp",
+        groupes:     (m.groupes as string[]) ?? [],
+      })));
+    }).catch(() => {});
+  }, []);
+
+  // Load students when a module+groupe is selected
+  const fetchStudents = useCallback(async (niv: string, grp: string) => {
+    setLoadingStudents(true);
+    try {
+      const data = await api.students(niv, grp) as Record<string, unknown>[];
+      setStudents(data.map(s => ({
+        id:        String(s.id),
+        matricule: String(s.matricule ?? ""),
+        nom:       String(s.nom ?? ""),
+        prenom:    String(s.prenom ?? ""),
+        groupe:    String(s.groupe ?? ""),
+      })));
+    } catch { setStudents([]); }
+    finally { setLoadingStudents(false); }
+  }, []);
+
+  useEffect(() => {
+    if (selectedModule && selectedGroupe && niveau) {
+      fetchStudents(niveau, selectedGroupe);
+    } else {
+      setStudents([]);
+    }
+  }, [selectedModule, selectedGroupe, niveau, fetchStudents]);
+
   const semestres = niveau ? semestresParNiveau[niveau] ?? [] : [];
 
-  const filteredAssignments = teacherAssignments.filter((a) => {
+  const filteredAssignments = allAssignments.filter(a => {
     if (a.niveau !== niveau || a.semestre !== semestre) return false;
     if (tab === "examen" && !a.responsable) return false;
     return true;
   });
-
-  const students: Student[] = selectedModule && selectedGroupe
-    ? (studentsDB[`${niveau}-${selectedGroupe}`] ?? [])
-    : [];
 
   const role: TeacherRole = selectedModule?.role ?? "cc+tp";
 
@@ -155,6 +206,8 @@ export default function EnseignantNotes() {
     setSelectedGroupe("");
     setGrades({});
     setSubmitted(false);
+    setSubmitError("");
+    setStudents([]);
   }
 
   function resetAll() {
@@ -334,7 +387,7 @@ export default function EnseignantNotes() {
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {selectedModule.groupes.map((g) => {
-                      const count = studentsDB[`${niveau}-${g}`]?.length ?? 0;
+                      const count = selectedGroupe === g ? students.length : "…";
                       return (
                         <button
                           key={g}
@@ -356,9 +409,16 @@ export default function EnseignantNotes() {
             )}
           </AnimatePresence>
 
+          {/* Loading indicator for students */}
+          {loadingStudents && (
+            <Card className="p-6 text-center text-sm text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />Chargement des étudiants…
+            </Card>
+          )}
+
           {/* Student table */}
           <AnimatePresence>
-            {selectedModule && selectedGroupe && students.length > 0 && !submitted && (
+            {selectedModule && selectedGroupe && students.length > 0 && !submitted && !loadingStudents && (
               <motion.div key="table" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 <Card>
                   {/* Table header */}
@@ -494,11 +554,49 @@ export default function EnseignantNotes() {
                     <Button variant="outline" className="gap-2 text-sm" onClick={() => exportCSV(students, grades, role, tab, csvLabel)}>
                       <FileText className="w-4 h-4" />Télécharger la liste remplie
                     </Button>
-                    <div className="flex gap-3">
-                      <Button variant="outline">Enregistrer (brouillon)</Button>
-                      <Button onClick={() => setSubmitted(true)} className="gap-2">
-                        <Send className="w-4 h-4" />Soumettre pour validation
-                      </Button>
+                    <div className="flex flex-col items-end gap-2">
+                      {submitError && (
+                        <p className="text-xs text-red-600">{submitError}</p>
+                      )}
+                      <div className="flex gap-3">
+                        <Button variant="outline" disabled={submitting}>Enregistrer (brouillon)</Button>
+                        <Button
+                          disabled={submitting}
+                          onClick={async () => {
+                            if (!selectedModule) return;
+                            setSubmitting(true);
+                            setSubmitError("");
+                            try {
+                              await api.submitGrades({
+                                module_id: selectedModule.id,
+                                niveau,
+                                groupe: selectedGroupe,
+                                semestre,
+                                session,
+                                students: students.map(s => {
+                                  const g = grades[s.id] ?? { cc: "", tp: "", absent: false, observation: "" };
+                                  return {
+                                    matricule: s.matricule,
+                                    noteCC:   g.absent ? null : (g.cc   !== "" ? parseFloat(g.cc)   : null),
+                                    noteExam: g.absent ? null : (g.cc   !== "" && tab === "examen" ? parseFloat(g.cc) : null),
+                                    noteTP:   g.absent ? null : (g.tp   !== "" ? parseFloat(g.tp)   : null),
+                                    absent:   g.absent,
+                                  };
+                                }),
+                              });
+                              setSubmitted(true);
+                            } catch (err: unknown) {
+                              setSubmitError(err instanceof Error ? err.message : "Erreur lors de la soumission.");
+                            } finally {
+                              setSubmitting(false);
+                            }
+                          }}
+                          className="gap-2"
+                        >
+                          {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                          {submitting ? "Envoi…" : "Soumettre pour validation"}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </Card>

@@ -5,15 +5,83 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users, Plus, Trash2, X, Search, Eye, EyeOff, KeyRound, UserX, UserCheck } from "lucide-react";
 import { superAgent as api } from "@/lib/api";
+
+// ── Static hierarchical university data ───────────────────────────────────────
+const UNIVERSITIES = [
+  "USTHB — Université des Sciences et de la Technologie Houari Boumediene",
+  "USDB — Université Saad Dahleb Blida",
+  "ENP — École Nationale Polytechnique",
+  "ENSET — École Normale Supérieure de l'Enseignement Technique",
+  "USTO — Université des Sciences et de la Technologie d'Oran",
+];
+
+const FACULTIES_BY_UNIVERSITY: Record<string, string[]> = {
+  "USTHB — Université des Sciences et de la Technologie Houari Boumediene": [
+    "Faculté d'Informatique",
+    "Faculté de Mathématiques",
+    "Faculté de Physique",
+    "Faculté de Chimie",
+    "Faculté des Sciences Biologiques",
+  ],
+  "USDB — Université Saad Dahleb Blida": [
+    "Faculté des Sciences",
+    "Faculté de Technologie",
+    "Faculté des Lettres et Sciences Humaines",
+    "Faculté de Droit",
+  ],
+  "ENP — École Nationale Polytechnique": [
+    "Département Informatique",
+    "Département Électronique",
+    "Département Génie Civil",
+    "Département Génie Mécanique",
+  ],
+  "ENSET — École Normale Supérieure de l'Enseignement Technique": [
+    "Département Informatique",
+    "Département Génie Électrique",
+    "Département Génie Mécanique",
+  ],
+  "USTO — Université des Sciences et de la Technologie d'Oran": [
+    "Faculté d'Informatique",
+    "Faculté des Mathématiques et Informatique",
+    "Faculté de Physique",
+    "Faculté de Chimie",
+  ],
+};
+
+const DEPARTMENTS_BY_FACULTY: Record<string, string[]> = {
+  "Faculté d'Informatique":            ["Informatique", "Réseaux & Télécoms", "Systèmes d'Information", "Sécurité Informatique"],
+  "Faculté de Mathématiques":          ["Mathématiques Pures", "Statistiques", "Mathématiques Appliquées"],
+  "Faculté de Physique":               ["Physique Théorique", "Physique Appliquée", "Optique"],
+  "Faculté de Chimie":                 ["Chimie Organique", "Chimie Analytique", "Chimie Industrielle"],
+  "Faculté des Sciences Biologiques":  ["Biologie Cellulaire", "Microbiologie", "Biochimie"],
+  "Faculté des Sciences":              ["Informatique", "Mathématiques", "Physique", "Chimie"],
+  "Faculté de Technologie":            ["Génie Civil", "Génie Électrique", "Génie Mécanique"],
+  "Faculté des Lettres et Sciences Humaines": ["Linguistique", "Histoire", "Géographie"],
+  "Faculté de Droit":                  ["Droit Public", "Droit Privé"],
+  "Département Informatique":          ["Informatique Générale", "Génie Logiciel", "Réseaux"],
+  "Département Électronique":          ["Électronique", "Micro-électronique"],
+  "Département Génie Civil":           ["Structures", "Hydraulique"],
+  "Département Génie Mécanique":       ["Mécanique des Fluides", "Thermodynamique"],
+  "Département Génie Électrique":      ["Electrotechnique", "Automatique"],
+  "Faculté des Mathématiques et Informatique": ["Mathématiques", "Informatique"],
+};
+
+function generateUsername(prenom: string, nom: string): string {
+  const p = prenom.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z]/g, "");
+  const n = nom.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z]/g, "");
+  if (!p && !n) return "";
+  return (p[0] ?? "") + n + ".agent";
+}
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
 interface AgentRecord { id: number; nom: string; prenom: string; email: string; role: string; departement: string; statut: string; }
 
-const EMPTY_FORM = { nom: "", prenom: "", email: "", motDePasse: "", departement: "" };
+const EMPTY_FORM = { nom: "", prenom: "", motDePasse: "", universite: "", faculte: "", departement: "" };
 
 export default function SuperAgentComptes() {
   const [agents, setAgents] = useState<AgentRecord[]>([]);
@@ -21,10 +89,23 @@ export default function SuperAgentComptes() {
   const [showModal, setShowModal] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
-  const [errors, setErrors] = useState<Partial<typeof EMPTY_FORM>>({});
+  const [errors, setErrors] = useState<Partial<Record<keyof typeof EMPTY_FORM, string>>>({});
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+
+  const computedUsername = generateUsername(form.prenom, form.nom);
+  const faculties = form.universite ? (FACULTIES_BY_UNIVERSITY[form.universite] ?? []) : [];
+  const departments = form.faculte ? (DEPARTMENTS_BY_FACULTY[form.faculte] ?? []) : [];
+
+  // Reset faculty when university changes
+  useEffect(() => {
+    setForm(f => ({ ...f, faculte: "", departement: "" }));
+  }, [form.universite]);
+  // Reset department when faculty changes
+  useEffect(() => {
+    setForm(f => ({ ...f, departement: "" }));
+  }, [form.faculte]);
 
   const refresh = useCallback(() => {
     api.agents().then((d) => setAgents(d as AgentRecord[])).catch(() => {});
@@ -37,10 +118,9 @@ export default function SuperAgentComptes() {
   );
 
   function validate() {
-    const e: Partial<typeof EMPTY_FORM> = {};
+    const e: Partial<Record<keyof typeof EMPTY_FORM, string>> = {};
     if (!form.nom.trim())    e.nom = "Nom requis";
     if (!form.prenom.trim()) e.prenom = "Prénom requis";
-    if (!form.email.includes("@")) e.email = "Email valide requis";
     if (form.motDePasse.length < 6) e.motDePasse = "Min. 6 caractères";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -52,11 +132,13 @@ export default function SuperAgentComptes() {
     setSaveError("");
     try {
       await api.storeAgent({
-        nom: form.nom,
-        prenom: form.prenom,
-        email: form.email,
-        password: form.motDePasse,
-        departement: form.departement,
+        nom:         form.nom,
+        prenom:      form.prenom,
+        username:    computedUsername,
+        password:    form.motDePasse,
+        universite:  form.universite || undefined,
+        faculte:     form.faculte || undefined,
+        departement: form.departement || undefined,
       });
       refresh();
       setShowModal(false);
@@ -95,8 +177,7 @@ export default function SuperAgentComptes() {
             <div className="flex items-start justify-between flex-wrap gap-3">
               <div>
                 <h1 className="text-2xl font-bold flex items-center gap-2">
-                  <Users className="w-6 h-6 text-purple-600" />
-                  Comptes Agents
+                  <Users className="w-6 h-6 text-purple-600" />Comptes Agents
                 </h1>
                 <p className="text-muted-foreground mt-1">Créez et gérez les comptes des agents pédagogiques.</p>
               </div>
@@ -138,7 +219,7 @@ export default function SuperAgentComptes() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm">{agent.prenom} {agent.nom}</p>
-                      <p className="text-xs text-muted-foreground">{agent.email}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{agent.email}</p>
                       {agent.departement && (
                         <p className="text-xs text-muted-foreground">{agent.departement}</p>
                       )}
@@ -150,7 +231,7 @@ export default function SuperAgentComptes() {
                         {agent.statut === "suspendu" ? "Suspendu" : "Actif"}
                       </Badge>
                       <Button size="sm" variant="outline"
-                        title={agent.statut === "suspendu" ? "Réactiver le compte" : "Suspendre le compte"}
+                        title={agent.statut === "suspendu" ? "Réactiver" : "Suspendre"}
                         className={`h-8 px-2 ${agent.statut === "suspendu"
                           ? "text-blue-600 hover:text-blue-700 border-blue-200 hover:bg-blue-50"
                           : "text-amber-600 hover:text-amber-700 border-amber-200 hover:bg-amber-50"}`}
@@ -191,6 +272,7 @@ export default function SuperAgentComptes() {
                 </div>
 
                 <div className="space-y-4">
+                  {/* Name fields */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-medium text-muted-foreground block mb-1">Prénom *</label>
@@ -206,13 +288,23 @@ export default function SuperAgentComptes() {
                     </div>
                   </div>
 
+                  {/* Auto-generated username */}
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">Adresse email *</label>
-                    <Input type="email" placeholder="ex: m.benali@univ.dz" value={form.email}
-                      onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
-                    {errors.email && <p className="text-xs text-red-500 mt-0.5">{errors.email}</p>}
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">
+                      Nom d'utilisateur (généré automatiquement)
+                    </label>
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/30">
+                      <span className="font-mono text-sm text-foreground flex-1">
+                        {computedUsername || <span className="text-muted-foreground italic">Saisir le prénom et le nom…</span>}
+                      </span>
+                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">Auto</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Format : première lettre du prénom + nom + .agent (ex: mbenali.agent)
+                    </p>
                   </div>
 
+                  {/* Password */}
                   <div>
                     <label className="text-xs font-medium text-muted-foreground block mb-1">
                       <KeyRound className="inline w-3 h-3 mr-1" />Mot de passe *
@@ -230,10 +322,37 @@ export default function SuperAgentComptes() {
                     {errors.motDePasse && <p className="text-xs text-red-500 mt-0.5">{errors.motDePasse}</p>}
                   </div>
 
+                  {/* Hierarchical selects */}
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Université</label>
+                    <Select value={form.universite} onValueChange={(v) => setForm(f => ({ ...f, universite: v, faculte: "", departement: "" }))}>
+                      <SelectTrigger className="text-sm"><SelectValue placeholder="Choisir une université…" /></SelectTrigger>
+                      <SelectContent>
+                        {UNIVERSITIES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Faculté</label>
+                    <Select value={form.faculte} onValueChange={(v) => setForm(f => ({ ...f, faculte: v, departement: "" }))}
+                      disabled={!form.universite || faculties.length === 0}>
+                      <SelectTrigger className="text-sm"><SelectValue placeholder="Choisir une faculté…" /></SelectTrigger>
+                      <SelectContent>
+                        {faculties.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div>
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Département</label>
-                    <Input placeholder="ex: Scolarité - Informatique" value={form.departement}
-                      onChange={(e) => setForm((f) => ({ ...f, departement: e.target.value }))} />
+                    <Select value={form.departement} onValueChange={(v) => setForm(f => ({ ...f, departement: v }))}
+                      disabled={!form.faculte || departments.length === 0}>
+                      <SelectTrigger className="text-sm"><SelectValue placeholder="Choisir un département…" /></SelectTrigger>
+                      <SelectContent>
+                        {departments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {saveError && (

@@ -1138,12 +1138,6 @@ export default function AgentComptes() {
                       onChange={e => setNewStudent(prev => ({ ...prev, matricule: e.target.value }))} className="h-9 text-sm" />
                   </div>
                   <div className="col-span-2">
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">Adresse email *</label>
-                    <Input type="email" placeholder="ex: k.bensalem@univ-alger.dz"
-                      value={newStudent.email}
-                      onChange={e => setNewStudent(prev => ({ ...prev, email: e.target.value }))} className="h-9 text-sm" />
-                  </div>
-                  <div className="col-span-2">
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Filière</label>
                     <div className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/30 text-sm text-muted-foreground cursor-not-allowed">
                       {AGENT_DEPT} <span className="ml-2 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">non modifiable</span>
@@ -1173,7 +1167,7 @@ export default function AgentComptes() {
                 )}
                 <div className="flex gap-3 mt-4">
                   <Button variant="outline" className="flex-1" onClick={() => setShowAddStudent(false)}>Annuler</Button>
-                  <Button className="flex-1" disabled={saving || !newStudent.nom || !newStudent.prenom || !newStudent.matricule || !newStudent.email} onClick={addStudentFn}>
+                  <Button className="flex-1" disabled={saving || !newStudent.nom || !newStudent.prenom || !newStudent.matricule} onClick={addStudentFn}>
                     {saving ? "Création…" : "Créer le compte"}
                   </Button>
                 </div>

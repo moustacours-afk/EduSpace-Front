@@ -25,7 +25,7 @@ export default function EnseignantDashboard() {
 
   useEffect(() => {
     api.modules().then((d) => setModules(d as Module[])).catch(() => {});
-    api.students().then((d) => setStudents(d as Student[])).catch(() => {});
+    api.students("L3", "").then((d) => setStudents(d as Student[])).catch(() => {});
     api.soumissions().then((d) => setSoumissions(d as Soumission[])).catch(() => {});
   }, []);
 

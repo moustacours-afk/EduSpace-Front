@@ -52,19 +52,31 @@ class SuperAgentController extends Controller
     public function storeAgent(Request $request)
     {
         $request->validate([
-            'email' => 'required|email|unique:users',
             'password' => 'required|min:6',
-            'nom' => 'required|string',
-            'prenom' => 'required|string',
+            'nom'      => 'required|string',
+            'prenom'   => 'required|string',
         ]);
-        $user = User::create(['email' => $request->email, 'password' => $request->password, 'role' => 'agent']);
+
+        // Build username from prenom+nom if not provided
+        $username = $request->username
+            ?? strtolower(mb_substr($request->prenom, 0, 1) . $request->nom) . '.agent';
+        $username = preg_replace('/[^a-z0-9._-]/', '', strtolower($username));
+
+        // Ensure unique email
+        $email   = $username . '@eduspace.local';
+        $counter = 1;
+        while (User::where('email', $email)->exists()) {
+            $email = $username . $counter++ . '@eduspace.local';
+        }
+
+        $user  = User::create(['email' => $email, 'password' => $request->password, 'role' => 'agent']);
         $agent = Agent::create([
-            'user_id' => $user->id,
-            'nom' => $request->nom,
-            'prenom' => $request->prenom,
+            'user_id'     => $user->id,
+            'nom'         => $request->nom,
+            'prenom'      => $request->prenom,
             'departement' => $request->departement,
         ]);
-        return response()->json($agent, 201);
+        return response()->json(array_merge($agent->toArray(), ['username' => $username]), 201);
     }
 
     public function updateAgent(Request $request, int $id)

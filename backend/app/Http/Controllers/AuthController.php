@@ -40,6 +40,12 @@ class AuthController extends Controller
                 if ($etu) $user = $etu->user;
             }
 
+            // 5. Username login for agent: "mbenali.agent" → "mbenali.agent@eduspace.local"
+            if (! $user) {
+                $user = User::where('email', $identifier . '@eduspace.local')
+                            ->where('role', 'agent')->first();
+            }
+
             if (! $user || ! Hash::check($password, $user->password)) {
                 return response()->json(['message' => 'Identifiants incorrects.'], 401);
             }

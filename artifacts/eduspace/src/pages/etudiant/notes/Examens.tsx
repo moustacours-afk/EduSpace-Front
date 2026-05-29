@@ -121,10 +121,11 @@ function AppealCell({
 }
 
 function ExamTable({
-  label, data, refreshKey, onOpen,
+  label, data, refreshKey, onOpen, session,
 }: {
   label: string; data: NoteRow[]; refreshKey: number;
   onOpen: (s: AppealDialogState) => void;
+  session: string;
 }) {
   if (data.length === 0) {
     return (
@@ -184,7 +185,7 @@ function ExamTable({
                     <Badge className={`text-xs border ${conf.color}`}>{conf.label}</Badge>
                   </td>
                   <td className="px-4 py-3.5 text-center">
-                    {n.exam !== undefined ? (
+                    {session === "Session rattrapage" && n.exam !== undefined ? (
                       <AppealCell
                         moduleId={n.moduleId}
                         moduleName={n.module}
@@ -293,11 +294,11 @@ export default function EtudiantExamens() {
           </motion.div>
 
           <motion.div variants={item}>
-            <ExamTable label={`Semestre 5 — ${session}`} data={s5Data} refreshKey={refreshKey} onOpen={setDialogState} />
+            <ExamTable label={`Semestre 5 — ${session}`} data={s5Data} refreshKey={refreshKey} onOpen={setDialogState} session={session} />
           </motion.div>
 
           <motion.div variants={item}>
-            <ExamTable label={`Semestre 6 — ${session}`} data={s6Data} refreshKey={refreshKey} onOpen={setDialogState} />
+            <ExamTable label={`Semestre 6 — ${session}`} data={s6Data} refreshKey={refreshKey} onOpen={setDialogState} session={session} />
           </motion.div>
 
         </motion.div>

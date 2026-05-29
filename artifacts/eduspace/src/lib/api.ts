@@ -36,6 +36,19 @@ const post = <T>(path: string, body?: unknown, pub = false) => request<T>("POST"
 const patch = <T>(path: string, body?: unknown) => request<T>("PATCH", path, body);
 const del  = <T>(path: string) => request<T>("DELETE", path);
 
+async function uploadFile<T>(path: string, body: FormData): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  const t = token();
+  if (t) headers["Authorization"] = `Bearer ${t}`;
+  const res = await fetch(`${BASE}${path}`, { method: "POST", headers, body });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: "Erreur réseau" }));
+    throw new Error(err.message ?? `Erreur ${res.status}`);
+  }
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
 // ── Auth ─────────────────────────────────────────────────────────────
 export interface AuthUser {
   id: number;
@@ -73,12 +86,16 @@ export const etudiant = {
 export const enseignant = {
   profile: () => get<Record<string, unknown>>("/enseignant/profile"),
   modules: () => get<unknown[]>("/enseignant/modules"),
-  students: () => get<unknown[]>("/enseignant/students"),
+  students: (niveau: string, groupe: string) => get<unknown[]>(`/enseignant/students?niveau=${encodeURIComponent(niveau)}&groupe=${encodeURIComponent(groupe)}`),
   annonces: () => get<unknown[]>("/enseignant/annonces"),
+  storeAnnonce: (body: unknown) => post<unknown>("/enseignant/annonces", body),
+  supports: () => get<unknown[]>("/enseignant/supports"),
+  uploadSupport: (body: FormData) => uploadFile<unknown>("/enseignant/supports", body),
+  deleteSupport: (id: number) => del<void>(`/enseignant/supports/${id}`),
   soumissions: () => get<unknown[]>("/enseignant/soumissions"),
   soumissionStudents: (id: number) => get<unknown[]>(`/enseignant/soumissions/${id}/students`),
   soumettrNotes: (id: number, body: unknown) => post<void>(`/enseignant/soumissions/${id}/submit`, body),
-  uploadSupport: (body: unknown) => post<void>("/enseignant/supports", body),
+  submitGrades: (body: unknown) => post<void>("/enseignant/grades", body),
   recours: () => get<unknown[]>("/enseignant/recours"),
   decidRecours: (id: number, body: unknown) => post<void>(`/enseignant/recours/${id}/decision`, body),
 };
@@ -127,7 +144,7 @@ export const superAgent = {
   profile: () => get<Record<string, unknown>>("/super-agent/profile"),
   stats: () => get<Record<string, unknown>>("/super-agent/stats"),
   agents: () => get<unknown[]>("/super-agent/agents"),
-  storeAgent: (body: unknown) => post<unknown>("/super-agent/agents", body),
+  storeAgent: (body: { nom: string; prenom: string; username: string; password: string; universite?: string; faculte?: string; departement?: string }) => post<unknown>("/super-agent/agents", body),
   updateAgent: (id: number, body: unknown) => patch<void>(`/super-agent/agents/${id}`, body),
   toggleAgentStatus: (id: number, statut: string) => patch<{ statut: string }>(`/super-agent/agents/${id}/status`, { statut }),
   deleteAgent: (id: number) => del<void>(`/super-agent/agents/${id}`),
