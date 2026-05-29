@@ -305,10 +305,12 @@ class EnseignantController extends Controller
 
     public function annonces(Request $request)
     {
-        $annonces = Annonce::where('audience', 'all')
-            ->orWhere('audience', 'enseignant')
-            ->orderByDesc('date_publication')
-            ->get();
+        $userId = $request->user()->id;
+        $annonces = Annonce::where(function ($q) use ($userId) {
+            $q->where('audience', 'all')
+              ->orWhere('audience', 'enseignant')
+              ->orWhere('auteur_id', $userId); // always show teacher's own announcements
+        })->orderByDesc('date_publication')->get();
         return response()->json($annonces);
     }
 

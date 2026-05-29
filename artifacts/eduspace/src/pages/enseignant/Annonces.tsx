@@ -59,11 +59,21 @@ export default function EnseignantAnnonces() {
     setSending(true);
     setSendError("");
     try {
-      await api.storeAnnonce({ titre, contenu, categorie: moduleSelect || "Pédagogique" });
-      await fetchAnnonces();
+      const created = await api.storeAnnonce({
+        titre,
+        contenu,
+        categorie: moduleSelect || "Pédagogique",
+      }) as AnnonceRow;
+
+      // Optimistic update: show immediately without waiting for re-fetch
+      setAnnonces(prev => [created, ...prev]);
+
       setTitre("");
       setContenu("");
       setShowForm(false);
+
+      // Sync from server in background to get the authoritative list
+      fetchAnnonces();
     } catch (err: unknown) {
       setSendError(err instanceof Error ? err.message : "Erreur lors de l'envoi.");
     } finally {
