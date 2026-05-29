@@ -55,6 +55,7 @@ class AgentController extends Controller
             'prenom'   => 'required|string',
             'filiere'  => 'required|string',
             'niveau'   => 'required|string',
+            'groupe'   => 'nullable|string',
         ]);
 
         $matricule = $request->matricule ?? '2025' . str_pad(rand(1, 99999), 5, '0', STR_PAD_LEFT);
@@ -74,7 +75,7 @@ class AgentController extends Controller
             'prenom'         => $request->prenom,
             'filiere'        => $request->filiere,
             'niveau'         => $request->niveau,
-            'groupe'         => $request->groupe ?? '',
+            'groupe'         => $request->groupe ?? 'Groupe 1',
             'date_naissance' => $request->date_naissance,
             'wilaya'         => $request->wilaya,
         ]);

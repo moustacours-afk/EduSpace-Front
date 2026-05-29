@@ -1,5 +1,6 @@
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Link, useLocation } from "wouter";
 import { AgentSidebar } from "@/components/AgentSidebar";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,12 +13,40 @@ import {
   ChevronDown, ClipboardCheck, BookOpen,
   Plus, Trash2, Copy, FileText, KeyRound,
 } from "lucide-react";
-import {
-  modules, gradeSubmissions,
-  type AgentStudent, type AgentTeacher, type CompteStatut,
-} from "@/data/mockData";
+import { modules, gradeSubmissions } from "@/data/mockData";
+import { agent as api } from "@/lib/api";
 import { getStudentAssignment } from "@/lib/orgStore";
-import { agent as agentApi } from "@/lib/api";
+
+// ── Local types (normalized from backend) ─────────────────────────────────────
+type CompteStatut = "actif" | "suspendu" | "archive";
+
+interface AgentStudent {
+  id: string;
+  matricule: string;
+  nom: string;
+  prenom: string;
+  filiere: string;
+  niveau: string;
+  groupe: string;
+  dateNaissance: string;
+  wilaya: string;
+  email: string;
+  statutCompte: CompteStatut;
+  statutReinscription: string;
+}
+
+interface AgentTeacher {
+  id: string;
+  matricule: string;
+  nom: string;
+  prenom: string;
+  grade: string;
+  departement: string;
+  email: string;
+  modulesAssignes: string[];
+  statutCompte: CompteStatut;
+  schedule: unknown[];
+}
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
@@ -136,7 +165,8 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export default function AgentComptes() {
-  const tab = window.location.pathname.includes("enseignants") ? "enseignants" : "etudiants";
+  const [location] = useLocation();
+  const tab = location.includes("enseignants") ? "enseignants" : "etudiants";
 
   const [search, setSearch]                   = useState("");
   const [filterNiveau, setFilterNiveau]       = useState("all");
@@ -147,9 +177,71 @@ export default function AgentComptes() {
 
   const [students, setStudents]   = useState<AgentStudent[]>([]);
   const [teachers, setTeachers]   = useState<AgentTeacher[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(true);
+  const [loadingTeachers, setLoadingTeachers] = useState(true);
 
   const [studentPasswordStore, setStudentPasswordStore] = useState<Record<string, string>>({});
   const [teacherPasswordStore, setTeacherPasswordStore] = useState<Record<string, { password: string; username: string }>>({});
+
+  const [saving, setSaving]     = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  // ── API fetch ──────────────────────────────────────────────────────────────
+  const fetchStudents = useCallback(async () => {
+    setLoadingStudents(true);
+    try {
+      const data = await api.students() as Record<string, unknown>[];
+      const mapped: AgentStudent[] = data.map(s => ({
+        id:                 String(s.id),
+        matricule:          String(s.matricule ?? ""),
+        nom:                String(s.nom ?? ""),
+        prenom:             String(s.prenom ?? ""),
+        filiere:            String(s.filiere ?? ""),
+        niveau:             String(s.niveau ?? ""),
+        groupe:             String(s.groupe ?? ""),
+        dateNaissance:      String(s.date_naissance ?? ""),
+        wilaya:             String(s.wilaya ?? ""),
+        email:              String((s as Record<string, unknown>).email ?? ""),
+        statutCompte:       ((s.statut_compte ?? "actif") as CompteStatut),
+        statutReinscription: String(s.statut_reinscription ?? "en_attente"),
+      }));
+      setStudents(mapped);
+      setStudentPasswordStore(prev => {
+        const next = { ...prev };
+        mapped.forEach(s => { if (!next[s.id]) next[s.id] = "••••••"; });
+        return next;
+      });
+    } catch { /* ignore */ }
+    finally { setLoadingStudents(false); }
+  }, []);
+
+  const fetchTeachers = useCallback(async () => {
+    setLoadingTeachers(true);
+    try {
+      const data = await api.teachers() as Record<string, unknown>[];
+      const mapped: AgentTeacher[] = data.map(t => ({
+        id:             String(t.id),
+        matricule:      String(t.matricule ?? ""),
+        nom:            String(t.nom ?? ""),
+        prenom:         String(t.prenom ?? ""),
+        grade:          String(t.grade ?? ""),
+        departement:    String(t.departement ?? ""),
+        email:          String(t.email ?? ""),
+        modulesAssignes: (t.modulesAssignes as string[]) ?? [],
+        statutCompte:   ((t.statutCompte ?? "actif") as CompteStatut),
+        schedule:       [],
+      }));
+      setTeachers(mapped);
+      setTeacherPasswordStore(prev => {
+        const next = { ...prev };
+        mapped.forEach(t => { if (!next[t.id]) next[t.id] = { password: "••••••", username: t.email }; });
+        return next;
+      });
+    } catch { /* ignore */ }
+    finally { setLoadingTeachers(false); }
+  }, []);
+
+  useEffect(() => { fetchStudents(); fetchTeachers(); }, [fetchStudents, fetchTeachers]);
 
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [selectedTeacherIds, setSelectedTeacherIds] = useState<Set<string>>(new Set());
@@ -180,56 +272,12 @@ export default function AgentComptes() {
 
   const [newStudent, setNewStudent] = useState({
     nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "", matricule: "",
-    niveau: "L3",
+    niveau: "L3", email: "", groupe: "Groupe 1",
   });
-  const [newTeacher, setNewTeacher]     = useState({ nom: "", prenom: "", grade: "MAA", username: "" });
+  const [newTeacher, setNewTeacher] = useState({ nom: "", prenom: "", grade: "MAA", username: "", email: "" });
   const [selectedDepts, setSelectedDepts] = useState<string[]>([AGENT_DEPT]);
   const [showDeptDropdown, setShowDeptDropdown] = useState(false);
   const deptRef = useRef<HTMLDivElement>(null);
-
-  // ── Load from API on mount ────────────────────────────────
-  useEffect(() => {
-    agentApi.students().then((data) => {
-      const mapped = (data as Record<string, unknown>[]).map((s) => ({
-        id: String(s.id),
-        matricule: String(s.matricule ?? ""),
-        nom: String(s.nom ?? ""),
-        prenom: String(s.prenom ?? ""),
-        dateNaissance: String(s.date_naissance ?? ""),
-        wilaya: String(s.wilaya ?? ""),
-        filiere: String(s.filiere ?? AGENT_DEPT),
-        niveau: String(s.niveau ?? "L1"),
-        groupe: String(s.groupe ?? ""),
-        email: "",
-        statutCompte: (s.statut_compte ?? "actif") as CompteStatut,
-        statutReinscription: "en_attente" as const,
-        statutPaiement: "non_paye",
-        montantPaye: 0,
-        methodePayment: "",
-        referencePayment: "",
-        datePayment: "",
-        documents: [] as { type: string; soumis: boolean; verifie: boolean }[],
-        auditTrail: [] as { date: string; action: string; agent: string }[],
-      })) as AgentStudent[];
-      setStudents(mapped);
-    }).catch(() => {});
-
-    agentApi.teachers().then((data) => {
-      const mapped = (data as Record<string, unknown>[]).map((t) => ({
-        id: String(t.id),
-        matricule: String(t.matricule ?? ""),
-        nom: String(t.nom ?? ""),
-        prenom: String(t.prenom ?? ""),
-        grade: String(t.grade ?? ""),
-        departement: String(t.departement ?? ""),
-        email: String(t.email ?? ""),
-        modulesAssignes: (t.modulesAssignes as string[]) ?? [],
-        statutCompte: (t.statutCompte ?? "actif") as CompteStatut,
-        schedule: [],
-      })) as AgentTeacher[];
-      setTeachers(mapped);
-    }).catch(() => {});
-  }, []);
 
   // ── helpers ──────────────────────────────────────────────
   function toggleDept(dept: string) {
@@ -313,90 +361,81 @@ export default function AgentComptes() {
 
   async function addStudentFn() {
     if (!newStudent.nom || !newStudent.prenom || !newStudent.matricule) return;
-    const password = generatePassword();
+    setSaving(true);
+    setSaveError("");
     try {
-      const created = await agentApi.storeStudent({
-        nom: newStudent.nom,
-        prenom: newStudent.prenom,
-        matricule: newStudent.matricule,
-        filiere: AGENT_DEPT,
-        niveau: newStudent.niveau,
-        date_naissance: newStudent.dateNaissance || undefined,
-        wilaya: newStudent.wilayaNaissance || undefined,
+      const password = generatePassword();
+      const created = await api.storeStudent({
+        nom:            newStudent.nom,
+        prenom:         newStudent.prenom,
         password,
+        filiere:        AGENT_DEPT,
+        niveau:         newStudent.niveau,
+        groupe:         newStudent.groupe || "Groupe 1",
+        matricule:      newStudent.matricule,
+        date_naissance: newStudent.dateNaissance || undefined,
+        wilaya:         newStudent.wilayaNaissance || undefined,
       }) as Record<string, unknown>;
 
-      const newS: AgentStudent = {
-        id: String(created.id ?? `as${Date.now()}`),
-        matricule: String(created.matricule ?? newStudent.matricule),
-        nom: String(created.nom ?? newStudent.nom),
-        prenom: String(created.prenom ?? newStudent.prenom),
-        dateNaissance: newStudent.dateNaissance || "2001-01-01",
-        wilaya: newStudent.wilayaNaissance || "Alger",
-        filiere: AGENT_DEPT,
-        niveau: newStudent.niveau,
-        groupe: "",
-        email: "",
-        statutCompte: "actif",
-        statutReinscription: "en_attente",
-        statutPaiement: "non_paye",
-        montantPaye: 0,
-        methodePayment: "",
-        referencePayment: "",
-        datePayment: "",
-        documents: ["CNI", "Attestation de naissance", "Bac original", "Relevé de notes", "Photo d'identité", "Reçu de paiement"].map(type => ({ type, soumis: false, verifie: false })),
-        auditTrail: [{ date: new Date().toLocaleString("fr-FR").replace(",", ""), action: "Compte créé par l'agent", agent: "Agent" }],
+      const realId = String(created.id);
+      setStudentPasswordStore(prev => ({ ...prev, [realId]: password }));
+      await fetchStudents();
+
+      const credStudent: AgentStudent = {
+        id: realId, matricule: newStudent.matricule,
+        nom: newStudent.nom, prenom: newStudent.prenom,
+        filiere: AGENT_DEPT, niveau: newStudent.niveau,
+        groupe: newStudent.groupe || "Groupe 1",
+        dateNaissance: newStudent.dateNaissance || "",
+        wilaya: newStudent.wilayaNaissance || "",
+        email: String(created.matricule ?? newStudent.matricule) + "@eduspace.local",
+        statutCompte: "actif", statutReinscription: "en_attente",
       };
-      setStudents(prev => [newS, ...prev]);
-      setStudentPasswordStore(prev => ({ ...prev, [newS.id]: password }));
       setShowAddStudent(false);
-      setNewStudent({ nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "", matricule: "", niveau: "L3" });
-      setStudentCredentialsFor(newS);
+      setNewStudent({ nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "", matricule: "", niveau: "L3", email: "", groupe: "Groupe 1" });
+      setSaveError("");
+      setStudentCredentialsFor(credStudent);
       setShowStudentCredentials(true);
-    } catch {
-      setAddSuccess("Erreur lors de la création du compte. Vérifiez que le matricule n'est pas déjà utilisé.");
-      setTimeout(() => setAddSuccess(""), 4000);
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : "Erreur lors de la création.");
+    } finally {
+      setSaving(false);
     }
   }
 
   async function addTeacherFn() {
     if (!newTeacher.nom || !newTeacher.prenom) return;
-    const username = newTeacher.username || `${newTeacher.prenom[0].toLowerCase()}.${newTeacher.nom.toLowerCase()}`;
-    const password = generatePassword();
-    const deptStr = selectedDepts.join(", ") || AGENT_DEPT;
+    setSaving(true);
+    setSaveError("");
     try {
-      const created = await agentApi.storeTeacher({
-        nom: newTeacher.nom,
-        prenom: newTeacher.prenom,
-        grade: newTeacher.grade,
-        departement: deptStr,
+      const password = generatePassword();
+      const deptStr = selectedDepts.join(", ") || AGENT_DEPT;
+      const username = newTeacher.email || `${newTeacher.prenom[0].toLowerCase()}.${newTeacher.nom.toLowerCase()}`;
+      const created = await api.storeTeacher({
+        nom:         newTeacher.nom,
+        prenom:      newTeacher.prenom,
         username,
         password,
+        grade:       newTeacher.grade,
+        departement: deptStr,
+        matricule:   newTeacher.username || undefined,
       }) as Record<string, unknown>;
 
-      const mat = String(created.matricule ?? `ENS${String(teachers.length + 100).padStart(3, "0")}`);
-      const newT: AgentTeacher = {
-        id: String(created.id ?? `at${Date.now()}`),
-        matricule: mat,
-        nom: newTeacher.nom,
-        prenom: newTeacher.prenom,
-        grade: newTeacher.grade,
-        departement: deptStr,
-        email: username,
-        modulesAssignes: [],
-        statutCompte: "actif",
-        schedule: [],
-      };
-      setTeachers(prev => [newT, ...prev]);
-      setTeacherPasswordStore(prev => ({ ...prev, [newT.id]: { password, username } }));
+      const realId = String(created.id);
+      const generatedUsername = String(created.username ?? username);
+      setTeacherPasswordStore(prev => ({ ...prev, [realId]: { password, username: generatedUsername } }));
+      await fetchTeachers();
+
       setShowAddTeacher(false);
-      setNewTeacher({ nom: "", prenom: "", grade: "MAA", username: "" });
+      setNewTeacher({ nom: "", prenom: "", grade: "MAA", username: "", email: "" });
       setSelectedDepts([AGENT_DEPT]);
-      setCreatedInfo({ username, password, name: `${newT.prenom} ${newT.nom}` });
+      setSaveError("");
+      setCreatedInfo({ username: generatedUsername + "@eduspace.local", password, name: `${newTeacher.prenom} ${newTeacher.nom}` });
       setShowCreatedModal(true);
-    } catch {
-      setAddSuccess("Erreur lors de la création du compte enseignant.");
-      setTimeout(() => setAddSuccess(""), 4000);
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : "Erreur lors de la création.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -499,12 +538,16 @@ export default function AgentComptes() {
 
           {/* Tabs */}
           <motion.div variants={item} className="flex border-b border-border">
-            <a href="/agent/comptes/etudiants" className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all ${tab === "etudiants" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-              <GraduationCap className="w-4 h-4" />Étudiants ({students.length})
-            </a>
-            <a href="/agent/comptes/enseignants" className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all ${tab === "enseignants" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-              <Users className="w-4 h-4" />Enseignants ({teachers.length})
-            </a>
+            <Link href="/agent/comptes/etudiants">
+              <a className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all ${tab === "etudiants" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+                <GraduationCap className="w-4 h-4" />Étudiants ({loadingStudents ? "…" : students.length})
+              </a>
+            </Link>
+            <Link href="/agent/comptes/enseignants">
+              <a className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all ${tab === "enseignants" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+                <Users className="w-4 h-4" />Enseignants ({loadingTeachers ? "…" : teachers.length})
+              </a>
+            </Link>
           </motion.div>
 
           {/* ── STUDENT FILTERS ── */}
@@ -1082,30 +1125,44 @@ export default function AgentComptes() {
                       onChange={e => setNewStudent(prev => ({ ...prev, matricule: e.target.value }))} className="h-9 text-sm" />
                   </div>
                   <div className="col-span-2">
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Adresse email *</label>
+                    <Input type="email" placeholder="ex: k.bensalem@univ-alger.dz"
+                      value={newStudent.email}
+                      onChange={e => setNewStudent(prev => ({ ...prev, email: e.target.value }))} className="h-9 text-sm" />
+                  </div>
+                  <div className="col-span-2">
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Filière</label>
                     <div className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/30 text-sm text-muted-foreground cursor-not-allowed">
                       {AGENT_DEPT} <span className="ml-2 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">non modifiable</span>
                     </div>
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Niveau</label>
                     <Select value={newStudent.niveau} onValueChange={v => setNewStudent(prev => ({ ...prev, niveau: v }))}>
                       <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>{NIVEAUX.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <div className="col-span-2 flex items-center gap-2 p-3 bg-muted/20 rounded-lg text-xs text-muted-foreground">
-                    <CheckCircle className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-                    La section et le groupe seront attribués via <strong className="mx-1">Organisation des étudiants</strong>.
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Groupe</label>
+                    <Select value={newStudent.groupe} onValueChange={v => setNewStudent(prev => ({ ...prev, groupe: v }))}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>{GROUPS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div className="mt-3 flex items-center gap-2 bg-muted/20 rounded-lg p-3 text-xs text-muted-foreground">
                   <CheckCircle className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
                   Un mot de passe à 6 caractères (lettres + chiffres) sera généré automatiquement.
                 </div>
+                {saveError && (
+                  <div className="mt-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{saveError}</div>
+                )}
                 <div className="flex gap-3 mt-4">
                   <Button variant="outline" className="flex-1" onClick={() => setShowAddStudent(false)}>Annuler</Button>
-                  <Button className="flex-1" disabled={!newStudent.nom || !newStudent.prenom || !newStudent.matricule} onClick={addStudentFn}>Créer le compte</Button>
+                  <Button className="flex-1" disabled={saving || !newStudent.nom || !newStudent.prenom || !newStudent.matricule || !newStudent.email} onClick={addStudentFn}>
+                    {saving ? "Création…" : "Créer le compte"}
+                  </Button>
                 </div>
               </Card>
             </motion.div>
@@ -1125,13 +1182,14 @@ export default function AgentComptes() {
                 </div>
                 <div className="space-y-3 text-sm">
                   {[
-                    { label: "Nom *", key: "nom", placeholder: "Hadj" },
-                    { label: "Prénom *", key: "prenom", placeholder: "Mohamed" },
-                    { label: "Nom d'utilisateur", key: "username", placeholder: "m.hadj (auto si vide)" },
+                    { label: "Nom *", key: "nom", placeholder: "Hadj", type: "text" },
+                    { label: "Prénom *", key: "prenom", placeholder: "Mohamed", type: "text" },
+                    { label: "Adresse email *", key: "email", placeholder: "m.hadj@univ-alger.dz", type: "email" },
+                    { label: "Matricule (optionnel)", key: "username", placeholder: "ENS00001 (auto si vide)", type: "text" },
                   ].map(f => (
                     <div key={f.key}>
                       <label className="text-xs font-medium text-muted-foreground block mb-1">{f.label}</label>
-                      <Input placeholder={f.placeholder} value={(newTeacher as Record<string, string>)[f.key]}
+                      <Input type={f.type} placeholder={f.placeholder} value={(newTeacher as Record<string, string>)[f.key]}
                         onChange={e => setNewTeacher(prev => ({ ...prev, [f.key]: e.target.value }))} className="h-9 text-sm" />
                     </div>
                   ))}
@@ -1173,9 +1231,14 @@ export default function AgentComptes() {
                     Un mot de passe à 6 caractères sera généré automatiquement.
                   </div>
                 </div>
+                {saveError && (
+                  <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{saveError}</div>
+                )}
                 <div className="flex gap-3 mt-5">
                   <Button variant="outline" className="flex-1" onClick={() => setShowAddTeacher(false)}>Annuler</Button>
-                  <Button className="flex-1" disabled={!newTeacher.nom || !newTeacher.prenom} onClick={addTeacherFn}>Créer le compte</Button>
+                  <Button className="flex-1" disabled={saving || !newTeacher.nom || !newTeacher.prenom || !newTeacher.email} onClick={addTeacherFn}>
+                    {saving ? "Création…" : "Créer le compte"}
+                  </Button>
                 </div>
               </Card>
             </motion.div>
