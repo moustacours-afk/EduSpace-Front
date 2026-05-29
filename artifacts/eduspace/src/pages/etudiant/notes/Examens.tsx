@@ -185,7 +185,7 @@ function ExamTable({
                     <Badge className={`text-xs border ${conf.color}`}>{conf.label}</Badge>
                   </td>
                   <td className="px-4 py-3.5 text-center">
-                    {session === "Session rattrapage" && n.exam !== undefined ? (
+                    {session === "Session normale" && n.exam !== undefined ? (
                       <AppealCell
                         moduleId={n.moduleId}
                         moduleName={n.module}
