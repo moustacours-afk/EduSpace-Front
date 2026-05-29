@@ -401,7 +401,7 @@ export default function AgentComptes() {
         groupe: newStudent.groupe || "Groupe 1",
         dateNaissance: newStudent.dateNaissance || "",
         wilaya: newStudent.wilayaNaissance || "",
-        email: String(created.matricule ?? newStudent.matricule) + "@eduspace.local",
+        email: String(created.email ?? (String(created.matricule ?? newStudent.matricule) + "@eduspace.local")),
         statutCompte: "actif", statutReinscription: "en_attente",
       };
       setShowAddStudent(false);

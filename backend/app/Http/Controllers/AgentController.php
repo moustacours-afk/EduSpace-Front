@@ -30,7 +30,7 @@ class AgentController extends Controller
 
     public function students(Request $request)
     {
-        $q = Etudiant::query();
+        $q = Etudiant::with('user');
         if ($request->has('filiere')) $q->where('filiere', $request->filiere);
         if ($request->has('niveau')) $q->where('niveau', $request->niveau);
         if ($request->has('groupe')) $q->where('groupe', $request->groupe);
@@ -38,7 +38,20 @@ class AgentController extends Controller
             $s = $request->search;
             $q->where(fn ($qq) => $qq->where('nom', 'like', "%$s%")->orWhere('prenom', 'like', "%$s%")->orWhere('matricule', 'like', "%$s%"));
         }
-        return response()->json($q->get());
+        return response()->json($q->get()->map(fn ($s) => [
+            'id'                  => $s->id,
+            'matricule'           => $s->matricule,
+            'nom'                 => $s->nom,
+            'prenom'              => $s->prenom,
+            'filiere'             => $s->filiere,
+            'niveau'              => $s->niveau,
+            'groupe'              => $s->groupe,
+            'date_naissance'      => $s->date_naissance,
+            'wilaya'              => $s->wilaya,
+            'email'               => $s->user?->email ?? '',
+            'statut_compte'       => $s->statut_compte,
+            'statut_reinscription' => $s->statut_reinscription,
+        ]));
     }
 
     public function showStudent(Request $request, int $id)
@@ -80,7 +93,7 @@ class AgentController extends Controller
             'wilaya'         => $request->wilaya,
         ]);
 
-        return response()->json($etudiant, 201);
+        return response()->json(array_merge($etudiant->toArray(), ['email' => $user->email]), 201);
     }
 
     public function updateStudent(Request $request, int $id)
@@ -161,6 +174,27 @@ class AgentController extends Controller
     {
         $ens = Enseignant::findOrFail($id);
         $ens->update($request->only(['nom', 'prenom', 'grade', 'departement', 'statut_compte', 'modules_details']));
+
+        // Sync enseignant_module pivot so the teacher sees their assignments
+        if ($request->has('modules_details') && is_array($request->modules_details)) {
+            $syncData = [];
+            foreach ($request->modules_details as $row) {
+                $module = Module::where('intitule', $row['module'] ?? '')->first();
+                if (! $module) continue;
+                $types  = $row['types'] ?? [];
+                $role   = (in_array('CM', $types) && in_array('TP', $types)) ? 'cc+tp'
+                        : (in_array('CM', $types) ? 'cc'
+                        : (in_array('TP', $types) ? 'tp' : 'cc+tp'));
+                $groups = array_values(array_unique(array_merge($row['tdGroups'] ?? [], $row['tpGroups'] ?? [])));
+                $syncData[$module->id] = [
+                    'role'        => $role,
+                    'responsable' => ! empty($row['responsable']),
+                    'groupes'     => json_encode($groups),
+                ];
+            }
+            $ens->modules()->sync($syncData);
+        }
+
         return response()->json($ens);
     }
 
@@ -176,7 +210,7 @@ class AgentController extends Controller
             'filiere' => $s->filiere,
             'niveau' => $s->niveau,
             'groupe' => $s->groupe,
-            'enseignant' => 'Dr. ' . $s->enseignant->nom,
+            'enseignant' => $s->enseignant ? 'Dr. ' . $s->enseignant->nom : '—',
             'semestre' => $s->semestre,
             'statut' => $s->statut,
             'dateDepot' => $s->date_depot,

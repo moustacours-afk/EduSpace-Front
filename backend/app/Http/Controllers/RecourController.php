@@ -85,13 +85,15 @@ class RecourController extends Controller
         $etudiant = $request->user()->etudiant;
         $request->validate([
             'module_id' => 'required|exists:modules,id',
+            'semestre'  => 'required|string',
             'note_type' => 'required|in:exam,controle,tp,generale',
         ]);
 
         $recour = Recour::where([
             'etudiant_id' => $etudiant->id,
-            'module_id' => $request->module_id,
-            'note_type' => $request->note_type,
+            'module_id'   => $request->module_id,
+            'semestre'    => $request->semestre,
+            'note_type'   => $request->note_type,
         ])->first();
 
         return response()->json($recour ? [
