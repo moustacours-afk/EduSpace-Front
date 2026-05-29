@@ -120,6 +120,7 @@ class AgentController extends Controller
             'email' => $e->user->email,
             'modules' => $e->modules->count(),
             'modulesAssignes' => $e->modules->pluck('intitule'),
+            'modulesDetails' => $e->modules_details ?? [],
             'statutCompte' => $e->statut_compte,
         ]));
     }
@@ -159,7 +160,7 @@ class AgentController extends Controller
     public function updateTeacher(Request $request, int $id)
     {
         $ens = Enseignant::findOrFail($id);
-        $ens->update($request->only(['nom', 'prenom', 'grade', 'departement', 'statut_compte']));
+        $ens->update($request->only(['nom', 'prenom', 'grade', 'departement', 'statut_compte', 'modules_details']));
         return response()->json($ens);
     }
 

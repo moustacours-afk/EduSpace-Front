@@ -57,6 +57,14 @@ class AuthController extends Controller
             }
         }
 
+        // Block suspended agents
+        if ($user->role === 'agent') {
+            $agentProfile = $user->agent;
+            if ($agentProfile && $agentProfile->statut === 'suspendu') {
+                return response()->json(['message' => 'Votre compte a été suspendu. Contactez l\'administration.'], 403);
+            }
+        }
+
         $profile = match ($user->role) {
             'etudiant' => $user->etudiant,
             'enseignant' => $user->enseignant,

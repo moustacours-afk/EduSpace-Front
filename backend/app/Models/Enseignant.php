@@ -6,7 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class Enseignant extends Model
 {
-    protected $fillable = ['user_id', 'matricule', 'nom', 'prenom', 'grade', 'departement', 'statut_compte'];
+    protected $fillable = ['user_id', 'matricule', 'nom', 'prenom', 'grade', 'departement', 'statut_compte', 'modules_details'];
+
+    protected $casts = ['modules_details' => 'array'];
 
     public function user()
     {

@@ -44,6 +44,7 @@ interface AgentTeacher {
   departement: string;
   email: string;
   modulesAssignes: string[];
+  modulesDetails: ModuleRow[];
   statutCompte: CompteStatut;
   schedule: unknown[];
 }
@@ -228,6 +229,7 @@ export default function AgentComptes() {
         departement:    String(t.departement ?? ""),
         email:          String(t.email ?? ""),
         modulesAssignes: (t.modulesAssignes as string[]) ?? [],
+        modulesDetails: (t.modulesDetails as ModuleRow[]) ?? [],
         statutCompte:   ((t.statutCompte ?? "actif") as CompteStatut),
         schedule:       [],
       }));
@@ -310,9 +312,13 @@ export default function AgentComptes() {
 
   function openEditTeacher(t: AgentTeacher) {
     setEditingTeacher(t);
-    setEditModules(t.modulesAssignes.map((mod, i) => ({
-      id: `em${i}`, module: mod, types: [], sections: [], tdGroups: [], tpGroups: [], responsable: false,
-    })));
+    if (t.modulesDetails.length > 0) {
+      setEditModules(t.modulesDetails.map((row, i) => ({ ...row, id: `em${i}` })));
+    } else {
+      setEditModules(t.modulesAssignes.map((mod, i) => ({
+        id: `em${i}`, module: mod, types: [], sections: [], tdGroups: [], tpGroups: [], responsable: false,
+      })));
+    }
     setShowEditModal(true);
   }
   function addModuleRow() {
@@ -346,11 +352,18 @@ export default function AgentComptes() {
       ...r, tpGroups: r.tpGroups.includes(grp) ? r.tpGroups.filter(g => g !== grp) : [...r.tpGroups, grp],
     }));
   }
-  function saveTeacherEdit() {
+  async function saveTeacherEdit() {
     if (!editingTeacher) return;
-    const updated = editModules.filter(r => r.module).map(r => r.module);
-    setTeachers(prev => prev.map(t => t.id === editingTeacher.id ? { ...t, modulesAssignes: updated } : t));
-    if (selectedTeacher?.id === editingTeacher.id) setSelectedTeacher(prev => prev ? { ...prev, modulesAssignes: updated } : null);
+    const details = editModules.filter(r => r.module);
+    const updated = details.map(r => r.module);
+    try {
+      await api.updateTeacher(Number(editingTeacher.id), { modules_details: details });
+    } catch { /* persist local state regardless */ }
+    setTeachers(prev => prev.map(t => t.id === editingTeacher.id
+      ? { ...t, modulesAssignes: updated, modulesDetails: details }
+      : t));
+    if (selectedTeacher?.id === editingTeacher.id)
+      setSelectedTeacher(prev => prev ? { ...prev, modulesAssignes: updated, modulesDetails: details } : null);
     setShowEditModal(false);
   }
 

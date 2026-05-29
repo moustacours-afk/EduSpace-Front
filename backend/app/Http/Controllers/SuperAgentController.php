@@ -37,7 +37,16 @@ class SuperAgentController extends Controller
             'email' => $a->user->email,
             'role' => $a->role,
             'departement' => $a->departement,
+            'statut' => $a->statut ?? 'actif',
         ]));
+    }
+
+    public function toggleAgentStatus(Request $request, int $id)
+    {
+        $request->validate(['statut' => 'required|in:actif,suspendu']);
+        $agent = Agent::findOrFail($id);
+        $agent->update(['statut' => $request->statut]);
+        return response()->json(['ok' => true, 'statut' => $agent->statut]);
     }
 
     public function storeAgent(Request $request)

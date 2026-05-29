@@ -129,6 +129,7 @@ export const superAgent = {
   agents: () => get<unknown[]>("/super-agent/agents"),
   storeAgent: (body: unknown) => post<unknown>("/super-agent/agents", body),
   updateAgent: (id: number, body: unknown) => patch<void>(`/super-agent/agents/${id}`, body),
+  toggleAgentStatus: (id: number, statut: string) => patch<{ statut: string }>(`/super-agent/agents/${id}/status`, { statut }),
   deleteAgent: (id: number) => del<void>(`/super-agent/agents/${id}`),
   modules: (params?: string) => get<unknown[]>(`/super-agent/modules${params ? "?" + params : ""}`),
   storeModule: (body: unknown) => post<unknown>("/super-agent/modules", body),

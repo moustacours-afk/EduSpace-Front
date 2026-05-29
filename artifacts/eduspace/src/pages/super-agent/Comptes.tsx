@@ -5,13 +5,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Users, Plus, Trash2, X, Search, Eye, EyeOff, KeyRound } from "lucide-react";
+import { Users, Plus, Trash2, X, Search, Eye, EyeOff, KeyRound, UserX, UserCheck } from "lucide-react";
 import { superAgent as api } from "@/lib/api";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
-interface AgentRecord { id: number; nom: string; prenom: string; email: string; role: string; departement: string }
+interface AgentRecord { id: number; nom: string; prenom: string; email: string; role: string; departement: string; statut: string; }
 
 const EMPTY_FORM = { nom: "", prenom: "", email: "", motDePasse: "", departement: "" };
 
@@ -77,6 +77,14 @@ export default function SuperAgentComptes() {
     setConfirmDelete(null);
   }
 
+  async function handleToggleStatus(id: number, current: string) {
+    const newStatut = current === "actif" ? "suspendu" : "actif";
+    try {
+      await api.toggleAgentStatus(id, newStatut);
+      setAgents(prev => prev.map(a => a.id === id ? { ...a, statut: newStatut } : a));
+    } catch { /* ignore */ }
+  }
+
   return (
     <div className="flex min-h-screen bg-background">
       <SuperAgentSidebar />
@@ -136,7 +144,21 @@ export default function SuperAgentComptes() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge className="bg-green-100 text-green-700 border-green-200">Actif</Badge>
+                      <Badge className={agent.statut === "suspendu"
+                        ? "bg-amber-100 text-amber-700 border-amber-200"
+                        : "bg-green-100 text-green-700 border-green-200"}>
+                        {agent.statut === "suspendu" ? "Suspendu" : "Actif"}
+                      </Badge>
+                      <Button size="sm" variant="outline"
+                        title={agent.statut === "suspendu" ? "Réactiver le compte" : "Suspendre le compte"}
+                        className={`h-8 px-2 ${agent.statut === "suspendu"
+                          ? "text-blue-600 hover:text-blue-700 border-blue-200 hover:bg-blue-50"
+                          : "text-amber-600 hover:text-amber-700 border-amber-200 hover:bg-amber-50"}`}
+                        onClick={() => handleToggleStatus(agent.id, agent.statut)}>
+                        {agent.statut === "suspendu"
+                          ? <UserCheck className="w-3.5 h-3.5" />
+                          : <UserX className="w-3.5 h-3.5" />}
+                      </Button>
                       <Button size="sm" variant="outline"
                         className="h-8 px-2 text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
                         onClick={() => setConfirmDelete(agent.id)}>

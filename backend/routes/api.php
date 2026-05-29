@@ -125,6 +125,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/agents', [SuperAgentController::class, 'agents']);
         Route::post('/agents', [SuperAgentController::class, 'storeAgent']);
         Route::patch('/agents/{id}', [SuperAgentController::class, 'updateAgent']);
+        Route::patch('/agents/{id}/status', [SuperAgentController::class, 'toggleAgentStatus']);
         Route::delete('/agents/{id}', [SuperAgentController::class, 'destroyAgent']);
 
         // Modules/Programmes CRUD

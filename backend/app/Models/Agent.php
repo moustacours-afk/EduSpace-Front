@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Agent extends Model
 {
-    protected $fillable = ['user_id', 'nom', 'prenom', 'role', 'departement'];
+    protected $fillable = ['user_id', 'nom', 'prenom', 'role', 'departement', 'statut'];
 
     public function user()
     {
