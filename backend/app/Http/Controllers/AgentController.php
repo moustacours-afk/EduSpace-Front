@@ -50,26 +50,33 @@ class AgentController extends Controller
     public function storeStudent(Request $request)
     {
         $request->validate([
-            'email' => 'required|email|unique:users',
             'password' => 'required|min:6',
-            'nom' => 'required|string',
-            'prenom' => 'required|string',
-            'filiere' => 'required|string',
-            'niveau' => 'required|string',
-            'groupe' => 'required|string',
+            'nom'      => 'required|string',
+            'prenom'   => 'required|string',
+            'filiere'  => 'required|string',
+            'niveau'   => 'required|string',
         ]);
 
-        $user = User::create(['email' => $request->email, 'password' => $request->password, 'role' => 'etudiant']);
+        $matricule = $request->matricule ?? '2025' . str_pad(rand(1, 99999), 5, '0', STR_PAD_LEFT);
+
+        // Auto-generate a unique internal email from the matricule
+        $email = $matricule . '@eduspace.local';
+        $counter = 1;
+        while (User::where('email', $email)->exists()) {
+            $email = $matricule . $counter++ . '@eduspace.local';
+        }
+
+        $user = User::create(['email' => $email, 'password' => $request->password, 'role' => 'etudiant']);
         $etudiant = Etudiant::create([
-            'user_id' => $user->id,
-            'matricule' => $request->matricule ?? '2025' . str_pad($user->id, 5, '0', STR_PAD_LEFT),
-            'nom' => $request->nom,
-            'prenom' => $request->prenom,
-            'filiere' => $request->filiere,
-            'niveau' => $request->niveau,
-            'groupe' => $request->groupe,
+            'user_id'        => $user->id,
+            'matricule'      => $matricule,
+            'nom'            => $request->nom,
+            'prenom'         => $request->prenom,
+            'filiere'        => $request->filiere,
+            'niveau'         => $request->niveau,
+            'groupe'         => $request->groupe ?? '',
             'date_naissance' => $request->date_naissance,
-            'wilaya' => $request->wilaya,
+            'wilaya'         => $request->wilaya,
         ]);
 
         return response()->json($etudiant, 201);
@@ -119,21 +126,33 @@ class AgentController extends Controller
     public function storeTeacher(Request $request)
     {
         $request->validate([
-            'email' => 'required|email|unique:users',
             'password' => 'required|min:6',
-            'nom' => 'required|string',
-            'prenom' => 'required|string',
+            'nom'      => 'required|string',
+            'prenom'   => 'required|string',
         ]);
-        $user = User::create(['email' => $request->email, 'password' => $request->password, 'role' => 'enseignant']);
+
+        // Derive username from provided value or first-initial.lastname
+        $username = $request->username
+            ?? strtolower(mb_substr($request->prenom, 0, 1) . '.' . $request->nom);
+
+        // Auto-generate a unique internal email from the username
+        $email = $username . '@eduspace.local';
+        $counter = 1;
+        while (User::where('email', $email)->exists()) {
+            $email = $username . $counter++ . '@eduspace.local';
+        }
+
+        $user = User::create(['email' => $email, 'password' => $request->password, 'role' => 'enseignant']);
         $ens = Enseignant::create([
-            'user_id' => $user->id,
-            'matricule' => $request->matricule ?? 'ENS' . str_pad($user->id, 5, '0', STR_PAD_LEFT),
-            'nom' => $request->nom,
-            'prenom' => $request->prenom,
-            'grade' => $request->grade,
+            'user_id'     => $user->id,
+            'matricule'   => $request->matricule ?? 'ENS' . str_pad($user->id, 5, '0', STR_PAD_LEFT),
+            'nom'         => $request->nom,
+            'prenom'      => $request->prenom,
+            'grade'       => $request->grade,
             'departement' => $request->departement,
         ]);
-        return response()->json($ens, 201);
+
+        return response()->json(array_merge($ens->toArray(), ['username' => $username]), 201);
     }
 
     public function updateTeacher(Request $request, int $id)

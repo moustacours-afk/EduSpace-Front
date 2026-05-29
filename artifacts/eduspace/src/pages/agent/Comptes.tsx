@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AgentSidebar } from "@/components/AgentSidebar";
 import { Card } from "@/components/ui/card";
@@ -13,10 +13,11 @@ import {
   Plus, Trash2, Copy, FileText, KeyRound,
 } from "lucide-react";
 import {
-  agentStudents, agentTeachers, modules, gradeSubmissions,
+  modules, gradeSubmissions,
   type AgentStudent, type AgentTeacher, type CompteStatut,
 } from "@/data/mockData";
 import { getStudentAssignment } from "@/lib/orgStore";
+import { agent as agentApi } from "@/lib/api";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
@@ -144,15 +145,11 @@ export default function AgentComptes() {
   const [filterGroupe, setFilterGroupe]       = useState("all");
   const [page, setPage]                       = useState(1);
 
-  const [students, setStudents]   = useState<AgentStudent[]>(agentStudents);
-  const [teachers, setTeachers]   = useState<AgentTeacher[]>(agentTeachers);
+  const [students, setStudents]   = useState<AgentStudent[]>([]);
+  const [teachers, setTeachers]   = useState<AgentTeacher[]>([]);
 
-  const [studentPasswordStore, setStudentPasswordStore] = useState<Record<string, string>>(
-    () => initStudentPasswords(agentStudents)
-  );
-  const [teacherPasswordStore, setTeacherPasswordStore] = useState<Record<string, { password: string; username: string }>>(
-    () => initTeacherPasswords(agentTeachers)
-  );
+  const [studentPasswordStore, setStudentPasswordStore] = useState<Record<string, string>>({});
+  const [teacherPasswordStore, setTeacherPasswordStore] = useState<Record<string, { password: string; username: string }>>({});
 
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [selectedTeacherIds, setSelectedTeacherIds] = useState<Set<string>>(new Set());
@@ -189,6 +186,50 @@ export default function AgentComptes() {
   const [selectedDepts, setSelectedDepts] = useState<string[]>([AGENT_DEPT]);
   const [showDeptDropdown, setShowDeptDropdown] = useState(false);
   const deptRef = useRef<HTMLDivElement>(null);
+
+  // ── Load from API on mount ────────────────────────────────
+  useEffect(() => {
+    agentApi.students().then((data) => {
+      const mapped = (data as Record<string, unknown>[]).map((s) => ({
+        id: String(s.id),
+        matricule: String(s.matricule ?? ""),
+        nom: String(s.nom ?? ""),
+        prenom: String(s.prenom ?? ""),
+        dateNaissance: String(s.date_naissance ?? ""),
+        wilaya: String(s.wilaya ?? ""),
+        filiere: String(s.filiere ?? AGENT_DEPT),
+        niveau: String(s.niveau ?? "L1"),
+        groupe: String(s.groupe ?? ""),
+        email: "",
+        statutCompte: (s.statut_compte ?? "actif") as CompteStatut,
+        statutReinscription: "en_attente" as const,
+        statutPaiement: "non_paye",
+        montantPaye: 0,
+        methodePayment: "",
+        referencePayment: "",
+        datePayment: "",
+        documents: [] as { type: string; soumis: boolean; verifie: boolean }[],
+        auditTrail: [] as { date: string; action: string; agent: string }[],
+      })) as AgentStudent[];
+      setStudents(mapped);
+    }).catch(() => {});
+
+    agentApi.teachers().then((data) => {
+      const mapped = (data as Record<string, unknown>[]).map((t) => ({
+        id: String(t.id),
+        matricule: String(t.matricule ?? ""),
+        nom: String(t.nom ?? ""),
+        prenom: String(t.prenom ?? ""),
+        grade: String(t.grade ?? ""),
+        departement: String(t.departement ?? ""),
+        email: String(t.email ?? ""),
+        modulesAssignes: (t.modulesAssignes as string[]) ?? [],
+        statutCompte: (t.statutCompte ?? "actif") as CompteStatut,
+        schedule: [],
+      })) as AgentTeacher[];
+      setTeachers(mapped);
+    }).catch(() => {});
+  }, []);
 
   // ── helpers ──────────────────────────────────────────────
   function toggleDept(dept: string) {
@@ -270,45 +311,93 @@ export default function AgentComptes() {
     return modules.filter(m => depts.some(d => m.filiere.toLowerCase().includes(d) || d.includes(m.filiere.toLowerCase())));
   }
 
-  function addStudentFn() {
+  async function addStudentFn() {
     if (!newStudent.nom || !newStudent.prenom || !newStudent.matricule) return;
     const password = generatePassword();
-    const email = `${newStudent.prenom[0].toLowerCase()}.${newStudent.nom.toLowerCase()}@univ-alger.dz`;
-    const newS: AgentStudent = {
-      id: `as${Date.now()}`, matricule: newStudent.matricule, nom: newStudent.nom, prenom: newStudent.prenom,
-      dateNaissance: newStudent.dateNaissance || "2001-01-01", wilaya: newStudent.wilayaNaissance || "Alger",
-      filiere: AGENT_DEPT, niveau: newStudent.niveau, groupe: "", email,
-      statutCompte: "actif", statutReinscription: "en_attente", statutPaiement: "non_paye",
-      montantPaye: 0, methodePayment: "", referencePayment: "", datePayment: "",
-      documents: ["CNI", "Attestation de naissance", "Bac original", "Relevé de notes", "Photo d'identité", "Reçu de paiement"].map(type => ({ type, soumis: false, verifie: false })),
-      auditTrail: [{ date: new Date().toLocaleString("fr-FR").replace(",", ""), action: "Compte créé par l'agent", agent: "Ferhat Nadia" }],
-    };
-    setStudents(prev => [newS, ...prev]);
-    setStudentPasswordStore(prev => ({ ...prev, [newS.id]: password }));
-    setShowAddStudent(false);
-    setNewStudent({ nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "", matricule: "", niveau: "L3" });
-    setStudentCredentialsFor(newS);
-    setShowStudentCredentials(true);
+    try {
+      const created = await agentApi.storeStudent({
+        nom: newStudent.nom,
+        prenom: newStudent.prenom,
+        matricule: newStudent.matricule,
+        filiere: AGENT_DEPT,
+        niveau: newStudent.niveau,
+        date_naissance: newStudent.dateNaissance || undefined,
+        wilaya: newStudent.wilayaNaissance || undefined,
+        password,
+      }) as Record<string, unknown>;
+
+      const newS: AgentStudent = {
+        id: String(created.id ?? `as${Date.now()}`),
+        matricule: String(created.matricule ?? newStudent.matricule),
+        nom: String(created.nom ?? newStudent.nom),
+        prenom: String(created.prenom ?? newStudent.prenom),
+        dateNaissance: newStudent.dateNaissance || "2001-01-01",
+        wilaya: newStudent.wilayaNaissance || "Alger",
+        filiere: AGENT_DEPT,
+        niveau: newStudent.niveau,
+        groupe: "",
+        email: "",
+        statutCompte: "actif",
+        statutReinscription: "en_attente",
+        statutPaiement: "non_paye",
+        montantPaye: 0,
+        methodePayment: "",
+        referencePayment: "",
+        datePayment: "",
+        documents: ["CNI", "Attestation de naissance", "Bac original", "Relevé de notes", "Photo d'identité", "Reçu de paiement"].map(type => ({ type, soumis: false, verifie: false })),
+        auditTrail: [{ date: new Date().toLocaleString("fr-FR").replace(",", ""), action: "Compte créé par l'agent", agent: "Agent" }],
+      };
+      setStudents(prev => [newS, ...prev]);
+      setStudentPasswordStore(prev => ({ ...prev, [newS.id]: password }));
+      setShowAddStudent(false);
+      setNewStudent({ nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "", matricule: "", niveau: "L3" });
+      setStudentCredentialsFor(newS);
+      setShowStudentCredentials(true);
+    } catch {
+      setAddSuccess("Erreur lors de la création du compte. Vérifiez que le matricule n'est pas déjà utilisé.");
+      setTimeout(() => setAddSuccess(""), 4000);
+    }
   }
 
-  function addTeacherFn() {
+  async function addTeacherFn() {
     if (!newTeacher.nom || !newTeacher.prenom) return;
-    const mat = `ENS${String(teachers.length + 100).padStart(3, "0")}`;
     const username = newTeacher.username || `${newTeacher.prenom[0].toLowerCase()}.${newTeacher.nom.toLowerCase()}`;
     const password = generatePassword();
     const deptStr = selectedDepts.join(", ") || AGENT_DEPT;
-    const newT: AgentTeacher = {
-      id: `at${Date.now()}`, matricule: mat, nom: newTeacher.nom, prenom: newTeacher.prenom,
-      grade: newTeacher.grade, departement: deptStr, email: username,
-      modulesAssignes: [], statutCompte: "actif", schedule: [],
-    };
-    setTeachers(prev => [newT, ...prev]);
-    setTeacherPasswordStore(prev => ({ ...prev, [newT.id]: { password, username } }));
-    setShowAddTeacher(false);
-    setNewTeacher({ nom: "", prenom: "", grade: "MAA", username: "" });
-    setSelectedDepts([AGENT_DEPT]);
-    setCreatedInfo({ username, password, name: `${newT.prenom} ${newT.nom}` });
-    setShowCreatedModal(true);
+    try {
+      const created = await agentApi.storeTeacher({
+        nom: newTeacher.nom,
+        prenom: newTeacher.prenom,
+        grade: newTeacher.grade,
+        departement: deptStr,
+        username,
+        password,
+      }) as Record<string, unknown>;
+
+      const mat = String(created.matricule ?? `ENS${String(teachers.length + 100).padStart(3, "0")}`);
+      const newT: AgentTeacher = {
+        id: String(created.id ?? `at${Date.now()}`),
+        matricule: mat,
+        nom: newTeacher.nom,
+        prenom: newTeacher.prenom,
+        grade: newTeacher.grade,
+        departement: deptStr,
+        email: username,
+        modulesAssignes: [],
+        statutCompte: "actif",
+        schedule: [],
+      };
+      setTeachers(prev => [newT, ...prev]);
+      setTeacherPasswordStore(prev => ({ ...prev, [newT.id]: { password, username } }));
+      setShowAddTeacher(false);
+      setNewTeacher({ nom: "", prenom: "", grade: "MAA", username: "" });
+      setSelectedDepts([AGENT_DEPT]);
+      setCreatedInfo({ username, password, name: `${newT.prenom} ${newT.nom}` });
+      setShowCreatedModal(true);
+    } catch {
+      setAddSuccess("Erreur lors de la création du compte enseignant.");
+      setTimeout(() => setAddSuccess(""), 4000);
+    }
   }
 
   // ── student selection helpers ──

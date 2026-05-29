@@ -8,7 +8,7 @@ import { GraduationCap, ArrowLeft, Lock, Hash } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { login } from "@/lib/api";
+import { loginWithMatricule } from "@/lib/api";
 import { setAuth } from "@/lib/auth";
 
 const schema = z.object({
@@ -32,7 +32,7 @@ export default function LoginEtudiant() {
     setLoginError("");
     setLoading(true);
     try {
-      const { token, user } = await login(values.email, values.motDePasse);
+      const { token, user } = await loginWithMatricule(values.email, values.motDePasse);
       if (user.role !== "etudiant") {
         setLoginError("Ce compte n'est pas un compte étudiant.");
         return;

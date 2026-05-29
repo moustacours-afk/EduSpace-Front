@@ -14,15 +14,47 @@ class AuthController extends Controller
 {
     public function login(Request $request)
     {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
-        ]);
+        // Matricule/username-based login for enseignant and etudiant
+        if ($request->has('matricule')) {
+            $identifier = $request->matricule;
+            $password   = $request->password ?? '';
+            $user       = null;
 
-        $user = User::where('email', $request->email)->first();
+            // 1. Username login for enseignant: "m.hadj" → "m.hadj@eduspace.local"
+            $user = User::where('email', $identifier . '@eduspace.local')->first();
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
-            return response()->json(['message' => 'Identifiants incorrects.'], 401);
+            // 2. Full email match for enseignant (demo/seeded accounts)
+            if (! $user) {
+                $user = User::where('email', $identifier)->where('role', 'enseignant')->first();
+            }
+
+            // 3. Matricule lookup in enseignants table (fallback)
+            if (! $user) {
+                $ens = \App\Models\Enseignant::where('matricule', $identifier)->first();
+                if ($ens) $user = $ens->user;
+            }
+
+            // 4. Matricule lookup in etudiants table
+            if (! $user) {
+                $etu = \App\Models\Etudiant::where('matricule', $identifier)->first();
+                if ($etu) $user = $etu->user;
+            }
+
+            if (! $user || ! Hash::check($password, $user->password)) {
+                return response()->json(['message' => 'Identifiants incorrects.'], 401);
+            }
+        } else {
+            // Email-based login for agent and super_agent
+            $request->validate([
+                'email'    => 'required|email',
+                'password' => 'required',
+            ]);
+
+            $user = User::where('email', $request->email)->first();
+
+            if (! $user || ! Hash::check($request->password, $user->password)) {
+                return response()->json(['message' => 'Identifiants incorrects.'], 401);
+            }
         }
 
         $profile = match ($user->role) {

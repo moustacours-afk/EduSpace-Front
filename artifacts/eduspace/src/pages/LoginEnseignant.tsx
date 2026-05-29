@@ -8,7 +8,7 @@ import { BookOpen, ArrowLeft, Lock, User } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { login } from "@/lib/api";
+import { loginWithMatricule } from "@/lib/api";
 import { setAuth } from "@/lib/auth";
 
 const schema = z.object({
@@ -32,7 +32,7 @@ export default function LoginEnseignant() {
     setLoginError("");
     setLoading(true);
     try {
-      const { token, user } = await login(values.email, values.motDePasse);
+      const { token, user } = await loginWithMatricule(values.email, values.motDePasse);
       if (user.role !== "enseignant") {
         setLoginError("Ce compte n'est pas un compte enseignant.");
         return;
@@ -76,7 +76,7 @@ export default function LoginEnseignant() {
 
           {/* Demo credentials hint */}
           <div className="bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mb-5 text-xs text-emerald-700">
-            <span className="font-semibold">Compte démo :</span> username = <span className="font-mono">m.hadj@univ-alger.dz</span> — mot de passe: <span className="font-mono">password</span>
+            <span className="font-semibold">Compte démo :</span> nom d'utilisateur = <span className="font-mono">m.hadj@univ-alger.dz</span> — mot de passe: <span className="font-mono">password</span>
           </div>
 
           <Form {...form}>

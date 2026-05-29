@@ -48,6 +48,10 @@ export function login(email: string, password: string) {
   return post<{ token: string; user: AuthUser }>("/auth/login", { email, password }, true);
 }
 
+export function loginWithMatricule(matricule: string, password: string) {
+  return post<{ token: string; user: AuthUser }>("/auth/login", { matricule, password }, true);
+}
+
 // ── Etudiant ──────────────────────────────────────────────────────────
 export const etudiant = {
   profile: () => get<Record<string, unknown>>("/etudiant/profile"),
