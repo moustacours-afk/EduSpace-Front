@@ -42,12 +42,10 @@ function SemestreTable({ label, data }: { label: string; data: typeof notes }) {
               <th className="text-center px-4 py-3 font-semibold text-muted-foreground">TP</th>
               <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Moyenne</th>
               <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Crédits</th>
-              <th className="text-left px-5 py-3 font-semibold text-muted-foreground">Situation</th>
             </tr>
           </thead>
           <tbody>
             {data.map((n) => {
-              const conf = situationConfig[n.situation];
               return (
                 <tr key={n.id} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
                   <td className="px-5 py-3 font-medium">{n.module}</td>
@@ -60,9 +58,6 @@ function SemestreTable({ label, data }: { label: string; data: typeof notes }) {
                     </span>
                   </td>
                   <td className="text-center px-4 py-3 font-medium">{n.creditAcquis}</td>
-                  <td className="px-5 py-3">
-                    <Badge className={`text-xs border ${conf.color}`}>{conf.label}</Badge>
-                  </td>
                 </tr>
               );
             })}

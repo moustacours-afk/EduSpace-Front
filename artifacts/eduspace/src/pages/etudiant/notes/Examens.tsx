@@ -153,14 +153,11 @@ function ExamTable({
             <tr>
               <th className="text-left px-5 py-3 font-semibold text-muted-foreground">Module</th>
               <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Note Examen</th>
-              <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Moyenne</th>
-              <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Situation</th>
               <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Recours</th>
             </tr>
           </thead>
           <tbody>
             {data.map((n, i) => {
-              const conf = situationConfig[n.situation];
               return (
                 <motion.tr
                   key={n.id}
@@ -175,14 +172,6 @@ function ExamTable({
                     {n.exam !== undefined
                       ? <span className={`font-semibold ${n.exam >= 10 ? "text-green-600" : "text-red-500"}`}>{n.exam}</span>
                       : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="text-center px-4 py-3.5">
-                    {n.moyenne !== undefined
-                      ? <span className={`font-bold ${n.moyenne >= 10 ? "text-green-600" : "text-red-500"}`}>{n.moyenne.toFixed(2)}</span>
-                      : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <Badge className={`text-xs border ${conf.color}`}>{conf.label}</Badge>
                   </td>
                   <td className="px-4 py-3.5 text-center">
                     {session === "Session normale" && n.exam !== undefined ? (

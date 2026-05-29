@@ -19,17 +19,12 @@ function SemestreTable({ label, data }: { label: string; data: typeof notes }) {
           <thead className="bg-muted/30 border-b border-border">
             <tr>
               <th className="text-left px-5 py-3 font-semibold text-muted-foreground">Module</th>
-              <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Contrôle 1</th>
-              <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Contrôle 2</th>
+              <th className="text-center px-4 py-3 font-semibold text-muted-foreground">TD</th>
               <th className="text-center px-4 py-3 font-semibold text-muted-foreground">TP</th>
-              <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Moy. CC+TP</th>
             </tr>
           </thead>
           <tbody>
             {data.map((n, i) => {
-              const ccMoy = n.tp !== null
-                ? ((n.controle + (n.tp ?? 0)) / 2).toFixed(2)
-                : n.controle.toFixed(2);
               return (
                 <motion.tr
                   key={n.id}
@@ -40,14 +35,8 @@ function SemestreTable({ label, data }: { label: string; data: typeof notes }) {
                 >
                   <td className="px-5 py-3.5 font-medium">{n.module}</td>
                   <td className="text-center px-4 py-3.5">{n.controle}</td>
-                  <td className="text-center px-4 py-3.5 text-muted-foreground">—</td>
                   <td className="text-center px-4 py-3.5">
                     {n.tp !== null ? n.tp : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="text-center px-4 py-3.5">
-                    <span className={`font-bold ${parseFloat(ccMoy) >= 10 ? "text-green-600" : "text-red-500"}`}>
-                      {ccMoy}
-                    </span>
                   </td>
                 </motion.tr>
               );
