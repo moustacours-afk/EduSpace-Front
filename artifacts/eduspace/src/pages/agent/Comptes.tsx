@@ -273,8 +273,8 @@ export default function AgentComptes() {
   const [addSuccess, setAddSuccess]             = useState("");
 
   const [newStudent, setNewStudent] = useState({
-    nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "", matricule: "",
-    niveau: "L3", email: "", groupe: "Groupe 1",
+    nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "Oran", matricule: "",
+    niveau: "L3", email: "",
   });
   const [newTeacher, setNewTeacher] = useState({ nom: "", prenom: "", grade: "MAA", username: "", email: "" });
   const [selectedDepts, setSelectedDepts] = useState<string[]>([AGENT_DEPT]);
@@ -387,7 +387,7 @@ export default function AgentComptes() {
         groupe:         newStudent.groupe || "Groupe 1",
         matricule:      newStudent.matricule,
         date_naissance: newStudent.dateNaissance || undefined,
-        wilaya:         newStudent.wilayaNaissance || undefined,
+        wilaya:         newStudent.wilayaNaissance || "Oran",
       }) as Record<string, unknown>;
 
       const realId = String(created.id);
@@ -400,12 +400,12 @@ export default function AgentComptes() {
         filiere: AGENT_DEPT, niveau: newStudent.niveau,
         groupe: newStudent.groupe || "Groupe 1",
         dateNaissance: newStudent.dateNaissance || "",
-        wilaya: newStudent.wilayaNaissance || "",
+        wilaya: newStudent.wilayaNaissance || "Oran",
         email: String(created.email ?? (String(created.matricule ?? newStudent.matricule) + "@eduspace.local")),
         statutCompte: "actif", statutReinscription: "en_attente",
       };
       setShowAddStudent(false);
-      setNewStudent({ nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "", matricule: "", niveau: "L3", email: "", groupe: "Groupe 1" });
+      setNewStudent({ nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "Oran", matricule: "", niveau: "L3", email: "" });
       setSaveError("");
       setStudentCredentialsFor(credStudent);
       setShowStudentCredentials(true);
@@ -764,7 +764,7 @@ export default function AgentComptes() {
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           {[
                             { label: "Date de naissance", value: s.dateNaissance },
-                            { label: "Wilaya de naissance", value: s.wilaya },
+                            { label: "Wilaya de naissance", value: s.wilaya || "Oran" },
                             { label: "Filière", value: s.filiere },
                             { label: "Niveau", value: s.niveau },
                             { label: "Section", value: assignment ? assignment.section : "—" },
@@ -1143,19 +1143,16 @@ export default function AgentComptes() {
                       {AGENT_DEPT} <span className="ml-2 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">non modifiable</span>
                     </div>
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Niveau</label>
                     <Select value={newStudent.niveau} onValueChange={v => setNewStudent(prev => ({ ...prev, niveau: v }))}>
                       <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>{NIVEAUX.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">Groupe</label>
-                    <Select value={newStudent.groupe} onValueChange={v => setNewStudent(prev => ({ ...prev, groupe: v }))}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                      <SelectContent>{GROUPS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
-                    </Select>
+                  <div className="col-span-2 flex items-center gap-2 p-3 bg-blue-50 rounded-lg text-xs text-blue-700">
+                    <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    Le groupe sera attribué via <strong className="mx-1">Organisation des étudiants</strong>.
                   </div>
                 </div>
                 <div className="mt-3 flex items-center gap-2 bg-muted/20 rounded-lg p-3 text-xs text-muted-foreground">

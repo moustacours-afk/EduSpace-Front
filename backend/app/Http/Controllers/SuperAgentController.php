@@ -17,12 +17,14 @@ class SuperAgentController extends Controller
     {
         $sa = $request->user()->superAgent;
         return response()->json([
-            'id' => $sa->id,
-            'nom' => $sa->nom,
-            'prenom' => $sa->prenom,
-            'email' => $request->user()->email,
-            'role' => $sa->role,
+            'id'          => $sa->id,
+            'nom'         => $sa->nom,
+            'prenom'      => $sa->prenom,
+            'email'       => $request->user()->email,
+            'role'        => $sa->role,
             'departement' => $sa->departement,
+            'universite'  => $sa->universite,
+            'faculte'     => $sa->faculte,
         ]);
     }
 
@@ -75,6 +77,8 @@ class SuperAgentController extends Controller
             'nom'         => $request->nom,
             'prenom'      => $request->prenom,
             'departement' => $request->departement,
+            'universite'  => $request->universite,
+            'faculte'     => $request->faculte,
         ]);
         return response()->json(array_merge($agent->toArray(), ['username' => $username]), 201);
     }

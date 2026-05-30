@@ -72,21 +72,21 @@ class AuthController extends Controller
         }
 
         $profile = match ($user->role) {
-            'etudiant' => $user->etudiant,
-            'enseignant' => $user->enseignant,
-            'agent' => $user->agent,
+            'etudiant'    => $user->etudiant,
+            'enseignant'  => $user->enseignant,
+            'agent'       => $user->agent,
             'super_agent' => $user->superAgent,
-            default => null,
+            default       => null,
         };
 
         $token = $user->createToken('api-token')->plainTextToken;
 
         return response()->json([
             'token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'email' => $user->email,
-                'role' => $user->role,
+            'user'  => [
+                'id'      => $user->id,
+                'email'   => $user->email,
+                'role'    => $user->role,
                 'profile' => $profile,
             ],
         ]);
@@ -159,10 +159,12 @@ class AuthController extends Controller
                 'departement' => $request->departement,
             ]),
             'super_agent' => SuperAgent::create([
-                'user_id' => $user->id,
-                'nom' => $request->nom,
-                'prenom' => $request->prenom,
+                'user_id'    => $user->id,
+                'nom'        => $request->nom,
+                'prenom'     => $request->prenom,
                 'departement' => $request->departement,
+                'universite' => $request->universite,
+                'faculte'    => $request->faculte,
             ]),
         };
 

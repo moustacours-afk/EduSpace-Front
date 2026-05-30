@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -74,16 +74,33 @@ const INITIAL: FormState = {
 interface Props {
   open: boolean;
   contextLabel: string;   // e.g. "Informatique · L3 · S5"
+  initialNiveau?: string; // pre-fill niveau from parent filter
+  initialSemestre?: string; // pre-fill semestre from parent filter
   onClose: () => void;
   onSave: (mod: Omit<ModuleEntry, "id">) => void;
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
 
-export default function AjoutModule({ open, contextLabel, onClose, onSave }: Props) {
-  const [form, setForm]     = useState<FormState>({ ...INITIAL });
+export default function AjoutModule({ open, contextLabel, initialNiveau, initialSemestre, onClose, onSave }: Props) {
+  const [form, setForm]     = useState<FormState>({
+    ...INITIAL,
+    niveau:   initialNiveau   ?? "",
+    semestre: initialSemestre ?? "",
+  });
   const [errors, setErrors] = useState<Errors>({});
   const [saved, setSaved]   = useState(false);
+
+  // Sync pre-filled values when parent filters change and modal opens
+  useEffect(() => {
+    if (open) {
+      setForm(f => ({
+        ...f,
+        niveau:   initialNiveau   ?? f.niveau,
+        semestre: initialSemestre ?? f.semestre,
+      }));
+    }
+  }, [open, initialNiveau, initialSemestre]);
 
   // ── derived flags ──────────────────────────────────────────────────────────
 

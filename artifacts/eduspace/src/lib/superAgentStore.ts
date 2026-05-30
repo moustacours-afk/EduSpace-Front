@@ -187,6 +187,23 @@ const FACULTES_SPECIFIQUES: Record<string, string[]> = {
     "Faculté de Génie Civil",
     "Faculté de Génie Industriel",
   ],
+  "Université d'Oran 1 — Ahmed Ben Bella": [
+    "Faculté de Droit et des Sciences Politiques",
+    "Faculté des Sciences Économiques, Commerciales et des Sciences de Gestion",
+    "Faculté des Lettres, Langues et Arts",
+    "Faculté des Sciences Sociales",
+    "Faculté de Médecine",
+    "Faculté des Sciences de la Nature et de la Vie",
+    "Faculté des Sciences de la Terre et de l'Univers",
+    "Faculté des Sciences Exactes et Appliquées",
+  ],
+  "Université d'Oran 2 — Mohamed Ben Ahmed": [
+    "Faculté des Sciences Humaines",
+    "Faculté des Lettres et des Langues",
+    "Faculté des Sciences Sociales et de la Communication",
+    "Faculté des Sciences Économiques, Commerciales et des Sciences de Gestion",
+    "Faculté de Psychologie et des Sciences de l'Éducation",
+  ],
 };
 
 export const DEPARTEMENTS_PAR_FACULTE: Record<string, string[]> = {
@@ -221,6 +238,16 @@ export const DEPARTEMENTS_PAR_FACULTE: Record<string, string[]> = {
   "Faculté des Sciences de la Terre, Géographie et Aménagement du Territoire": ["Géologie", "Géographie", "Aménagement du Territoire"],
   "Faculté des Sciences de la Terre et de l'Univers": ["Géologie", "Géophysique"],
   "Faculté des Sciences Biologiques": ["Biologie Cellulaire et Moléculaire", "Biochimie", "Microbiologie"],
+  // Oran 1
+  "Faculté de Droit et des Sciences Politiques":          ["Droit Privé", "Droit Public", "Sciences Politiques"],
+  "Faculté des Lettres, Langues et Arts":                 ["Langue Française", "Langue Arabe", "Langue Anglaise", "Langue Espagnole", "Arts"],
+  "Faculté des Sciences Sociales":                        ["Sociologie", "Psychologie", "Sciences de l'Éducation", "Anthropologie"],
+  "Faculté des Sciences Exactes et Appliquées":           ["Mathématiques", "Informatique", "Physique", "Chimie"],
+  // Oran 2
+  "Faculté des Sciences Humaines":                        ["Histoire", "Géographie", "Bibliothéconomie et Sciences Documentaires"],
+  "Faculté des Lettres et des Langues":                   ["Langue et Littérature Arabes", "Langue et Littérature Françaises", "Langues Étrangères Appliquées"],
+  "Faculté des Sciences Sociales et de la Communication": ["Sciences Sociales", "Sciences de l'Information et de la Communication", "Journalisme"],
+  "Faculté de Psychologie et des Sciences de l'Éducation": ["Psychologie", "Sciences de l'Éducation", "Orthophonie"],
 };
 
 const SPECIALITES_PAR_DEPT_NIVEAU: Record<string, Partial<Record<string, string[]>>> = {
