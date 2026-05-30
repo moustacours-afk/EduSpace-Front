@@ -39,9 +39,8 @@ export default function SuperAgentDashboard() {
   }, {});
 
   const statCards = [
-    { label: "Agents créés",    value: stats.totalAgents,    sub: "comptes actifs",     icon: Users,       color: "bg-purple-50 text-purple-700", href: "/super-agent/comptes" },
-    { label: "Total étudiants", value: stats.totalEtudiants, sub: "inscrits",           icon: CheckCircle, color: "bg-green-50 text-green-700",   href: "/super-agent/comptes" },
-    { label: "Total modules",   value: stats.totalModules,   sub: "toutes spécialités", icon: BookOpen,    color: "bg-blue-50 text-blue-700",     href: "/super-agent/modules" },
+    { label: "Agents créés",  value: stats.totalAgents,  sub: "comptes actifs",     icon: Users,    color: "bg-purple-50 text-purple-700", href: "/super-agent/comptes" },
+    { label: "Total modules", value: stats.totalModules, sub: "toutes spécialités", icon: BookOpen, color: "bg-blue-50 text-blue-700",     href: "/super-agent/modules" },
   ];
 
   return (
@@ -62,7 +61,7 @@ export default function SuperAgentDashboard() {
             </div>
           </motion.div>
 
-          <motion.div variants={item} className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          <motion.div variants={item} className="grid grid-cols-2 gap-4 max-w-sm">
             {statCards.map((s) => (
               <Card key={s.label} className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => setLocation(s.href)}>
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${s.color}`}>

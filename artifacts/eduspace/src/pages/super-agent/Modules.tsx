@@ -4,10 +4,10 @@ import { SuperAgentSidebar } from "@/components/SuperAgentSidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BookOpen, Plus, Trash2, GraduationCap, ChevronRight, Building2, Edit2, X, Check } from "lucide-react";
-import AjoutModule from "./AjoutModule";
+import { BookOpen, Plus, Trash2, GraduationCap, ChevronRight, Building2, Edit2 } from "lucide-react";
+import AjoutModule, { type EditModuleData } from "./AjoutModule";
 import {
   getFacultes, getDepartements, getSpecialites,
   NIVEAUX_LIST, SEMESTRES_PAR_NIVEAU,
@@ -32,14 +32,10 @@ export default function SuperAgentModules() {
   const [semestre, setSemestre]       = useState("S5");
 
   const [showModal, setShowModal]     = useState(false);
+  const [editingModule, setEditingModule] = useState<EditModuleData | undefined>(undefined);
   const [confirmDel, setConfirmDel]   = useState<{ mod: ModuleEntry } | null>(null);
   const [modules, setModules]         = useState<ModuleEntry[]>([]);
   const [allModules, setAllModules]   = useState<ModuleEntry[]>([]);
-
-  // Edit state
-  const [editingId, setEditingId]     = useState<number | null>(null);
-  const [editIntitule, setEditIntitule] = useState("");
-  const [editCredits, setEditCredits]   = useState(0);
 
   // Faculties filtered to SA's university
   const facultes    = saUniversite ? getFacultes(saUniversite) : [];
@@ -74,18 +70,66 @@ export default function SuperAgentModules() {
     setSemestre((SEMESTRES_PAR_NIVEAU[v] ?? ["S1", "S2"])[0]);
   }
 
-  async function handleAddModule(mod: { nom: string; credits: number; coefficient: number; ue: string }) {
-    await api.storeModule({
-      code: `${specialite.slice(0, 3).toUpperCase()}${Date.now().toString().slice(-4)}`,
-      intitule: mod.nom,
-      credits: mod.credits,
-      filiere: specialite,
-      niveau,
-      semestre,
-    });
+  type SavedMod = {
+    nom: string; code: string; coefficient: number; credits: number; ue: string;
+    nature: string; vhs: number; has_cours: boolean; duree_cours: string;
+    has_td: boolean; duree_td: string; has_tp: boolean; duree_tp: string;
+    pct_examen: number; pct_td: number; pct_tp: number; _editId?: number;
+  };
+
+  async function handleSaveModule(mod: SavedMod) {
+    if (mod._editId) {
+      // Edit mode
+      await api.updateModule(mod._editId, {
+        intitule:    mod.nom,
+        code:        mod.code,
+        credits:     mod.credits,
+        type_ue:     mod.ue,
+        nature:      mod.nature,
+        coefficient: mod.coefficient,
+        vhs:         mod.vhs,
+        has_cours:   mod.has_cours,
+        duree_cours: mod.duree_cours,
+        has_td:      mod.has_td,
+        duree_td:    mod.duree_td,
+        has_tp:      mod.has_tp,
+        duree_tp:    mod.duree_tp,
+        pct_examen:  mod.pct_examen,
+        pct_td:      mod.pct_td,
+        pct_tp:      mod.pct_tp,
+      });
+    } else {
+      // Create mode
+      await api.storeModule({
+        code:        mod.code || `${specialite.slice(0, 3).toUpperCase()}${Date.now().toString().slice(-4)}`,
+        intitule:    mod.nom,
+        credits:     mod.credits,
+        filiere:     specialite,
+        niveau,
+        semestre,
+        type_ue:     mod.ue,
+        nature:      mod.nature,
+        coefficient: mod.coefficient,
+        vhs:         mod.vhs,
+        has_cours:   mod.has_cours,
+        duree_cours: mod.duree_cours,
+        has_td:      mod.has_td,
+        duree_td:    mod.duree_td,
+        has_tp:      mod.has_tp,
+        duree_tp:    mod.duree_tp,
+        pct_examen:  mod.pct_examen,
+        pct_td:      mod.pct_td,
+        pct_tp:      mod.pct_tp,
+      });
+    }
+    setEditingModule(undefined);
     refreshModules();
     refreshAllModules();
-    setShowModal(false);
+  }
+
+  function openEdit(mod: ModuleEntry) {
+    setEditingModule(mod as unknown as EditModuleData);
+    setShowModal(true);
   }
 
   async function handleRemove(mod: ModuleEntry) {
@@ -93,19 +137,6 @@ export default function SuperAgentModules() {
     refreshModules();
     refreshAllModules();
     setConfirmDel(null);
-  }
-
-  function startEdit(mod: ModuleEntry) {
-    setEditingId(mod.id);
-    setEditIntitule(mod.intitule);
-    setEditCredits(mod.credits);
-  }
-
-  async function saveEdit(mod: ModuleEntry) {
-    await api.updateModule(mod.id, { intitule: editIntitule, credits: editCredits });
-    setEditingId(null);
-    refreshModules();
-    refreshAllModules();
   }
 
   const totalCredits = modules.reduce((a, m) => a + m.credits, 0);
@@ -252,39 +283,22 @@ export default function SuperAgentModules() {
                 <div className="space-y-2">
                   {modules.map(mod => (
                     <Card key={mod.id} className="p-3 flex items-center gap-3 hover:shadow-sm transition-shadow">
-                      {editingId === mod.id ? (
-                        <>
-                          <div className="flex-1 flex gap-2 items-center">
-                            <Input value={editIntitule} onChange={e => setEditIntitule(e.target.value)}
-                              className="h-8 text-sm flex-1" />
-                            <Input type="number" value={editCredits} onChange={e => setEditCredits(Number(e.target.value))}
-                              className="h-8 text-sm w-20" min={1} max={30} />
-                            <span className="text-xs text-muted-foreground">crédits</span>
-                          </div>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-green-600 hover:bg-green-50"
-                            onClick={() => saveEdit(mod)}><Check className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-slate-400"
-                            onClick={() => setEditingId(null)}><X className="w-3.5 h-3.5" /></Button>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm">{mod.intitule}</p>
-                            <div className="flex gap-2 mt-1">
-                              <Badge variant="outline" className="text-xs px-1.5 py-0">{mod.code}</Badge>
-                              <Badge variant="outline" className="text-xs px-1.5 py-0">{mod.credits} cr.</Badge>
-                            </div>
-                          </div>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-blue-500 hover:bg-blue-50"
-                            onClick={() => startEdit(mod)}>
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50"
-                            onClick={() => setConfirmDel({ mod })}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </>
-                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm">{mod.intitule}</p>
+                        <div className="flex gap-2 mt-1">
+                          <Badge variant="outline" className="text-xs px-1.5 py-0">{mod.code}</Badge>
+                          <Badge variant="outline" className="text-xs px-1.5 py-0">{mod.credits} cr.</Badge>
+                          {mod.type_ue && <Badge variant="outline" className="text-xs px-1.5 py-0 text-purple-600">{mod.type_ue}</Badge>}
+                        </div>
+                      </div>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-blue-500 hover:bg-blue-50"
+                        title="Modifier ce module" onClick={() => openEdit(mod)}>
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50"
+                        onClick={() => setConfirmDel({ mod })}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </Card>
                   ))}
                 </div>
@@ -303,37 +317,20 @@ export default function SuperAgentModules() {
                 <div className="space-y-1.5">
                   {allModules.map(mod => (
                     <Card key={mod.id} className="px-4 py-2.5 flex items-center gap-3">
-                      {editingId === mod.id ? (
-                        <>
-                          <div className="flex-1 flex gap-2 items-center">
-                            <Input value={editIntitule} onChange={e => setEditIntitule(e.target.value)}
-                              className="h-8 text-sm flex-1" />
-                            <Input type="number" value={editCredits} onChange={e => setEditCredits(Number(e.target.value))}
-                              className="h-8 text-sm w-20" min={1} max={30} />
-                            <span className="text-xs text-muted-foreground">crédits</span>
-                          </div>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-green-600 hover:bg-green-50"
-                            onClick={() => saveEdit(mod)}><Check className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-slate-400"
-                            onClick={() => setEditingId(null)}><X className="w-3.5 h-3.5" /></Button>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex-1 min-w-0">
-                            <span className="font-medium text-sm">{mod.intitule}</span>
-                            <span className="text-xs text-muted-foreground ml-2">{mod.filiere} · {mod.niveau} · {mod.semestre}</span>
-                          </div>
-                          <Badge variant="outline" className="text-xs">{mod.credits} cr.</Badge>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-blue-500 hover:bg-blue-50"
-                            onClick={() => startEdit(mod)}>
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:bg-red-50"
-                            onClick={() => setConfirmDel({ mod })}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </>
-                      )}
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-sm">{mod.intitule}</span>
+                        <span className="text-xs text-muted-foreground ml-2">{mod.filiere} · {mod.niveau} · {mod.semestre}</span>
+                      </div>
+                      <Badge variant="outline" className="text-xs">{mod.credits} cr.</Badge>
+                      {mod.type_ue && <Badge variant="outline" className="text-xs text-purple-600">{mod.type_ue}</Badge>}
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-blue-500 hover:bg-blue-50"
+                        title="Modifier ce module" onClick={() => openEdit(mod)}>
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:bg-red-50"
+                        onClick={() => setConfirmDel({ mod })}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </Card>
                   ))}
                 </div>
@@ -349,8 +346,9 @@ export default function SuperAgentModules() {
         contextLabel={`${faculte} · ${departement} · ${specialite} — ${niveau} ${semestre}`}
         initialNiveau={niveau}
         initialSemestre={semestre}
-        onClose={() => setShowModal(false)}
-        onSave={handleAddModule}
+        editModule={editingModule}
+        onClose={() => { setShowModal(false); setEditingModule(undefined); }}
+        onSave={handleSaveModule}
       />
 
       <AnimatePresence>

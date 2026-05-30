@@ -108,35 +108,58 @@ class SuperAgentController extends Controller
         if ($request->has('niveau')) $q->where('niveau', $request->niveau);
         if ($request->has('semestre')) $q->where('semestre', $request->semestre);
         return response()->json($q->get()->map(fn ($m) => [
-            'id' => $m->id,
-            'code' => $m->code,
-            'intitule' => $m->intitule,
-            'credits' => $m->credits,
-            'filiere' => $m->filiere,
-            'niveau' => $m->niveau,
-            'semestre' => $m->semestre,
-            'enseignant' => $m->enseignantResponsable ? 'Dr. ' . $m->enseignantResponsable->nom : null,
+            'id'          => $m->id,
+            'code'        => $m->code,
+            'intitule'    => $m->intitule,
+            'credits'     => $m->credits,
+            'filiere'     => $m->filiere,
+            'niveau'      => $m->niveau,
+            'semestre'    => $m->semestre,
+            'type_ue'     => $m->type_ue,
+            'nature'      => $m->nature,
+            'coefficient' => $m->coefficient,
+            'vhs'         => $m->vhs,
+            'has_cours'   => (bool) $m->has_cours,
+            'duree_cours' => $m->duree_cours,
+            'has_td'      => (bool) $m->has_td,
+            'duree_td'    => $m->duree_td,
+            'has_tp'      => (bool) $m->has_tp,
+            'duree_tp'    => $m->duree_tp,
+            'pct_examen'  => $m->pct_examen,
+            'pct_td'      => $m->pct_td,
+            'pct_tp'      => $m->pct_tp,
+            'enseignant'  => $m->enseignantResponsable ? 'Dr. ' . $m->enseignantResponsable->nom : null,
         ]));
     }
 
     public function storeModule(Request $request)
     {
         $request->validate([
-            'code' => 'required|string|unique:modules',
+            'code'     => 'required|string|unique:modules',
             'intitule' => 'required|string',
-            'credits' => 'required|integer|min:1|max:30',
-            'filiere' => 'required|string',
-            'niveau' => 'required|string',
+            'credits'  => 'required|integer|min:1|max:30',
+            'filiere'  => 'required|string',
+            'niveau'   => 'required|string',
             'semestre' => 'required|string',
         ]);
-        $module = Module::create($request->only(['code', 'intitule', 'credits', 'filiere', 'niveau', 'semestre', 'enseignant_id']));
+        $module = Module::create($request->only([
+            'code', 'intitule', 'credits', 'filiere', 'niveau', 'semestre', 'enseignant_id',
+            'type_ue', 'nature', 'coefficient', 'vhs',
+            'has_cours', 'duree_cours', 'has_td', 'duree_td', 'has_tp', 'duree_tp',
+            'pct_examen', 'pct_td', 'pct_tp',
+        ]));
         return response()->json($module, 201);
     }
 
     public function updateModule(Request $request, int $id)
     {
         $module = Module::findOrFail($id);
-        $module->update($request->only(['code', 'intitule', 'credits', 'filiere', 'niveau', 'semestre', 'enseignant_id']));
+        $module->update($request->only([
+            'code', 'intitule', 'credits', 'filiere', 'niveau', 'semestre', 'enseignant_id',
+            'type_ue', 'nature', 'coefficient', 'vhs',
+            'has_cours', 'duree_cours', 'has_td', 'duree_td', 'has_tp', 'duree_tp',
+            'pct_examen', 'pct_td', 'pct_tp',
+        ]));
         return response()->json($module);
     }
 

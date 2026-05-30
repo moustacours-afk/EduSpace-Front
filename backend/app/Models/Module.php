@@ -6,7 +6,18 @@ use Illuminate\Database\Eloquent\Model;
 
 class Module extends Model
 {
-    protected $fillable = ['code', 'intitule', 'credits', 'filiere', 'niveau', 'semestre', 'enseignant_id'];
+    protected $fillable = [
+        'code', 'intitule', 'credits', 'filiere', 'niveau', 'semestre', 'enseignant_id',
+        'type_ue', 'nature', 'coefficient', 'vhs',
+        'has_cours', 'duree_cours', 'has_td', 'duree_td', 'has_tp', 'duree_tp',
+        'pct_examen', 'pct_td', 'pct_tp',
+    ];
+
+    protected $casts = [
+        'has_cours' => 'boolean',
+        'has_td'    => 'boolean',
+        'has_tp'    => 'boolean',
+    ];
 
     public function enseignantResponsable()
     {

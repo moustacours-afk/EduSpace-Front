@@ -71,36 +71,82 @@ const INITIAL: FormState = {
 
 // ─── props ────────────────────────────────────────────────────────────────────
 
+// Full module data used when opening the modal in edit mode
+export interface EditModuleData {
+  id: number;
+  intitule: string;
+  code: string;
+  credits: number;
+  filiere: string;
+  niveau: string;
+  semestre: string;
+  type_ue?: string;
+  nature?: string;
+  coefficient?: number;
+  vhs?: number;
+  has_cours?: boolean;
+  duree_cours?: string;
+  has_td?: boolean;
+  duree_td?: string;
+  has_tp?: boolean;
+  duree_tp?: string;
+  pct_examen?: number;
+  pct_td?: number;
+  pct_tp?: number;
+}
+
 interface Props {
   open: boolean;
-  contextLabel: string;   // e.g. "Informatique · L3 · S5"
-  initialNiveau?: string; // pre-fill niveau from parent filter
-  initialSemestre?: string; // pre-fill semestre from parent filter
+  contextLabel: string;
+  initialNiveau?: string;
+  initialSemestre?: string;
+  editModule?: EditModuleData; // when set → edit mode (all fields pre-filled)
   onClose: () => void;
-  onSave: (mod: Omit<ModuleEntry, "id">) => void;
+  onSave: (mod: Omit<ModuleEntry, "id"> & { _editId?: number }) => void;
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
 
-export default function AjoutModule({ open, contextLabel, initialNiveau, initialSemestre, onClose, onSave }: Props) {
-  const [form, setForm]     = useState<FormState>({
-    ...INITIAL,
-    niveau:   initialNiveau   ?? "",
-    semestre: initialSemestre ?? "",
-  });
+export default function AjoutModule({ open, contextLabel, initialNiveau, initialSemestre, editModule, onClose, onSave }: Props) {
+  const isEditMode = !!editModule;
+
+  const [form, setForm]     = useState<FormState>({ ...INITIAL });
   const [errors, setErrors] = useState<Errors>({});
   const [saved, setSaved]   = useState(false);
 
-  // Sync pre-filled values when parent filters change and modal opens
+  // Sync form whenever the modal opens — pre-fill edit data or use filter defaults
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (editModule) {
+      setForm({
+        nom:         editModule.intitule     ?? "",
+        code:        editModule.code         ?? "",
+        semestre:    editModule.semestre     ?? initialSemestre ?? "",
+        niveau:      editModule.niveau       ?? initialNiveau   ?? "",
+        type_ue:     editModule.type_ue      ?? "",
+        nature:      (editModule.nature as "obligatoire" | "optionnelle") ?? "obligatoire",
+        coefficient: editModule.coefficient  ?? 2,
+        credits:     editModule.credits      ?? 3,
+        vhs:         editModule.vhs          ?? 45,
+        has_cours:   editModule.has_cours    ?? true,
+        duree_cours: editModule.duree_cours  ?? "1h30",
+        has_td:      editModule.has_td       ?? true,
+        duree_td:    editModule.duree_td     ?? "1h30",
+        has_tp:      editModule.has_tp       ?? false,
+        duree_tp:    editModule.duree_tp     ?? "1h30",
+        pct_examen:  editModule.pct_examen   ?? 60,
+        pct_td:      editModule.pct_td       ?? 40,
+        pct_tp:      editModule.pct_tp       ?? 0,
+      });
+    } else {
       setForm(f => ({
-        ...f,
+        ...INITIAL,
         niveau:   initialNiveau   ?? f.niveau,
         semestre: initialSemestre ?? f.semestre,
       }));
     }
-  }, [open, initialNiveau, initialSemestre]);
+    setErrors({});
+  }, [open, editModule, initialNiveau, initialSemestre]);
 
   // ── derived flags ──────────────────────────────────────────────────────────
 
@@ -158,22 +204,24 @@ export default function AjoutModule({ open, contextLabel, initialNiveau, initial
   function handleSave() {
     if (!validate()) return;
     onSave({
-      nom:        form.nom.trim(),
-      code:       form.code.trim().toUpperCase(),
+      nom:         form.nom.trim(),
+      code:        form.code.trim().toUpperCase(),
       coefficient: form.coefficient,
-      credits:    form.credits,
-      ue:         form.type_ue,
-      nature:     form.nature,
-      vhs:        form.vhs,
-      has_cours:  form.has_cours,
+      credits:     form.credits,
+      ue:          form.type_ue,
+      nature:      form.nature,
+      vhs:         form.vhs,
+      has_cours:   form.has_cours,
       duree_cours: form.has_cours ? form.duree_cours : "",
-      has_td:     form.has_td,
-      duree_td:   form.has_td ? form.duree_td : "",
-      has_tp:     form.has_tp,
-      duree_tp:   form.has_tp ? form.duree_tp : "",
-      pct_examen: effectivePcts.examen,
-      pct_td:     effectivePcts.td,
-      pct_tp:     effectivePcts.tp,
+      has_td:      form.has_td,
+      duree_td:    form.has_td ? form.duree_td : "",
+      has_tp:      form.has_tp,
+      duree_tp:    form.has_tp ? form.duree_tp : "",
+      pct_examen:  effectivePcts.examen,
+      pct_td:      effectivePcts.td,
+      pct_tp:      effectivePcts.tp,
+      // carry the edit id so parent can call updateModule
+      ...(editModule ? { _editId: editModule.id } : {}),
     });
     setSaved(true);
     setTimeout(() => {
@@ -205,7 +253,7 @@ export default function AjoutModule({ open, contextLabel, initialNiveau, initial
           <div>
             <h2 className="font-bold text-lg flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-purple-600" />
-              Ajouter un module
+              {isEditMode ? "Modifier le module" : "Ajouter un module"}
             </h2>
             {contextLabel && (
               <p className="text-xs text-muted-foreground mt-0.5">{contextLabel}</p>
@@ -477,7 +525,7 @@ export default function AjoutModule({ open, contextLabel, initialNiveau, initial
               onClick={handleSave}
               disabled={saved}
             >
-              <Plus className="w-4 h-4" />Enregistrer le module
+              <Plus className="w-4 h-4" />{isEditMode ? "Enregistrer les modifications" : "Enregistrer le module"}
             </Button>
           </div>
         </div>
