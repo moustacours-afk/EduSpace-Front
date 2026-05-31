@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AgentSidebar } from "@/components/AgentSidebar";
 import { Card } from "@/components/ui/card";
@@ -9,23 +9,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Users, Plus, X, CheckCircle, ChevronDown, ChevronRight,
   GraduationCap, Layers, Shuffle, Trash2, Edit, ArrowRightLeft,
-  Filter,
+  Filter, RefreshCw,
 } from "lucide-react";
-import { agentStudents } from "@/data/mockData";
+import { agent as api } from "@/lib/api";
 import {
   getOrgState, setOrgState,
   type OrgState, type OrgSection, type OrgGroup,
 } from "@/lib/orgStore";
 
-const NIVEAUX = ["L1", "L2", "L3", "M1", "M2", "ING1", "ING2", "ING3"];
-const NIVEAUX_AVEC_SPECIALITE = ["M1", "M2", "ING1", "ING2", "ING3"];
+const NIVEAUX = ["L1", "L2", "L3", "M1", "M2", "ING1", "ING2", "ING3", "ING4", "ING5"];
+// ING1 and ING2 have no speciality; ING3, ING4, ING5 do
+const NIVEAUX_AVEC_SPECIALITE = ["M1", "M2", "ING3", "ING4", "ING5"];
 
 const SPECIALITES_PAR_NIVEAU: Record<string, string[]> = {
   M1: ["Systèmes Informatiques", "Réseaux & Télécoms", "Base de Données & IA", "Génie Logiciel"],
   M2: ["Systèmes Informatiques", "Réseaux & Télécoms", "Base de Données & IA", "Génie Logiciel"],
-  ING1: ["Génie des Systèmes", "Réseaux & Télécoms", "Sécurité Informatique"],
-  ING2: ["Génie des Systèmes", "Réseaux & Télécoms", "Sécurité Informatique"],
-  ING3: ["Génie des Systèmes", "Réseaux & Télécoms", "Sécurité Informatique"],
+  ING3: ["Génie des Systèmes", "Réseaux & Télécoms", "Sécurité Informatique", "Intelligence Artificielle"],
+  ING4: ["Génie des Systèmes", "Réseaux & Télécoms", "Sécurité Informatique", "Intelligence Artificielle"],
+  ING5: ["Génie des Systèmes", "Réseaux & Télécoms", "Sécurité Informatique", "Intelligence Artificielle"],
 };
 
 const AGENT_FILIERE = "Informatique";
@@ -61,6 +62,9 @@ function buildGroups(studentIds: string[], nbGroupes: number, sectionId: string)
   return groups;
 }
 
+// Local student type (matches API response)
+type LocalStudent = { id: string; matricule: string; nom: string; prenom: string; filiere: string; niveau: string; groupe: string };
+
 export default function AgentOrganisationEtudiants() {
   const [orgState, setLocalOrg] = useState<OrgState>(() => getOrgState());
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
@@ -69,6 +73,10 @@ export default function AgentOrganisationEtudiants() {
   const [createSuccess, setCreateSuccess] = useState("");
   const [filterNiveau, setFilterNiveau] = useState("all");
   const [filterSpecialite, setFilterSpecialite] = useState("all");
+
+  // Real students from API
+  const [apiStudents, setApiStudents] = useState<LocalStudent[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
 
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editGroupsForm, setEditGroupsForm] = useState<{ id: string; nom: string; nbMax: number }[]>([]);
@@ -83,9 +91,28 @@ export default function AgentOrganisationEtudiants() {
     nbGroupes: "4",
   });
 
+  const fetchStudents = useCallback(async () => {
+    setLoadingStudents(true);
+    try {
+      const data = await api.students() as Record<string, unknown>[];
+      const mapped: LocalStudent[] = data.map(s => ({
+        id:       String(s.id),
+        matricule: String(s.matricule ?? ""),
+        nom:      String(s.nom ?? ""),
+        prenom:   String(s.prenom ?? ""),
+        filiere:  String(s.filiere ?? ""),
+        niveau:   String(s.niveau ?? ""),
+        groupe:   String(s.groupe ?? ""),
+      }));
+      setApiStudents(mapped);
+    } catch { /* keep empty */ }
+    finally { setLoadingStudents(false); }
+  }, []);
+
   useEffect(() => {
     setLocalOrg(getOrgState());
-  }, []);
+    fetchStudents();
+  }, [fetchStudents]);
 
   // Reset specialite when niveau changes in filter
   useEffect(() => {
@@ -113,7 +140,7 @@ export default function AgentOrganisationEtudiants() {
     const max = parseInt(form.maxStudents) || 200;
 
     const assigned = getAssignedStudentIds();
-    const eligible = agentStudents.filter(
+    const eligible = apiStudents.filter(
       s => s.niveau === form.niveau && s.filiere === AGENT_FILIERE && !assigned.has(s.id)
     );
 
@@ -258,10 +285,18 @@ export default function AgentOrganisationEtudiants() {
               <p className="text-muted-foreground mt-1">
                 Créez des sections, définissez les groupes et répartissez automatiquement les étudiants.
               </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {loadingStudents ? "Chargement des étudiants…" : `${apiStudents.length} étudiant(s) disponible(s) dans le système.`}
+              </p>
             </div>
-            <Button className="gap-2" size="sm" onClick={() => setShowCreateModal(true)}>
-              <Plus className="w-4 h-4" />Créer une section
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="gap-2" onClick={fetchStudents} disabled={loadingStudents} title="Actualiser la liste des étudiants">
+                <RefreshCw className={`w-4 h-4 ${loadingStudents ? "animate-spin" : ""}`} />Actualiser
+              </Button>
+              <Button className="gap-2" size="sm" onClick={() => setShowCreateModal(true)}>
+                <Plus className="w-4 h-4" />Créer une section
+              </Button>
+            </div>
           </motion.div>
 
           {/* Niveau filter */}
@@ -438,7 +473,7 @@ export default function AgentOrganisationEtudiants() {
                                               </thead>
                                               <tbody>
                                                 {groupe.studentIds.map(sid => {
-                                                  const s = agentStudents.find(x => x.id === sid);
+                                                  const s = apiStudents.find(x => x.id === sid);
                                                   if (!s) return null;
                                                   return (
                                                     <tr key={sid} className="border-t border-border/30 hover:bg-muted/10">
@@ -626,7 +661,7 @@ export default function AgentOrganisationEtudiants() {
       {/* ── REASSIGN STUDENT MODAL ── */}
       <AnimatePresence>
         {reassignStudent && (() => {
-          const student = agentStudents.find(s => s.id === reassignStudent.studentId);
+          const student = apiStudents.find(s => s.id === reassignStudent.studentId);
           const currentSection = orgState.sections.find(s => s.id === reassignStudent.currentSectionId);
           const currentGroup = currentSection?.groupes.find(g => g.id === reassignStudent.currentGroupId);
           return (

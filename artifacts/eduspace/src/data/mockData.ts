@@ -185,9 +185,12 @@ export const semestresParNiveau: Record<string, string[]> = {
   L3: ["S5", "S6"],
   M1: ["S1", "S2"],
   M2: ["S3", "S4"],
+  // Engineering cycle S1–S10 across 5 years
   ING1: ["S1", "S2"],
   ING2: ["S3", "S4"],
   ING3: ["S5", "S6"],
+  ING4: ["S7", "S8"],
+  ING5: ["S9", "S10"],
 };
 
 export const groupesParNiveau: Record<string, string[]> = {
@@ -198,7 +201,9 @@ export const groupesParNiveau: Record<string, string[]> = {
   M2: ["Groupe 1"],
   ING1: ["Groupe 1", "Groupe 2"],
   ING2: ["Groupe 1", "Groupe 2"],
-  ING3: ["Groupe 1"],
+  ING3: ["Groupe 1", "Groupe 2"],
+  ING4: ["Groupe 1"],
+  ING5: ["Groupe 1"],
 };
 
 const noms = ["Bensalem","Ouali","Mekkaoui","Brahimi","Cherif","Hamidi","Kaci","Benali","Mammeri","Zidane","Aouad","Tebbal","Hadjadj","Rahmani","Saidani","Bouzidi","Merzougui","Larbi","Guessoum","Moussaoui"];

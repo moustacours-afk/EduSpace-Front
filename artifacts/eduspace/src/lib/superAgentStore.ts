@@ -41,15 +41,25 @@ export type ProgrammeEntry = {
   modules: ModuleEntry[];
 };
 
-const AGENTS_KEY = "superAgent_agents";
-const PROGRAMMES_KEY = "superAgent_programmes";
+// Keys are scoped to the authenticated SA's ID so two SAs on the same browser never share data
+function saUserId(): string {
+  try { return String(JSON.parse(localStorage.getItem("eduspace_user") ?? "{}").id ?? "unknown"); }
+  catch { return "unknown"; }
+}
+function agentsKey():     string { return `superAgent_agents_${saUserId()}`; }
+function programmesKey(): string { return `superAgent_programmes_${saUserId()}`; }
 
-export const NIVEAUX_LIST = ["L1", "L2", "L3", "M1", "M2", "ING1", "ING2", "ING3"];
+export const NIVEAUX_LIST = ["L1", "L2", "L3", "M1", "M2", "ING1", "ING2", "ING3", "ING4", "ING5"];
 
 export const SEMESTRES_PAR_NIVEAU: Record<string, string[]> = {
   L1: ["S1", "S2"], L2: ["S3", "S4"], L3: ["S5", "S6"],
   M1: ["S1", "S2"], M2: ["S3", "S4"],
-  ING1: ["S1", "S2"], ING2: ["S3", "S4"], ING3: ["S5", "S6"],
+  // Engineering cycle: S1-S10 across 5 years
+  ING1: ["S1", "S2"],
+  ING2: ["S3", "S4"],
+  ING3: ["S5", "S6"],
+  ING4: ["S7", "S8"],
+  ING5: ["S9", "S10"],
 };
 
 export const WILAYAS = [
@@ -453,12 +463,12 @@ export function getSpecialites(departement: string, niveau: string): string[] {
 // ── Agent CRUD ──────────────────────────────────────────────────────────────
 
 function loadAgents(): AgentAccount[] {
-  try { return JSON.parse(localStorage.getItem(AGENTS_KEY) ?? "[]"); }
+  try { return JSON.parse(localStorage.getItem(agentsKey()) ?? "[]"); }
   catch { return []; }
 }
 
 function saveAgents(a: AgentAccount[]) {
-  localStorage.setItem(AGENTS_KEY, JSON.stringify(a));
+  localStorage.setItem(agentsKey(), JSON.stringify(a));
 }
 
 export function getAgents(): AgentAccount[] { return loadAgents(); }
@@ -483,12 +493,12 @@ export function toggleAgentActive(id: string) {
 // ── Programme / Module CRUD ─────────────────────────────────────────────────
 
 function loadProgrammes(): ProgrammeEntry[] {
-  try { return JSON.parse(localStorage.getItem(PROGRAMMES_KEY) ?? "[]"); }
+  try { return JSON.parse(localStorage.getItem(programmesKey()) ?? "[]"); }
   catch { return []; }
 }
 
 function saveProgrammes(p: ProgrammeEntry[]) {
-  localStorage.setItem(PROGRAMMES_KEY, JSON.stringify(p));
+  localStorage.setItem(programmesKey(), JSON.stringify(p));
 }
 
 export function getProgrammes(): ProgrammeEntry[] { return loadProgrammes(); }

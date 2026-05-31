@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { AgentSidebar } from "@/components/AgentSidebar";
 import { Card } from "@/components/ui/card";
@@ -8,15 +8,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   FileSpreadsheet, Download, Users, CalendarDays,
   ClipboardList, ListChecks,
-  Printer, Filter,
+  Printer, Filter, RefreshCw,
 } from "lucide-react";
 import { groupesParNiveau, semestresParNiveau } from "@/data/mockData";
 import { getSectionsForNiveau } from "@/lib/orgStore";
+import { agent as api } from "@/lib/api";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
-const NIVEAUX = ["L1", "L2", "L3", "M1", "M2"];
+const NIVEAUX = ["L1", "L2", "L3", "M1", "M2", "ING1", "ING2", "ING3", "ING4", "ING5"];
+
+type StudentRow = { id: string; matricule: string; nom: string; prenom: string; niveau: string; groupe: string; statut?: string };
 
 type DocCard = {
   id: string;
@@ -58,7 +61,7 @@ const DOC_SECTIONS: { label: string; icon: React.ElementType; docs: DocCard[] }[
         description: "Liste des étudiants après délibération avec leur statut : admis, ajourné ou ayant des dettes pédagogiques.",
         icon: ListChecks,
         color: "bg-green-50 text-green-700 border-green-200",
-        needsNiveau: true, needsSection: true, needsGroupe: true, needsSemestre: true, needsSession: true,
+        needsNiveau: true, needsSection: true, needsGroupe: true, needsSession: true,
       },
     ],
   },
@@ -77,7 +80,7 @@ const DOC_SECTIONS: { label: string; icon: React.ElementType; docs: DocCard[] }[
       {
         id: "liste-examen-salle",
         titre: "Liste des examens par salle",
-        description: "Organisation des étudiants par salle d'examen. Chaque salle est remplie groupe par groupe. Chaque salle sur une page à l'impression.",
+        description: "Organisation des étudiants par salle d'examen. Chaque salle est remplie groupe par groupe.",
         icon: CalendarDays,
         color: "bg-amber-50 text-amber-700 border-amber-200",
         needsNiveau: true, needsSection: true, needsSemestre: true,
@@ -86,23 +89,17 @@ const DOC_SECTIONS: { label: string; icon: React.ElementType; docs: DocCard[] }[
   },
 ];
 
-function generateDoc(
+function buildDocHtml(
   docId: string,
-  opts: { niveau: string; section: string; groupe: string; semestre: string; session: string }
-) {
-  const win = window.open("", "_blank", "width=900,height=700");
-  if (!win) return;
-
+  opts: { niveau: string; section: string; groupe: string; semestre: string; session: string },
+  students: StudentRow[],
+): string {
   const titles: Record<string, string> = {
     "liste-section-groupe": "Liste Générale par Section et Groupe",
     "liste-emargement": "Feuille d'Émargement",
     "liste-etudiants-statut": "Liste des Étudiants — Admis / Ajournés / Dettes",
     "emargement-examen": "Feuille de Présence — Examen",
     "liste-examen-salle": "Liste des Examens par Salle",
-    "fiche-notes-vierge": "Fiche de Notes (vierge)",
-    "pv-saisie-notes": "PV de Saisie des Notes",
-    "releve-notes-prov": "Relevé de Notes Provisoire",
-    "releve-notes-officiel": "Relevé de Notes Officiel",
   };
 
   const title = titles[docId] ?? "Document";
@@ -115,18 +112,38 @@ function generateDoc(
   ].filter(Boolean);
   const infoLine = parts.join(" &nbsp;|&nbsp; ");
 
+  const extraStatutCol = docId === "liste-etudiants-statut";
+  const lastColHeader =
+    docId === "liste-emargement" || docId === "emargement-examen"
+      ? "Signature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+      : extraStatutCol
+      ? "Statut (Admis / Ajourné / Dettes)"
+      : "Observations";
+
   if (docId === "liste-examen-salle") {
-    // Multi-page: one salle per page with groups
     const groupes = opts.groupe !== "Tous" ? [opts.groupe] : ["Groupe 1", "Groupe 2", "Groupe 3"];
     const salles = ["Salle A101", "Salle A102", "Salle B201"];
     const studentsPerSalle = 30;
 
     const pages = salles.map((salle, si) => {
       const groupeRows = groupes.map((g, gi) => {
-        const rows = Array.from({ length: 10 }, (_, ri) => {
-          const num = si * studentsPerSalle + gi * 10 + ri + 1;
-          return `<tr><td style="border:1px solid #bbb;padding:5px;text-align:center;font-size:11px">${num}</td><td style="border:1px solid #bbb;padding:5px;font-size:11px"></td><td style="border:1px solid #bbb;padding:5px;font-size:11px"></td><td style="border:1px solid #bbb;padding:5px;font-size:11px">${g}</td><td style="border:1px solid #bbb;padding:5px;font-size:11px"></td></tr>`;
-        }).join("");
+        const grpStudents = students.filter(s => s.groupe === g);
+        const sliced = grpStudents.slice(si * studentsPerSalle + gi * 10, si * studentsPerSalle + gi * 10 + 10);
+        const rows = sliced.length > 0
+          ? sliced.map((s, ri) => `<tr>
+              <td style="border:1px solid #bbb;padding:5px;text-align:center;font-size:11px">${si * studentsPerSalle + gi * 10 + ri + 1}</td>
+              <td style="border:1px solid #bbb;padding:5px;font-size:11px">${s.matricule}</td>
+              <td style="border:1px solid #bbb;padding:5px;font-size:11px">${s.prenom} ${s.nom}</td>
+              <td style="border:1px solid #bbb;padding:5px;font-size:11px">${g}</td>
+              <td style="border:1px solid #bbb;padding:5px;font-size:11px"></td>
+            </tr>`).join("")
+          : Array.from({ length: 10 }, (_, ri) => `<tr>
+              <td style="border:1px solid #bbb;padding:5px;text-align:center;font-size:11px">${si * studentsPerSalle + gi * 10 + ri + 1}</td>
+              <td style="border:1px solid #bbb;padding:5px;font-size:11px"></td>
+              <td style="border:1px solid #bbb;padding:5px;font-size:11px"></td>
+              <td style="border:1px solid #bbb;padding:5px;font-size:11px">${g}</td>
+              <td style="border:1px solid #bbb;padding:5px;font-size:11px"></td>
+            </tr>`).join("");
         return `<tr><td colspan="5" style="background:#e8e8f0;padding:4px 6px;font-weight:bold;font-size:11px">${g}</td></tr>${rows}`;
       }).join("");
 
@@ -134,7 +151,7 @@ function generateDoc(
         <div style="text-align:center;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:14px">
           <p style="margin:2px 0;font-size:11px;color:#555">République Algérienne Démocratique et Populaire — Ministère de l'Enseignement Supérieur</p>
           <h3 style="margin:6px 0;font-size:14px">Liste des Examens par Salle — ${opts.semestre}</h3>
-          <p style="font-size:12px;font-weight:bold">Salle : ${salle} &nbsp;|&nbsp; Niveau : ${opts.niveau} &nbsp;|&nbsp; ${infoLine}</p>
+          <p style="font-size:12px;font-weight:bold">Salle : ${salle} &nbsp;|&nbsp; ${infoLine}</p>
         </div>
         <table style="border-collapse:collapse;width:100%">
           <thead><tr style="background:#e8e8f0">
@@ -149,7 +166,7 @@ function generateDoc(
       </div>`;
     }).join("");
 
-    win.document.write(`<html><head><title>${title}</title>
+    return `<html><head><title>${title}</title>
     <style>
       body{font-family:Arial,sans-serif;padding:20px}
       @media print{button{display:none} .page-break{page-break-after:always}}
@@ -157,25 +174,28 @@ function generateDoc(
     <body>
       <button onclick="window.print()" style="margin-bottom:14px;padding:7px 14px;background:#4f46e5;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px">🖨 Imprimer</button>
       ${pages}
-    </body></html>`);
-    win.document.close();
-    return;
+    </body></html>`;
   }
 
-  // Standard single-page documents
-  const extraStatutCol = docId === "liste-etudiants-statut";
-  const lastColHeader =
-    docId === "liste-emargement" || docId === "emargement-examen"
-      ? "Signature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-      : extraStatutCol
-      ? "Statut (Admis / Ajourné / Dettes)"
-      : docId === "fiche-notes-vierge"
-      ? "Note CC"
-      : docId === "releve-notes-prov" || docId === "releve-notes-officiel"
-      ? "Moy. Sem."
-      : "Observations";
+  // Standard single-page documents — populate with real students
+  const studentRows = students.length > 0
+    ? students.map((s, i) => `<tr>
+        <td style="text-align:center">${i + 1}</td>
+        <td>${s.matricule}</td>
+        <td>${s.nom}</td>
+        <td>${s.prenom}</td>
+        ${opts.section && opts.section !== "Tous" ? "" : "<td>—</td>"}
+        <td>${s.groupe}</td>
+        <td>${extraStatutCol ? (s.statut ?? "—") : ""}</td>
+      </tr>`).join("")
+    : Array.from({ length: 15 }, (_, i) => `<tr>
+        <td style="text-align:center">${i + 1}</td>
+        <td></td><td></td><td></td>
+        ${opts.section && opts.section !== "Tous" ? "" : "<td></td>"}
+        <td>${opts.groupe !== "Tous" ? opts.groupe : "—"}</td><td></td>
+      </tr>`).join("");
 
-  win.document.write(`<html><head><title>${title}</title>
+  return `<html><head><title>${title}</title>
   <style>
     body{font-family:Arial,sans-serif;padding:24px;color:#111}
     .header{text-align:center;border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:16px}
@@ -203,24 +223,14 @@ function generateDoc(
         ${opts.section && opts.section !== "Tous" ? "" : "<th>Section</th>"}
         <th>Groupe</th>
         <th>${lastColHeader}</th>
-        ${docId === "fiche-notes-vierge" ? "<th>Note Exam</th><th>Moyenne</th>" : ""}
       </tr></thead>
-      <tbody>
-        ${Array.from({ length: 15 }, (_, i) => `<tr>
-          <td style="text-align:center">${i + 1}</td>
-          <td></td><td></td><td></td>
-          ${opts.section && opts.section !== "Tous" ? "" : "<td></td>"}
-          <td>${opts.groupe !== "Tous" ? opts.groupe : "—"}</td><td></td>
-          ${docId === "fiche-notes-vierge" ? "<td></td><td></td>" : ""}
-        </tr>`).join("")}
-      </tbody>
+      <tbody>${studentRows}</tbody>
     </table>
     <div style="margin-top:40px;display:flex;justify-content:space-between;font-size:11px">
       <div><p><b>Le Chef de Département</b></p><br/><br/><p>Signature et cachet</p></div>
       <div><p><b>L'Agent Pédagogique</b></p><br/><br/><p>Signature</p></div>
     </div>
-  </body></html>`);
-  win.document.close();
+  </body></html>`;
 }
 
 export default function AgentSheets() {
@@ -229,6 +239,29 @@ export default function AgentSheets() {
   const [filterGroupe,   setFilterGroupe]   = useState("Tous");
   const [filterSemestre, setFilterSemestre] = useState("S5");
   const [filterSession,  setFilterSession]  = useState("Normale");
+
+  const [allStudents, setAllStudents] = useState<StudentRow[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+
+  const fetchStudents = useCallback(async () => {
+    setLoadingStudents(true);
+    try {
+      const data = await api.students() as Record<string, unknown>[];
+      const mapped: StudentRow[] = data.map(s => ({
+        id:        String(s.id),
+        matricule: String(s.matricule ?? ""),
+        nom:       String(s.nom ?? ""),
+        prenom:    String(s.prenom ?? ""),
+        niveau:    String(s.niveau ?? ""),
+        groupe:    String(s.groupe ?? ""),
+        statut:    String((s as Record<string, unknown>).statut_deliberation ?? "—"),
+      }));
+      setAllStudents(mapped);
+    } catch { /* keep empty */ }
+    finally { setLoadingStudents(false); }
+  }, []);
+
+  useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
   // Sections from orgStore (or fallback placeholders)
   const orgSections = getSectionsForNiveau(filterNiveau);
@@ -245,6 +278,51 @@ export default function AgentSheets() {
     setFilterSemestre(semestresParNiveau[v]?.[0] ?? "S1");
   }
 
+  // Filter students for the current selection
+  function getFilteredStudents(): StudentRow[] {
+    return allStudents.filter(s => {
+      if (s.niveau !== filterNiveau) return false;
+      if (filterGroupe !== "Tous" && s.groupe !== filterGroupe) return false;
+      return true;
+    });
+  }
+
+  function generateDoc(docId: string, action: "print" | "download") {
+    const students = getFilteredStudents();
+    const html = buildDocHtml(docId, {
+      niveau:   filterNiveau,
+      section:  filterSection,
+      groupe:   filterGroupe,
+      semestre: filterSemestre,
+      session:  filterSession,
+    }, students);
+
+    if (action === "download") {
+      const titles: Record<string, string> = {
+        "liste-section-groupe":    "Liste_Generale",
+        "liste-emargement":        "Feuille_Emargement",
+        "liste-etudiants-statut":  "Liste_Statut",
+        "emargement-examen":       "Emargement_Examen",
+        "liste-examen-salle":      "Liste_Examen_Salle",
+      };
+      const filename = `${titles[docId] ?? "Document"}_${filterNiveau}_${filterGroupe}.html`;
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    // print — open in new window
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  }
+
   return (
     <div className="flex min-h-screen bg-background">
       <AgentSidebar />
@@ -259,7 +337,13 @@ export default function AgentSheets() {
                   Feuilles & Documents
                 </h1>
                 <p className="text-muted-foreground mt-1">Générez et exportez tous les documents pédagogiques.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {loadingStudents ? "Chargement des étudiants…" : `${allStudents.length} étudiant(s) chargé(s) depuis le système.`}
+                </p>
               </div>
+              <Button variant="outline" size="sm" className="gap-2" onClick={fetchStudents} disabled={loadingStudents}>
+                <RefreshCw className={`w-4 h-4 ${loadingStudents ? "animate-spin" : ""}`} />Actualiser
+              </Button>
             </div>
           </motion.div>
 
@@ -315,6 +399,9 @@ export default function AgentSheets() {
                   </Select>
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                {getFilteredStudents().length} étudiant(s) correspondant aux filtres actuels.
+              </p>
             </Card>
           </motion.div>
 
@@ -354,23 +441,12 @@ export default function AgentSheets() {
                       </div>
                       <div className="flex gap-2 mt-3">
                         <Button size="sm" className="flex-1 h-8 text-xs gap-1.5"
-                          onClick={() => generateDoc(doc.id, {
-                            niveau: filterNiveau,
-                            section: filterSection,
-                            groupe: filterGroupe,
-                            semestre: filterSemestre,
-                            session: filterSession,
-                          })}>
+                          onClick={() => generateDoc(doc.id, "print")}>
                           <Printer className="w-3 h-3" />Générer
                         </Button>
-                        <Button size="sm" variant="outline" className="h-8 px-2 text-xs"
-                          onClick={() => generateDoc(doc.id, {
-                            niveau: filterNiveau,
-                            section: filterSection,
-                            groupe: filterGroupe,
-                            semestre: filterSemestre,
-                            session: filterSession,
-                          })}>
+                        <Button size="sm" variant="outline" className="h-8 px-2.5 text-xs gap-1.5"
+                          title="Télécharger le document"
+                          onClick={() => generateDoc(doc.id, "download")}>
                           <Download className="w-3 h-3" />
                         </Button>
                       </div>

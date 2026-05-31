@@ -36,7 +36,35 @@ export default function AgentDashboard() {
   const [showPublishModal, setShowPublishModal] = useState(false);
 
   useEffect(() => {
-    api.stats().then((d) => setStats(d as unknown as Stats)).catch(() => {});
+    api.stats()
+      .then((d) => {
+        const s = d as unknown as Stats;
+        setStats(s);
+        // If counts are zero, compute from direct lists as fallback
+        if (!s.totalStudents || !s.totalTeachers) {
+          Promise.all([api.students(), api.teachers()])
+            .then(([stList, tList]) => {
+              setStats(prev => ({
+                ...prev,
+                totalStudents: s.totalStudents || (stList as unknown[]).length,
+                totalTeachers: s.totalTeachers || (tList as unknown[]).length,
+              }));
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {
+        // Stats endpoint failed — count from lists directly
+        Promise.all([api.students(), api.teachers()])
+          .then(([stList, tList]) => {
+            setStats(prev => ({
+              ...prev,
+              totalStudents: (stList as unknown[]).length,
+              totalTeachers: (tList as unknown[]).length,
+            }));
+          })
+          .catch(() => {});
+      });
   }, []);
 
   const gradesSoumis  = stats.gradeStats?.soumis ?? 0;

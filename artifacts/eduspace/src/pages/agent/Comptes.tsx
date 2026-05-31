@@ -10,53 +10,46 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Search, UserPlus, Edit, UserX, UserCheck, Eye, X, CheckCircle,
   GraduationCap, Users, ChevronLeft, ChevronRight, Download,
-  ChevronDown, ClipboardCheck, BookOpen,
-  Plus, Trash2, Copy, FileText, KeyRound,
+  ChevronDown, ClipboardCheck, BookOpen, CalendarDays,
+  Plus, Trash2, Copy, FileText, KeyRound, Info,
 } from "lucide-react";
-import { modules, gradeSubmissions } from "@/data/mockData";
+import { gradeSubmissions } from "@/data/mockData";
 import { agent as api } from "@/lib/api";
 import { getStudentAssignment } from "@/lib/orgStore";
+import { getUser } from "@/lib/auth";
 
-// ── Local types (normalized from backend) ─────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 type CompteStatut = "actif" | "suspendu" | "archive";
 
 interface AgentStudent {
-  id: string;
-  matricule: string;
-  nom: string;
-  prenom: string;
-  filiere: string;
-  niveau: string;
-  groupe: string;
-  dateNaissance: string;
-  wilaya: string;
-  email: string;
-  statutCompte: CompteStatut;
-  statutReinscription: string;
+  id: string; matricule: string; nom: string; prenom: string;
+  filiere: string; niveau: string; groupe: string;
+  dateNaissance: string; wilaya: string; email: string;
+  statutCompte: CompteStatut; statutReinscription: string;
 }
 
 interface AgentTeacher {
-  id: string;
-  matricule: string;
-  nom: string;
-  prenom: string;
-  grade: string;
-  departement: string;
-  email: string;
-  modulesAssignes: string[];
-  modulesDetails: ModuleRow[];
-  statutCompte: CompteStatut;
-  schedule: unknown[];
+  id: string; matricule: string; nom: string; prenom: string;
+  grade: string; departement: string; email: string;
+  modulesAssignes: string[]; modulesDetails: ModuleRow[];
+  statutCompte: CompteStatut; schedule: unknown[];
+  username?: string;
 }
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
-const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
+const item      = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 const ITEMS_PER_PAGE = 10;
 
+// ── Agent dept from profile ───────────────────────────────────────────────────
+function getAgentDept(): string {
+  const profile = getUser()?.profile as Record<string, string> | undefined;
+  return profile?.departement ?? "Informatique";
+}
+
 const DEPARTMENTS = ["Informatique", "Mathématiques", "Physique", "Réseaux", "Systèmes", "Électronique"];
-const SECTIONS  = ["Section 1", "Section 2"];
-const GROUPS    = ["Groupe 1", "Groupe 2", "Groupe 3", "Groupe 4"];
-const NIVEAUX   = ["L1", "L2", "L3", "M1", "M2"];
+const SECTIONS  = ["Section 1", "Section 2", "Section 3", "Section 4"];
+const GROUPS    = ["Groupe 1", "Groupe 2", "Groupe 3", "Groupe 4", "Groupe 5", "Groupe 6"];
+const NIVEAUX   = ["L1", "L2", "L3", "M1", "M2", "ING1", "ING2", "ING3", "ING4", "ING5"];
 const GRADES    = ["MAA", "MAB", "MCA", "MCB", "Professeur"];
 const WILAYAS_ALGERIE = [
   "Adrar","Chlef","Laghouat","Oum El Bouaghi","Batna","Béjaïa","Biskra","Béchar","Blida","Bouira",
@@ -67,9 +60,112 @@ const WILAYAS_ALGERIE = [
   "Aïn Témouchent","Ghardaïa","Relizane","Timimoun","Bordj Badji Mokhtar","Ouled Djellal",
   "Béni Abbès","In Salah","In Guezzam","Touggourt","Djanet","El M'Ghair","El Meniaa",
 ];
-const AGENT_DEPT    = "Informatique";
-const AGENT_FACULTY = "Faculté d'Informatique";
-const AGENT_UNIV    = "Université des Sciences et de la Technologie Houari Boumediene";
+
+// ── Modules per department (Algerian university curricula) ────────────────────
+const MODULES_PAR_DEPARTEMENT: Record<string, { id: string; intitule: string }[]> = {
+  "Informatique": [
+    { id: "inf-1",  intitule: "Algorithmique" },
+    { id: "inf-2",  intitule: "Structures de Données" },
+    { id: "inf-3",  intitule: "Base de Données" },
+    { id: "inf-4",  intitule: "Réseaux Informatiques" },
+    { id: "inf-5",  intitule: "Systèmes d'Exploitation" },
+    { id: "inf-6",  intitule: "Programmation Orientée Objet" },
+    { id: "inf-7",  intitule: "Programmation Web" },
+    { id: "inf-8",  intitule: "Intelligence Artificielle" },
+    { id: "inf-9",  intitule: "Compilation" },
+    { id: "inf-10", intitule: "Génie Logiciel" },
+    { id: "inf-11", intitule: "Sécurité Informatique" },
+    { id: "inf-12", intitule: "Architecture des Ordinateurs" },
+    { id: "inf-13", intitule: "Théorie des Langages" },
+    { id: "inf-14", intitule: "Systèmes Distribués" },
+    { id: "inf-15", intitule: "Mathématiques pour l'Informatique" },
+    { id: "inf-16", intitule: "Logique et Calculabilité" },
+    { id: "inf-17", intitule: "Graphes et Algorithmes" },
+    { id: "inf-18", intitule: "Interface Homme-Machine" },
+    { id: "inf-19", intitule: "Traitement d'Images" },
+    { id: "inf-20", intitule: "Programmation Fonctionnelle" },
+    { id: "inf-21", intitule: "Cloud Computing" },
+    { id: "inf-22", intitule: "Développement Mobile" },
+  ],
+  "Mathématiques": [
+    { id: "mat-1",  intitule: "Analyse Mathématique 1" },
+    { id: "mat-2",  intitule: "Analyse Mathématique 2" },
+    { id: "mat-3",  intitule: "Algèbre Linéaire" },
+    { id: "mat-4",  intitule: "Probabilités et Statistiques" },
+    { id: "mat-5",  intitule: "Géométrie" },
+    { id: "mat-6",  intitule: "Topologie" },
+    { id: "mat-7",  intitule: "Analyse Numérique" },
+    { id: "mat-8",  intitule: "Équations Différentielles" },
+    { id: "mat-9",  intitule: "Mathématiques Discrètes" },
+    { id: "mat-10", intitule: "Théorie des Graphes" },
+    { id: "mat-11", intitule: "Calcul des Probabilités" },
+    { id: "mat-12", intitule: "Méthodes Numériques" },
+    { id: "mat-13", intitule: "Logique Mathématique" },
+    { id: "mat-14", intitule: "Algèbre Générale" },
+    { id: "mat-15", intitule: "Analyse Fonctionnelle" },
+    { id: "mat-16", intitule: "Théorie de la Mesure" },
+  ],
+  "Physique": [
+    { id: "phy-1",  intitule: "Mécanique Classique" },
+    { id: "phy-2",  intitule: "Électromagnétisme" },
+    { id: "phy-3",  intitule: "Optique" },
+    { id: "phy-4",  intitule: "Thermodynamique" },
+    { id: "phy-5",  intitule: "Mécanique Quantique" },
+    { id: "phy-6",  intitule: "Physique des Solides" },
+    { id: "phy-7",  intitule: "Physique Nucléaire" },
+    { id: "phy-8",  intitule: "Électronique Générale" },
+    { id: "phy-9",  intitule: "Physique Computationnelle" },
+    { id: "phy-10", intitule: "Physique Statistique" },
+    { id: "phy-11", intitule: "Relativité" },
+    { id: "phy-12", intitule: "Acoustique et Vibrations" },
+    { id: "phy-13", intitule: "Mécanique des Fluides" },
+    { id: "phy-14", intitule: "Physique Atomique" },
+  ],
+  "Réseaux": [
+    { id: "res-1",  intitule: "Réseaux Informatiques" },
+    { id: "res-2",  intitule: "Protocoles Réseaux" },
+    { id: "res-3",  intitule: "Sécurité des Réseaux" },
+    { id: "res-4",  intitule: "Systèmes de Télécommunication" },
+    { id: "res-5",  intitule: "Transmission de Données" },
+    { id: "res-6",  intitule: "Administration Réseaux" },
+    { id: "res-7",  intitule: "Réseaux Sans Fil" },
+    { id: "res-8",  intitule: "Architecture TCP/IP" },
+    { id: "res-9",  intitule: "Virtualisation Réseaux" },
+    { id: "res-10", intitule: "QoS et Qualité de Service" },
+    { id: "res-11", intitule: "VoIP et Multimédia" },
+    { id: "res-12", intitule: "Réseaux Mobiles" },
+    { id: "res-13", intitule: "Internet des Objets (IoT)" },
+    { id: "res-14", intitule: "Routage et Commutation" },
+  ],
+  "Systèmes": [
+    { id: "sys-1",  intitule: "Systèmes d'Exploitation" },
+    { id: "sys-2",  intitule: "Systèmes Embarqués" },
+    { id: "sys-3",  intitule: "Architecture des Systèmes" },
+    { id: "sys-4",  intitule: "Systèmes Temps Réel" },
+    { id: "sys-5",  intitule: "Microprocesseurs et Microcontrôleurs" },
+    { id: "sys-6",  intitule: "Programmation Système" },
+    { id: "sys-7",  intitule: "Systèmes de Fichiers" },
+    { id: "sys-8",  intitule: "Virtualisation et Cloud" },
+    { id: "sys-9",  intitule: "Systèmes Distribués" },
+    { id: "sys-10", intitule: "Gestion de Mémoire" },
+    { id: "sys-11", intitule: "Concurrence et Parallélisme" },
+    { id: "sys-12", intitule: "Sécurité des Systèmes" },
+  ],
+  "Électronique": [
+    { id: "elec-1",  intitule: "Électronique Analogique" },
+    { id: "elec-2",  intitule: "Électronique Numérique" },
+    { id: "elec-3",  intitule: "Microélectronique" },
+    { id: "elec-4",  intitule: "Circuits Intégrés" },
+    { id: "elec-5",  intitule: "Traitement du Signal" },
+    { id: "elec-6",  intitule: "Automatique et Régulation" },
+    { id: "elec-7",  intitule: "Électronique de Puissance" },
+    { id: "elec-8",  intitule: "Capteurs et Instrumentation" },
+    { id: "elec-9",  intitule: "VHDL et FPGA" },
+    { id: "elec-10", intitule: "Systèmes de Contrôle" },
+    { id: "elec-11", intitule: "Télécommunications Analogiques" },
+    { id: "elec-12", intitule: "Électromagnétisme Appliqué" },
+  ],
+};
 
 const statutCompteBadge: Record<CompteStatut, string> = {
   actif:    "bg-green-100 text-green-800 border-green-200",
@@ -78,39 +174,53 @@ const statutCompteBadge: Record<CompteStatut, string> = {
 };
 
 type ModuleRow = {
-  id: string; module: string; types: ("CM" | "TD" | "TP")[];
+  id: string; module: string; niveau: string; types: ("CM" | "TD" | "TP")[];
   sections: string[]; tdGroups: string[]; tpGroups: string[]; responsable: boolean;
 };
 type CreatedInfo = { username: string; password: string; name: string };
 
 function generatePassword() {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
-function initStudentPasswords(students: AgentStudent[]): Record<string, string> {
-  const store: Record<string, string> = {};
-  students.forEach(s => { store[s.id] = generatePassword(); });
-  return store;
-}
-function initTeacherPasswords(teachers: AgentTeacher[]): Record<string, { password: string; username: string }> {
-  const store: Record<string, { password: string; username: string }> = {};
-  teachers.forEach(t => { store[t.id] = { password: generatePassword(), username: t.email }; });
-  return store;
-}
-
-function getSectionFromGroupe(groupe: string) {
-  return ["Groupe 1", "Groupe 2"].includes(groupe) ? "Section 1" : "Section 2";
+function generateTeacherUsername(prenom: string, nom: string): string {
+  const normalize = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z]/g, "");
+  const p = normalize(prenom);
+  const n = normalize(nom);
+  const pp = p.length > 0 ? (p[0].toUpperCase() + p.slice(1, 3).toLowerCase()) : "";
+  const nn = n.length > 0 ? (n[0].toUpperCase() + n.slice(1, 3).toLowerCase()) : "";
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const suffix = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  return (pp + nn + suffix).slice(0, 10);
 }
 
-function exportStudentPDF(list: { nom: string; prenom: string; matricule: string; password: string }[]) {
+function getModulesForDepts(depts: string[]): { id: string; intitule: string }[] {
+  const all: { id: string; intitule: string }[] = [];
+  const seen = new Set<string>();
+  depts.forEach(dept => {
+    // Direct match
+    const found = MODULES_PAR_DEPARTEMENT[dept] ?? [];
+    // Partial match fallback
+    const partial = found.length === 0
+      ? Object.keys(MODULES_PAR_DEPARTEMENT)
+          .filter(k => k.toLowerCase().includes(dept.toLowerCase()) || dept.toLowerCase().includes(k.toLowerCase()))
+          .flatMap(k => MODULES_PAR_DEPARTEMENT[k])
+      : found;
+    partial.forEach(m => {
+      if (!seen.has(m.id)) { seen.add(m.id); all.push(m); }
+    });
+  });
+  return all;
+}
+
+function exportStudentPDF(list: { nom: string; prenom: string; matricule: string; password: string }[], univ: string, dept: string) {
   const pages = list.map(s => `
     <div class="page">
       <div class="card">
         <div class="logo-row">🎓</div>
-        <h1>${AGENT_UNIV}</h1>
-        <h2>${AGENT_FACULTY}</h2>
-        <p class="dept">Département ${AGENT_DEPT}</p>
+        <h1>${univ}</h1>
+        <p class="dept">Département ${dept}</p>
         <hr/>
         <div class="student-name">${s.prenom} ${s.nom}</div>
         <p class="sub">Identifiants d'accès — Plateforme EduSpace</p>
@@ -134,7 +244,6 @@ function exportStudentPDF(list: { nom: string; prenom: string; matricule: string
     .card{width:160mm;border:2px solid #2d2d7a;border-radius:12px;padding:44px;text-align:center}
     .logo-row{font-size:48px;margin-bottom:16px}
     h1{font-size:15px;font-weight:bold;color:#1a1a4e;margin-bottom:8px;line-height:1.5}
-    h2{font-size:13px;color:#2d2d7a;margin-bottom:4px}
     .dept{font-size:12px;color:#666;margin-bottom:24px}
     hr{border:none;border-top:1px solid #e5e7eb;margin-bottom:24px}
     .student-name{font-size:22px;font-weight:bold;color:#111;margin-bottom:6px}
@@ -169,6 +278,10 @@ export default function AgentComptes() {
   const [location] = useLocation();
   const tab = location.includes("enseignants") ? "enseignants" : "etudiants";
 
+  const agentDept = getAgentDept();
+  const agentUniv = (getUser()?.profile as Record<string, string> | undefined)?.universite
+    ?? "Université des Sciences et de la Technologie Houari Boumediene";
+
   const [search, setSearch]                   = useState("");
   const [filterNiveau, setFilterNiveau]       = useState("all");
   const [filterStatutCompte, setFilterStatutCompte] = useState("all");
@@ -184,10 +297,9 @@ export default function AgentComptes() {
   const [studentPasswordStore, setStudentPasswordStore] = useState<Record<string, string>>({});
   const [teacherPasswordStore, setTeacherPasswordStore] = useState<Record<string, { password: string; username: string }>>({});
 
-  const [saving, setSaving]     = useState(false);
+  const [saving, setSaving]       = useState(false);
   const [saveError, setSaveError] = useState("");
 
-  // ── API fetch ──────────────────────────────────────────────────────────────
   const fetchStudents = useCallback(async () => {
     setLoadingStudents(true);
     try {
@@ -228,6 +340,7 @@ export default function AgentComptes() {
         grade:          String(t.grade ?? ""),
         departement:    String(t.departement ?? ""),
         email:          String(t.email ?? ""),
+        username:       String((t as Record<string, unknown>).username ?? ""),
         modulesAssignes: (t.modulesAssignes as string[]) ?? [],
         modulesDetails: (t.modulesDetails as ModuleRow[]) ?? [],
         statutCompte:   ((t.statutCompte ?? "actif") as CompteStatut),
@@ -236,7 +349,9 @@ export default function AgentComptes() {
       setTeachers(mapped);
       setTeacherPasswordStore(prev => {
         const next = { ...prev };
-        mapped.forEach(t => { if (!next[t.id]) next[t.id] = { password: "••••••", username: t.email }; });
+        mapped.forEach(t => {
+          if (!next[t.id]) next[t.id] = { password: "••••••", username: t.username || t.email };
+        });
         return next;
       });
     } catch { /* ignore */ }
@@ -273,16 +388,17 @@ export default function AgentComptes() {
   const [addSuccess, setAddSuccess]             = useState("");
 
   const [newStudent, setNewStudent] = useState({
-    nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "Oran", matricule: "",
-    niveau: "L3", email: "",
+    nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "Oran",
+    matricule: "", niveau: "L3",
   });
-  const [newTeacher, setNewTeacher] = useState({ nom: "", prenom: "", grade: "MAA", username: "", email: "" });
-  const [selectedDepts, setSelectedDepts] = useState<string[]>([AGENT_DEPT]);
+  const [newTeacher, setNewTeacher] = useState({ nom: "", prenom: "", grade: "MAA" });
+  const [selectedDepts, setSelectedDepts] = useState<string[]>([agentDept]);
   const [showDeptDropdown, setShowDeptDropdown] = useState(false);
   const deptRef = useRef<HTMLDivElement>(null);
 
   // ── helpers ──────────────────────────────────────────────
   function toggleDept(dept: string) {
+    if (dept === agentDept) return; // agent's own dept is locked
     setSelectedDepts(prev => prev.includes(dept) ? prev.filter(d => d !== dept) : [...prev, dept]);
   }
 
@@ -313,16 +429,16 @@ export default function AgentComptes() {
   function openEditTeacher(t: AgentTeacher) {
     setEditingTeacher(t);
     if (t.modulesDetails.length > 0) {
-      setEditModules(t.modulesDetails.map((row, i) => ({ ...row, id: `em${i}` })));
+      setEditModules(t.modulesDetails.map((row, i) => ({ ...row, id: `em${i}`, niveau: row.niveau ?? "" })));
     } else {
       setEditModules(t.modulesAssignes.map((mod, i) => ({
-        id: `em${i}`, module: mod, types: [], sections: [], tdGroups: [], tpGroups: [], responsable: false,
+        id: `em${i}`, module: mod, niveau: "", types: [], sections: [], tdGroups: [], tpGroups: [], responsable: false,
       })));
     }
     setShowEditModal(true);
   }
   function addModuleRow() {
-    setEditModules(prev => [...prev, { id: `em${Date.now()}`, module: "", types: [], sections: [], tdGroups: [], tpGroups: [], responsable: false }]);
+    setEditModules(prev => [...prev, { id: `em${Date.now()}`, module: "", niveau: "", types: [], sections: [], tdGroups: [], tpGroups: [], responsable: false }]);
   }
   function removeModuleRow(id: string) {
     setEditModules(prev => prev.filter(r => r.id !== id));
@@ -356,9 +472,7 @@ export default function AgentComptes() {
     if (!editingTeacher) return;
     const details = editModules.filter(r => r.module);
     const updated = details.map(r => r.module);
-    try {
-      await api.updateTeacher(Number(editingTeacher.id), { modules_details: details });
-    } catch { /* persist local state regardless */ }
+    try { await api.updateTeacher(Number(editingTeacher.id), { modules_details: details }); } catch { /* persist local */ }
     setTeachers(prev => prev.map(t => t.id === editingTeacher.id
       ? { ...t, modulesAssignes: updated, modulesDetails: details }
       : t));
@@ -367,24 +481,18 @@ export default function AgentComptes() {
     setShowEditModal(false);
   }
 
-  function getModulesForTeacher(t: AgentTeacher) {
-    const depts = t.departement.split(",").map(d => d.trim().toLowerCase());
-    return modules.filter(m => depts.some(d => m.filiere.toLowerCase().includes(d) || d.includes(m.filiere.toLowerCase())));
-  }
-
   async function addStudentFn() {
     if (!newStudent.nom || !newStudent.prenom || !newStudent.matricule) return;
-    setSaving(true);
-    setSaveError("");
+    setSaving(true); setSaveError("");
     try {
       const password = generatePassword();
       const created = await api.storeStudent({
         nom:            newStudent.nom,
         prenom:         newStudent.prenom,
         password,
-        filiere:        AGENT_DEPT,
+        filiere:        agentDept,
         niveau:         newStudent.niveau,
-        groupe:         newStudent.groupe || "Groupe 1",
+        groupe:         "Groupe 1",
         matricule:      newStudent.matricule,
         date_naissance: newStudent.dateNaissance || undefined,
         wilaya:         newStudent.wilayaNaissance || "Oran",
@@ -397,33 +505,30 @@ export default function AgentComptes() {
       const credStudent: AgentStudent = {
         id: realId, matricule: newStudent.matricule,
         nom: newStudent.nom, prenom: newStudent.prenom,
-        filiere: AGENT_DEPT, niveau: newStudent.niveau,
-        groupe: newStudent.groupe || "Groupe 1",
+        filiere: agentDept, niveau: newStudent.niveau,
+        groupe: "Groupe 1",
         dateNaissance: newStudent.dateNaissance || "",
         wilaya: newStudent.wilayaNaissance || "Oran",
-        email: String(created.email ?? (String(created.matricule ?? newStudent.matricule) + "@eduspace.local")),
+        email: String(created.email ?? (newStudent.matricule + "@eduspace.local")),
         statutCompte: "actif", statutReinscription: "en_attente",
       };
       setShowAddStudent(false);
-      setNewStudent({ nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "Oran", matricule: "", niveau: "L3", email: "" });
+      setNewStudent({ nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "Oran", matricule: "", niveau: "L3" });
       setSaveError("");
       setStudentCredentialsFor(credStudent);
       setShowStudentCredentials(true);
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : "Erreur lors de la création.");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   async function addTeacherFn() {
     if (!newTeacher.nom || !newTeacher.prenom) return;
-    setSaving(true);
-    setSaveError("");
+    setSaving(true); setSaveError("");
     try {
       const password = generatePassword();
-      const deptStr = selectedDepts.join(", ") || AGENT_DEPT;
-      const username = newTeacher.email || `${newTeacher.prenom[0].toLowerCase()}.${newTeacher.nom.toLowerCase()}`;
+      const deptStr  = selectedDepts.join(", ") || agentDept;
+      const username = generateTeacherUsername(newTeacher.prenom, newTeacher.nom);
       const created = await api.storeTeacher({
         nom:         newTeacher.nom,
         prenom:      newTeacher.prenom,
@@ -431,28 +536,25 @@ export default function AgentComptes() {
         password,
         grade:       newTeacher.grade,
         departement: deptStr,
-        matricule:   newTeacher.username || undefined,
       }) as Record<string, unknown>;
 
-      const realId = String(created.id);
+      const realId           = String(created.id);
       const generatedUsername = String(created.username ?? username);
       setTeacherPasswordStore(prev => ({ ...prev, [realId]: { password, username: generatedUsername } }));
       await fetchTeachers();
 
       setShowAddTeacher(false);
-      setNewTeacher({ nom: "", prenom: "", grade: "MAA", username: "", email: "" });
-      setSelectedDepts([AGENT_DEPT]);
+      setNewTeacher({ nom: "", prenom: "", grade: "MAA" });
+      setSelectedDepts([agentDept]);
       setSaveError("");
-      setCreatedInfo({ username: generatedUsername + "@eduspace.local", password, name: `${newTeacher.prenom} ${newTeacher.nom}` });
+      setCreatedInfo({ username: generatedUsername, password, name: `${newTeacher.prenom} ${newTeacher.nom}` });
       setShowCreatedModal(true);
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : "Erreur lors de la création.");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
-  // ── student selection helpers ──
+  // ── selection helpers ──
   function toggleSelectStudent(id: string) {
     setSelectedStudentIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
@@ -465,10 +567,14 @@ export default function AgentComptes() {
     const list = students.filter(s => selectedStudentIds.has(s.id)).map(s => ({
       nom: s.nom, prenom: s.prenom, matricule: s.matricule, password: studentPasswordStore[s.id] ?? "——",
     }));
-    if (list.length) exportStudentPDF(list);
+    if (list.length) exportStudentPDF(list, agentUniv, agentDept);
   }
-
-  // ── teacher selection helpers ──
+  function exportAllStudentsPDF() {
+    const list = students.map(s => ({
+      nom: s.nom, prenom: s.prenom, matricule: s.matricule, password: studentPasswordStore[s.id] ?? "——",
+    }));
+    if (list.length) exportStudentPDF(list, agentUniv, agentDept);
+  }
   function toggleSelectTeacher(id: string) {
     setSelectedTeacherIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
@@ -477,12 +583,19 @@ export default function AgentComptes() {
     if (allSel) setSelectedTeacherIds(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
     else setSelectedTeacherIds(prev => { const n = new Set(prev); ids.forEach(id => n.add(id)); return n; });
   }
+  function exportAllTeachersPDF() {
+    const list = teachers.map(t => {
+      const creds = teacherPasswordStore[t.id];
+      return { nom: t.nom, prenom: t.prenom, matricule: t.matricule, password: creds?.password ?? "——" };
+    });
+    if (list.length) exportStudentPDF(list, agentUniv, agentDept);
+  }
   function exportSelectedTeachersPDF() {
     const list = teachers.filter(t => selectedTeacherIds.has(t.id)).map(t => {
       const creds = teacherPasswordStore[t.id];
       return { nom: t.nom, prenom: t.prenom, matricule: t.matricule, password: creds?.password ?? "——" };
     });
-    if (list.length) exportStudentPDF(list);
+    if (list.length) exportStudentPDF(list, agentUniv, agentDept);
   }
 
   // ── filtered data ──
@@ -491,8 +604,14 @@ export default function AgentComptes() {
     if (!`${s.prenom} ${s.nom} ${s.matricule}`.toLowerCase().includes(q)) return false;
     if (filterNiveau !== "all" && s.niveau !== filterNiveau) return false;
     if (filterStatutCompte !== "all" && s.statutCompte !== filterStatutCompte) return false;
-    if (filterSection !== "all" && getSectionFromGroupe(s.groupe) !== filterSection) return false;
-    if (filterGroupe !== "all" && s.groupe !== filterGroupe) return false;
+    if (filterSection !== "all") {
+      const a = getStudentAssignment(s.id);
+      if (!a || a.section !== filterSection) return false;
+    }
+    if (filterGroupe !== "all") {
+      const a = getStudentAssignment(s.id);
+      if (!a || a.groupe !== filterGroupe) return false;
+    }
     return true;
   }), [students, search, filterNiveau, filterStatutCompte, filterSection, filterGroupe]);
 
@@ -504,9 +623,9 @@ export default function AgentComptes() {
   const totalPages    = Math.ceil((tab === "etudiants" ? filteredStudents : filteredTeachers).length / ITEMS_PER_PAGE);
   const pagedStudents = filteredStudents.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
   const pagedTeachers = filteredTeachers.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
-  const pagedStudentIds  = pagedStudents.map(s => s.id);
+  const pagedStudentIds   = pagedStudents.map(s => s.id);
   const allPageStudentSel = pagedStudentIds.length > 0 && pagedStudentIds.every(id => selectedStudentIds.has(id));
-  const pagedTeacherIds  = pagedTeachers.map(t => t.id);
+  const pagedTeacherIds   = pagedTeachers.map(t => t.id);
   const allPageTeacherSel = pagedTeacherIds.length > 0 && pagedTeacherIds.every(id => selectedTeacherIds.has(id));
 
   return (
@@ -525,15 +644,18 @@ export default function AgentComptes() {
             <div className="flex gap-2 flex-wrap">
               {tab === "etudiants" && selectedStudentIds.size > 0 && (
                 <Button variant="outline" size="sm" className="gap-1.5 text-xs border-violet-300 text-violet-700 hover:bg-violet-50" onClick={exportSelectedStudentsPDF}>
-                  <FileText className="w-3.5 h-3.5" />Exporter PDF ({selectedStudentIds.size} sélectionné{selectedStudentIds.size > 1 ? "s" : ""})
+                  <FileText className="w-3.5 h-3.5" />Exporter sélection ({selectedStudentIds.size})
                 </Button>
               )}
               {tab === "enseignants" && selectedTeacherIds.size > 0 && (
                 <Button variant="outline" size="sm" className="gap-1.5 text-xs border-violet-300 text-violet-700 hover:bg-violet-50" onClick={exportSelectedTeachersPDF}>
-                  <FileText className="w-3.5 h-3.5" />Exporter PDF ({selectedTeacherIds.size} sélectionné{selectedTeacherIds.size > 1 ? "s" : ""})
+                  <FileText className="w-3.5 h-3.5" />Exporter sélection ({selectedTeacherIds.size})
                 </Button>
               )}
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs"><Download className="w-3.5 h-3.5" />Exporter</Button>
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs"
+                onClick={tab === "etudiants" ? exportAllStudentsPDF : exportAllTeachersPDF}>
+                <Download className="w-3.5 h-3.5" />Exporter tout
+              </Button>
               <Button className="gap-2" size="sm" onClick={() => tab === "etudiants" ? setShowAddStudent(true) : setShowAddTeacher(true)}>
                 <UserPlus className="w-4 h-4" />
                 {tab === "etudiants" ? "Ajouter un étudiant" : "Ajouter un enseignant"}
@@ -649,7 +771,7 @@ export default function AgentComptes() {
                               <Button size="sm" variant="ghost" className={`h-7 w-7 p-0 ${s.statutCompte === "actif" ? "text-amber-600" : "text-blue-600"}`} onClick={() => toggleStudentStatus(s.id)}>
                                 {s.statutCompte === "actif" ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
                               </Button>
-                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" title="Supprimer le compte" onClick={() => setDeleteStudentTarget(s)}>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => setDeleteStudentTarget(s)}>
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
@@ -670,7 +792,6 @@ export default function AgentComptes() {
                 )}
               </Card>
             ) : (
-              /* ── TEACHER TABLE ── */
               <Card className="overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -699,7 +820,7 @@ export default function AgentComptes() {
                               checked={selectedTeacherIds.has(t.id)} onChange={() => toggleSelectTeacher(t.id)} />
                           </td>
                           <td className="px-4 py-3 font-mono text-xs">{t.matricule}</td>
-                          <td className="px-4 py-3"><p className="font-medium">{t.prenom} {t.nom}</p><p className="text-xs text-muted-foreground">{t.email}</p></td>
+                          <td className="px-4 py-3"><p className="font-medium">{t.prenom} {t.nom}</p></td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">{t.grade}</td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">{t.departement}</td>
                           <td className="px-4 py-3 text-center font-semibold">{t.modulesAssignes.length}</td>
@@ -711,7 +832,7 @@ export default function AgentComptes() {
                               <Button size="sm" variant="ghost" className={`h-7 w-7 p-0 ${t.statutCompte === "actif" ? "text-amber-600" : "text-blue-600"}`} onClick={() => toggleTeacherStatus(t.id)}>
                                 {t.statutCompte === "actif" ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
                               </Button>
-                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" title="Supprimer le compte" onClick={() => setDeleteTeacherTarget(t)}>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => setDeleteTeacherTarget(t)}>
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
@@ -751,20 +872,16 @@ export default function AgentComptes() {
                   </div>
                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setSelectedStudent(null)}><X className="w-4 h-4" /></Button>
                 </div>
-
                 <div className="p-5 space-y-4 flex-1 overflow-y-auto">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2 mb-3">
-                      <GraduationCap className="w-4 h-4 text-primary" />
-                      <span className="font-semibold text-sm">Informations personnelles</span>
-                    </div>
+                    <div className="flex items-center gap-2 mb-3"><GraduationCap className="w-4 h-4 text-primary" /><span className="font-semibold text-sm">Informations personnelles</span></div>
                     {(() => {
                       const assignment = getStudentAssignment(s.id);
                       return (
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           {[
                             { label: "Date de naissance", value: s.dateNaissance },
-                            { label: "Wilaya de naissance", value: s.wilaya || "Oran" },
+                            { label: "Wilaya de naissance", value: s.wilaya || "—" },
                             { label: "Filière", value: s.filiere },
                             { label: "Niveau", value: s.niveau },
                             { label: "Section", value: assignment ? assignment.section : "—" },
@@ -785,12 +902,8 @@ export default function AgentComptes() {
                       );
                     })()}
                   </div>
-
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Users className="w-4 h-4 text-primary" />
-                      <span className="font-semibold text-sm">Statut du compte</span>
-                    </div>
+                    <div className="flex items-center gap-2 mb-3"><Users className="w-4 h-4 text-primary" /><span className="font-semibold text-sm">Statut du compte</span></div>
                     <div className="flex items-center justify-between p-3 bg-muted/20 rounded-lg">
                       <Badge className={`text-xs border ${statutCompteBadge[s.statutCompte]}`}>{s.statutCompte}</Badge>
                       <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => toggleStudentStatus(s.id)}>
@@ -810,6 +923,8 @@ export default function AgentComptes() {
       <AnimatePresence>
         {selectedTeacher && (() => {
           const t = teachers.find(x => x.id === selectedTeacher.id) ?? selectedTeacher;
+          const creds = teacherPasswordStore[t.id];
+          const displayUsername = creds?.username || t.username || t.email || "—";
           const teacherGrades = gradeSubmissions.filter(gs => gs.enseignant.includes(t.nom));
           return (
             <div className="fixed inset-0 bg-black/50 flex items-start justify-end z-50">
@@ -824,12 +939,36 @@ export default function AgentComptes() {
                 </div>
                 <div className="p-5 space-y-5 flex-1 overflow-y-auto">
                   <div className="grid grid-cols-2 gap-3 text-sm">
-                    {[{ label: "Matricule", value: t.matricule }, { label: "Username", value: t.email }, { label: "Grade", value: t.grade }, { label: "Département", value: t.departement }].map(f => (
+                    {[
+                      { label: "Matricule", value: t.matricule || "—" },
+                      { label: "Grade", value: t.grade },
+                      { label: "Département", value: t.departement },
+                    ].map(f => (
                       <div key={f.label} className="bg-muted/20 rounded-lg p-3">
                         <p className="text-xs text-muted-foreground">{f.label}</p>
                         <p className="font-medium mt-0.5 text-sm break-all">{f.value}</p>
                       </div>
                     ))}
+                    {/* Username with explanation */}
+                    <div className="bg-muted/20 rounded-lg p-3">
+                      <div className="flex items-center gap-1 mb-1">
+                        <p className="text-xs text-muted-foreground">Nom d'utilisateur</p>
+                        <span title="Format : 3 premières lettres du prénom (1re en majuscule) + 3 premières lettres du nom (1re en majuscule) + 4 caractères aléatoires (lettres/chiffres). Max 10 caractères. Ex: MohBen4x8A" className="cursor-help">
+                          <Info className="w-3 h-3 text-muted-foreground/60" />
+                        </span>
+                      </div>
+                      <p className="font-mono font-medium mt-0.5 text-sm break-all">{displayUsername}</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Prénom[1-3] + Nom[1-3] + 4 chars aléatoires, max 10 chars
+                      </p>
+                    </div>
+                    {/* Email shown only if teacher has set one */}
+                    {t.email && (
+                      <div className="bg-muted/20 rounded-lg p-3">
+                        <p className="text-xs text-muted-foreground">Email (renseigné par l'enseignant)</p>
+                        <p className="font-medium mt-0.5 text-sm break-all">{t.email}</p>
+                      </div>
+                    )}
                     <div className="col-span-2 bg-muted/20 rounded-lg p-3 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="text-sm">Statut :</span>
@@ -838,7 +977,7 @@ export default function AgentComptes() {
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" className="gap-1.5 text-xs border-violet-300 text-violet-700 hover:bg-violet-50"
                           onClick={() => { setTeacherCredentialsFor(t); setShowTeacherCredentials(true); }}>
-                          <KeyRound className="w-3.5 h-3.5" />Afficher matricule et mot de passe
+                          <KeyRound className="w-3.5 h-3.5" />Afficher identifiants
                         </Button>
                         <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => toggleTeacherStatus(t.id)}>
                           {t.statutCompte === "actif" ? <UserX className="w-3.5 h-3.5 text-amber-600" /> : <UserCheck className="w-3.5 h-3.5 text-blue-600" />}
@@ -847,6 +986,8 @@ export default function AgentComptes() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Modules assignés */}
                   <div>
                     <div className="flex items-center gap-2 mb-3"><BookOpen className="w-4 h-4 text-primary" /><span className="font-semibold text-sm">Modules assignés</span></div>
                     {t.modulesAssignes.length === 0 ? <p className="text-sm text-muted-foreground italic">Aucun module.</p> : (
@@ -861,6 +1002,45 @@ export default function AgentComptes() {
                     )}
                     <Button size="sm" variant="outline" className="gap-1.5 text-xs mt-3" onClick={() => openEditTeacher(t)}><Edit className="w-3.5 h-3.5" />Modifier les enseignements</Button>
                   </div>
+
+                  {/* Emplois de temps */}
+                  {t.modulesDetails.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3"><CalendarDays className="w-4 h-4 text-primary" /><span className="font-semibold text-sm">Emploi de temps</span></div>
+                      <div className="space-y-2">
+                        {t.modulesDetails.filter(r => r.module).map((row, i) => (
+                          <div key={i} className="border border-border/60 rounded-lg p-3 text-sm">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <p className="font-medium">{row.module}</p>
+                              {row.niveau && <Badge className="text-[10px] bg-primary/10 text-primary border-primary/20">{row.niveau}</Badge>}
+                            </div>
+                            <div className="space-y-1 pl-1">
+                              {row.types.includes("CM") && (
+                                <p className="text-xs text-muted-foreground">
+                                  <span className="font-semibold text-blue-600">CM</span>
+                                  {row.sections.length > 0 ? ` — ${row.sections.join(", ")}` : " — sections non précisées"}
+                                </p>
+                              )}
+                              {row.types.includes("TD") && (
+                                <p className="text-xs text-muted-foreground">
+                                  <span className="font-semibold text-indigo-600">TD</span>
+                                  {row.tdGroups.length > 0 ? ` — ${row.tdGroups.join(", ")}` : " — groupes non précisés"}
+                                </p>
+                              )}
+                              {row.types.includes("TP") && (
+                                <p className="text-xs text-muted-foreground">
+                                  <span className="font-semibold text-teal-600">TP</span>
+                                  {row.tpGroups.length > 0 ? ` — ${row.tpGroups.join(", ")}` : " — groupes non précisés"}
+                                </p>
+                              )}
+                              {row.types.length === 0 && <p className="text-xs text-muted-foreground/50 italic">Types non définis</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {teacherGrades.length > 0 && (
                     <div>
                       <div className="flex items-center gap-2 mb-3"><ClipboardCheck className="w-4 h-4 text-primary" /><span className="font-semibold text-sm">Statut des notes</span></div>
@@ -913,8 +1093,8 @@ export default function AgentComptes() {
                     </div>
                   </div>
                   <Button variant="outline" className="w-full mt-4 gap-2 text-sm border-violet-300 text-violet-700 hover:bg-violet-50"
-                    onClick={() => exportStudentPDF([{ nom: s.nom, prenom: s.prenom, matricule: s.matricule, password: pwd }])}>
-                    <FileText className="w-3.5 h-3.5" />Exporter matricule et mot de passe (PDF)
+                    onClick={() => exportStudentPDF([{ nom: s.nom, prenom: s.prenom, matricule: s.matricule, password: pwd }], agentUniv, agentDept)}>
+                    <FileText className="w-3.5 h-3.5" />Exporter (PDF)
                   </Button>
                   <Button className="w-full mt-2" onClick={() => setShowStudentCredentials(false)}>Fermer</Button>
                 </Card>
@@ -930,7 +1110,7 @@ export default function AgentComptes() {
           const t = teacherCredentialsFor;
           const creds = teacherPasswordStore[t.id];
           const pwd = creds?.password ?? "——";
-          const username = creds?.username ?? t.email;
+          const username = creds?.username ?? t.username ?? t.email ?? "—";
           return (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
               <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
@@ -940,13 +1120,6 @@ export default function AgentComptes() {
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowTeacherCredentials(false)}><X className="w-4 h-4" /></Button>
                   </div>
                   <div className="space-y-3">
-                    <div className="bg-muted/20 border border-border rounded-lg p-3">
-                      <p className="text-xs text-muted-foreground mb-1.5">Matricule</p>
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold text-base">{t.matricule}</span>
-                        <CopyButton text={t.matricule} />
-                      </div>
-                    </div>
                     <div className="bg-muted/20 border border-border rounded-lg p-3">
                       <p className="text-xs text-muted-foreground mb-1.5">Nom d'utilisateur</p>
                       <div className="flex items-center justify-between">
@@ -963,8 +1136,8 @@ export default function AgentComptes() {
                     </div>
                   </div>
                   <Button variant="outline" className="w-full mt-4 gap-2 text-sm border-violet-300 text-violet-700 hover:bg-violet-50"
-                    onClick={() => exportStudentPDF([{ nom: t.nom, prenom: t.prenom, matricule: t.matricule, password: pwd }])}>
-                    <FileText className="w-3.5 h-3.5" />Exporter matricule et mot de passe (PDF)
+                    onClick={() => exportStudentPDF([{ nom: t.nom, prenom: t.prenom, matricule: t.matricule, password: pwd }], agentUniv, agentDept)}>
+                    <FileText className="w-3.5 h-3.5" />Exporter (PDF)
                   </Button>
                   <Button className="w-full mt-2" onClick={() => setShowTeacherCredentials(false)}>Fermer</Button>
                 </Card>
@@ -977,7 +1150,8 @@ export default function AgentComptes() {
       {/* ── TEACHER EDIT MODAL ── */}
       <AnimatePresence>
         {showEditModal && editingTeacher && (() => {
-          const availableMods = getModulesForTeacher(editingTeacher);
+          const depts = editingTeacher.departement.split(",").map(d => d.trim());
+          const availableMods = getModulesForDepts(depts.length > 0 ? depts : [agentDept]);
           return (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
               <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
@@ -985,7 +1159,7 @@ export default function AgentComptes() {
                   <div className="flex items-center justify-between mb-5">
                     <div>
                       <h3 className="font-bold text-base">Enseignements — {editingTeacher.prenom} {editingTeacher.nom}</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5">Semestre en cours · Département {editingTeacher.departement}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Dept. {editingTeacher.departement}</p>
                     </div>
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowEditModal(false)}><X className="w-4 h-4" /></Button>
                   </div>
@@ -997,16 +1171,27 @@ export default function AgentComptes() {
                     {editModules.map(row => (
                       <div key={row.id} className="border border-border rounded-xl p-4 space-y-3 bg-muted/10">
                         <div className="flex gap-3 items-start">
-                          <div className="flex-1">
-                            <label className="text-xs font-medium text-muted-foreground block mb-1">Module</label>
-                            <Select value={row.module} onValueChange={v => updateModuleRow(row.id, { module: v })}>
-                              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choisir un module…" /></SelectTrigger>
-                              <SelectContent>
-                                {availableMods.length === 0
-                                  ? <SelectItem value="__none" disabled>Aucun module dans ce département</SelectItem>
-                                  : availableMods.map(m => <SelectItem key={m.id} value={m.intitule}>{m.intitule}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                          <div className="flex-1 grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-xs font-medium text-muted-foreground block mb-1">Module</label>
+                              <Select value={row.module} onValueChange={v => updateModuleRow(row.id, { module: v })}>
+                                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choisir un module…" /></SelectTrigger>
+                                <SelectContent>
+                                  {availableMods.length === 0
+                                    ? <SelectItem value="__none" disabled>Aucun module dans ce département</SelectItem>
+                                    : availableMods.map(m => <SelectItem key={m.id} value={m.intitule}>{m.intitule}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-muted-foreground block mb-1">Niveau</label>
+                              <Select value={row.niveau} onValueChange={v => updateModuleRow(row.id, { niveau: v })}>
+                                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Niveau…" /></SelectTrigger>
+                                <SelectContent>
+                                  {NIVEAUX.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
                           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 mt-5 text-red-400 hover:text-red-600 flex-shrink-0" onClick={() => removeModuleRow(row.id)}>
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1029,7 +1214,7 @@ export default function AgentComptes() {
                         {row.types.includes("CM") && (
                           <div className="pl-3 border-l-2 border-blue-200">
                             <label className="text-xs font-medium text-blue-700 block mb-2">Sections (CM)</label>
-                            <div className="flex gap-4">
+                            <div className="flex flex-wrap gap-4">
                               {SECTIONS.map(sec => (
                                 <label key={sec} className="flex items-center gap-2 cursor-pointer text-sm">
                                   <input type="checkbox" className="accent-primary w-4 h-4"
@@ -1140,7 +1325,7 @@ export default function AgentComptes() {
                   <div className="col-span-2">
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Filière</label>
                     <div className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/30 text-sm text-muted-foreground cursor-not-allowed">
-                      {AGENT_DEPT} <span className="ml-2 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">non modifiable</span>
+                      {agentDept} <span className="ml-2 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">non modifiable</span>
                     </div>
                   </div>
                   <div className="col-span-2">
@@ -1157,11 +1342,9 @@ export default function AgentComptes() {
                 </div>
                 <div className="mt-3 flex items-center gap-2 bg-muted/20 rounded-lg p-3 text-xs text-muted-foreground">
                   <CheckCircle className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
-                  Un mot de passe à 6 caractères (lettres + chiffres) sera généré automatiquement.
+                  Un mot de passe à 8 caractères (lettres + chiffres) sera généré automatiquement.
                 </div>
-                {saveError && (
-                  <div className="mt-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{saveError}</div>
-                )}
+                {saveError && <div className="mt-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{saveError}</div>}
                 <div className="flex gap-3 mt-4">
                   <Button variant="outline" className="flex-1" onClick={() => setShowAddStudent(false)}>Annuler</Button>
                   <Button className="flex-1" disabled={saving || !newStudent.nom || !newStudent.prenom || !newStudent.matricule} onClick={addStudentFn}>
@@ -1186,17 +1369,19 @@ export default function AgentComptes() {
                 </div>
                 <div className="space-y-3 text-sm">
                   {[
-                    { label: "Nom *", key: "nom", placeholder: "Hadj", type: "text" },
-                    { label: "Prénom *", key: "prenom", placeholder: "Mohamed", type: "text" },
-                    { label: "Adresse email *", key: "email", placeholder: "m.hadj@univ-alger.dz", type: "email" },
-                    { label: "Matricule (optionnel)", key: "username", placeholder: "ENS00001 (auto si vide)", type: "text" },
+                    { label: "Nom *", key: "nom", placeholder: "Hadj" },
+                    { label: "Prénom *", key: "prenom", placeholder: "Mohamed" },
                   ].map(f => (
                     <div key={f.key}>
                       <label className="text-xs font-medium text-muted-foreground block mb-1">{f.label}</label>
-                      <Input type={f.type} placeholder={f.placeholder} value={(newTeacher as Record<string, string>)[f.key]}
+                      <Input placeholder={f.placeholder} value={(newTeacher as Record<string, string>)[f.key]}
                         onChange={e => setNewTeacher(prev => ({ ...prev, [f.key]: e.target.value }))} className="h-9 text-sm" />
                     </div>
                   ))}
+                  <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700 flex items-start gap-2">
+                    <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                    L'adresse email sera renseignée par l'enseignant lui-même depuis son interface.
+                  </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Grade académique</label>
                     <Select value={newTeacher.grade} onValueChange={v => setNewTeacher(prev => ({ ...prev, grade: v }))}>
@@ -1219,10 +1404,14 @@ export default function AgentComptes() {
                           <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                             className="absolute top-full mt-1 left-0 right-0 bg-popover border border-border rounded-lg shadow-lg z-20 p-2">
                             {DEPARTMENTS.map(dept => (
-                              <label key={dept} className="flex items-center gap-2.5 px-2 py-1.5 rounded hover:bg-muted/50 cursor-pointer text-sm">
+                              <label key={dept}
+                                className={`flex items-center gap-2.5 px-2 py-1.5 rounded text-sm ${dept === agentDept ? "cursor-not-allowed opacity-80" : "hover:bg-muted/50 cursor-pointer"}`}>
                                 <input type="checkbox" className="accent-primary w-3.5 h-3.5"
-                                  checked={selectedDepts.includes(dept)} onChange={() => toggleDept(dept)} />
+                                  checked={selectedDepts.includes(dept)}
+                                  disabled={dept === agentDept}
+                                  onChange={() => toggleDept(dept)} />
                                 {dept}
+                                {dept === agentDept && <span className="ml-auto text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded">votre dept</span>}
                               </label>
                             ))}
                           </motion.div>
@@ -1232,15 +1421,13 @@ export default function AgentComptes() {
                   </div>
                   <div className="flex items-center gap-2 bg-muted/20 rounded-lg p-3 text-xs text-muted-foreground">
                     <CheckCircle className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
-                    Un mot de passe à 6 caractères sera généré automatiquement.
+                    Un nom d'utilisateur (basé sur le nom/prénom) et un mot de passe seront générés automatiquement.
                   </div>
                 </div>
-                {saveError && (
-                  <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{saveError}</div>
-                )}
+                {saveError && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{saveError}</div>}
                 <div className="flex gap-3 mt-5">
                   <Button variant="outline" className="flex-1" onClick={() => setShowAddTeacher(false)}>Annuler</Button>
-                  <Button className="flex-1" disabled={saving || !newTeacher.nom || !newTeacher.prenom || !newTeacher.email} onClick={addTeacherFn}>
+                  <Button className="flex-1" disabled={saving || !newTeacher.nom || !newTeacher.prenom} onClick={addTeacherFn}>
                     {saving ? "Création…" : "Créer le compte"}
                   </Button>
                 </div>
@@ -1262,19 +1449,15 @@ export default function AgentComptes() {
                   </div>
                   <h3 className="font-bold text-base">Supprimer le compte</h3>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">
-                  Êtes-vous sûr de vouloir supprimer le compte de :
-                </p>
+                <p className="text-sm text-muted-foreground mb-1">Êtes-vous sûr de vouloir supprimer le compte de :</p>
                 <p className="font-semibold text-sm mb-1">{deleteStudentTarget.prenom} {deleteStudentTarget.nom}</p>
                 <p className="text-xs text-muted-foreground mb-4">Matricule : {deleteStudentTarget.matricule}</p>
                 <div className="flex gap-2 p-3 bg-red-50 border border-red-100 rounded-lg mb-4 text-xs text-red-700">
-                  Cette action est irréversible. Le compte et toutes les données associées seront supprimés.
+                  Cette action est irréversible.
                 </div>
                 <div className="flex gap-3">
                   <Button variant="outline" className="flex-1" onClick={() => setDeleteStudentTarget(null)}>Annuler</Button>
-                  <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => deleteStudentFn(deleteStudentTarget.id)}>
-                    Supprimer
-                  </Button>
+                  <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => deleteStudentFn(deleteStudentTarget.id)}>Supprimer</Button>
                 </div>
               </Card>
             </motion.div>
@@ -1294,9 +1477,7 @@ export default function AgentComptes() {
                   </div>
                   <h3 className="font-bold text-base">Supprimer le compte enseignant</h3>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">
-                  Êtes-vous sûr de vouloir supprimer le compte de :
-                </p>
+                <p className="text-sm text-muted-foreground mb-1">Êtes-vous sûr de vouloir supprimer le compte de :</p>
                 <p className="font-semibold text-sm mb-1">{deleteTeacherTarget.prenom} {deleteTeacherTarget.nom}</p>
                 <p className="text-xs text-muted-foreground mb-4">Matricule : {deleteTeacherTarget.matricule} — {deleteTeacherTarget.grade}</p>
                 <div className="flex gap-2 p-3 bg-red-50 border border-red-100 rounded-lg mb-4 text-xs text-red-700">
@@ -1304,9 +1485,7 @@ export default function AgentComptes() {
                 </div>
                 <div className="flex gap-3">
                   <Button variant="outline" className="flex-1" onClick={() => setDeleteTeacherTarget(null)}>Annuler</Button>
-                  <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => deleteTeacherFn(deleteTeacherTarget.id)}>
-                    Supprimer
-                  </Button>
+                  <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => deleteTeacherFn(deleteTeacherTarget.id)}>Supprimer</Button>
                 </div>
               </Card>
             </motion.div>
@@ -1324,7 +1503,9 @@ export default function AgentComptes() {
                   <CheckCircle className="w-5 h-5 text-green-600" />
                   <h3 className="font-bold text-base">Compte créé — {createdInfo.name}</h3>
                 </div>
-                <p className="text-xs text-muted-foreground mb-4">Transmettez ces identifiants à l'enseignant. Ils resteront accessibles via l'œil dans le panneau de détail.</p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Transmettez ces identifiants à l'enseignant. Ils restent accessibles via l'œil dans la liste.
+                </p>
                 <div className="space-y-3">
                   <div className="bg-muted/20 border border-border rounded-lg p-3">
                     <p className="text-xs text-muted-foreground mb-1.5">Nom d'utilisateur</p>
