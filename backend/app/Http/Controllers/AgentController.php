@@ -49,6 +49,7 @@ class AgentController extends Controller
             'date_naissance'      => $s->date_naissance,
             'wilaya'              => $s->wilaya,
             'email'               => $s->user?->email ?? '',
+            'initial_password'    => $s->user?->initial_password ?? '',
             'statut_compte'       => $s->statut_compte,
             'statut_reinscription' => $s->statut_reinscription,
         ]));
@@ -80,7 +81,7 @@ class AgentController extends Controller
             $email = $matricule . $counter++ . '@eduspace.local';
         }
 
-        $user = User::create(['email' => $email, 'password' => $request->password, 'role' => 'etudiant']);
+        $user = User::create(['email' => $email, 'password' => $request->password, 'initial_password' => $request->password, 'role' => 'etudiant']);
         $etudiant = Etudiant::create([
             'user_id'        => $user->id,
             'matricule'      => $matricule,
@@ -131,6 +132,8 @@ class AgentController extends Controller
             'grade' => $e->grade,
             'departement' => $e->departement,
             'email' => $e->user->email,
+            'username' => $e->user->email ? explode('@', $e->user->email)[0] : '',
+            'initial_password' => $e->user?->initial_password ?? '',
             'modules' => $e->modules->count(),
             'modulesAssignes' => $e->modules->pluck('intitule'),
             'modulesDetails' => $e->modules_details ?? [],
@@ -157,7 +160,7 @@ class AgentController extends Controller
             $email = $username . $counter++ . '@eduspace.local';
         }
 
-        $user = User::create(['email' => $email, 'password' => $request->password, 'role' => 'enseignant']);
+        $user = User::create(['email' => $email, 'password' => $request->password, 'initial_password' => $request->password, 'role' => 'enseignant']);
         $ens = Enseignant::create([
             'user_id'     => $user->id,
             'matricule'   => $request->matricule ?? 'ENS' . str_pad($user->id, 5, '0', STR_PAD_LEFT),

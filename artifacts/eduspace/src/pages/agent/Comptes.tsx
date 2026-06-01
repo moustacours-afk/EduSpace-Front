@@ -241,7 +241,7 @@ function getModulesForDepts(depts: string[]): { id: string; intitule: string }[]
 }
 
 function safePassword(raw: string | undefined): string {
-  if (!raw || raw === "••••••" || raw === "——") return "—";
+  if (!raw || raw === "••••••" || raw === "——") return "Non disponible";
   return raw;
 }
 
@@ -375,8 +375,29 @@ export default function AgentComptes() {
   const [loadingStudents, setLoadingStudents] = useState(true);
   const [loadingTeachers, setLoadingTeachers] = useState(true);
 
-  const [studentPasswordStore, setStudentPasswordStore] = useState<Record<string, string>>({});
-  const [teacherPasswordStore, setTeacherPasswordStore] = useState<Record<string, { password: string; username: string }>>({});
+  const [studentPasswordStore, setStudentPasswordStore] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem("esp_spwd") ?? "{}"); } catch { return {}; }
+  });
+  const [teacherPasswordStore, setTeacherPasswordStore] = useState<Record<string, { password: string; username: string }>>(() => {
+    try { return JSON.parse(localStorage.getItem("esp_tpwd") ?? "{}"); } catch { return {}; }
+  });
+
+  // Persist real passwords to localStorage so they survive page reloads
+  useEffect(() => {
+    try {
+      const out: Record<string, string> = {};
+      Object.entries(studentPasswordStore).forEach(([k, v]) => { if (v) out[k] = v; });
+      localStorage.setItem("esp_spwd", JSON.stringify(out));
+    } catch {}
+  }, [studentPasswordStore]);
+
+  useEffect(() => {
+    try {
+      const out: Record<string, { password: string; username: string }> = {};
+      Object.entries(teacherPasswordStore).forEach(([k, v]) => { if (v.password) out[k] = v; });
+      localStorage.setItem("esp_tpwd", JSON.stringify(out));
+    } catch {}
+  }, [teacherPasswordStore]);
 
   const [saving, setSaving]       = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -402,7 +423,13 @@ export default function AgentComptes() {
       setStudents(mapped);
       setStudentPasswordStore(prev => {
         const next = { ...prev };
-        mapped.forEach(s => { if (!next[s.id]) next[s.id] = "••••••"; });
+        data.forEach(s => {
+          const id = String(s.id);
+          const apiPwd = String((s as Record<string, unknown>).initial_password ?? "");
+          // API password takes priority; fallback to whatever is already in the store
+          if (apiPwd) next[id] = apiPwd;
+          else if (!next[id]) next[id] = "";
+        });
         return next;
       });
     } catch { /* ignore */ }
@@ -430,8 +457,15 @@ export default function AgentComptes() {
       setTeachers(mapped);
       setTeacherPasswordStore(prev => {
         const next = { ...prev };
-        mapped.forEach(t => {
-          if (!next[t.id]) next[t.id] = { password: "••••••", username: t.username || t.email };
+        data.forEach((t, i) => {
+          const id    = String(t.id);
+          const apiPwd = String((t as Record<string, unknown>).initial_password ?? "");
+          const uname  = mapped[i].username || mapped[i].email;
+          if (apiPwd) {
+            next[id] = { password: apiPwd, username: next[id]?.username || uname };
+          } else if (!next[id]) {
+            next[id] = { password: "", username: uname };
+          }
         });
         return next;
       });
@@ -1151,7 +1185,7 @@ export default function AgentComptes() {
       <AnimatePresence>
         {showStudentCredentials && studentCredentialsFor && (() => {
           const s = studentCredentialsFor;
-          const pwd = studentPasswordStore[s.id] ?? "——";
+          const pwd = studentPasswordStore[s.id] || "";
           return (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
               <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
@@ -1171,13 +1205,15 @@ export default function AgentComptes() {
                     <div className="bg-violet-50 border border-violet-200 rounded-lg p-3">
                       <p className="text-xs text-violet-600 mb-1.5">Mot de passe</p>
                       <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold text-xl tracking-widest text-violet-800">{pwd}</span>
-                        <CopyButton text={pwd} />
+                        {pwd
+                          ? <><span className="font-mono font-bold text-xl tracking-widest text-violet-800">{pwd}</span><CopyButton text={pwd} /></>
+                          : <span className="text-sm text-muted-foreground italic">Non disponible</span>
+                        }
                       </div>
                     </div>
                   </div>
                   <Button variant="outline" className="w-full mt-4 gap-2 text-sm border-violet-300 text-violet-700 hover:bg-violet-50"
-                    onClick={() => exportStudentPDF([{ nom: s.nom, prenom: s.prenom, matricule: s.matricule, password: pwd }], agentUniv, agentDept)}>
+                    onClick={() => exportStudentPDF([{ nom: s.nom, prenom: s.prenom, matricule: s.matricule, password: safePassword(pwd) }], agentUniv, agentDept)}>
                     <FileText className="w-3.5 h-3.5" />Exporter (PDF)
                   </Button>
                   <Button className="w-full mt-2" onClick={() => setShowStudentCredentials(false)}>Fermer</Button>
@@ -1193,7 +1229,7 @@ export default function AgentComptes() {
         {showTeacherCredentials && teacherCredentialsFor && (() => {
           const t = teacherCredentialsFor;
           const creds = teacherPasswordStore[t.id];
-          const pwd = creds?.password ?? "——";
+          const pwd = creds?.password || "";
           const username = creds?.username ?? t.username ?? t.email ?? "—";
           return (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
@@ -1214,13 +1250,15 @@ export default function AgentComptes() {
                     <div className="bg-violet-50 border border-violet-200 rounded-lg p-3">
                       <p className="text-xs text-violet-600 mb-1.5">Mot de passe</p>
                       <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold text-xl tracking-widest text-violet-800">{pwd}</span>
-                        <CopyButton text={pwd} />
+                        {pwd
+                          ? <><span className="font-mono font-bold text-xl tracking-widest text-violet-800">{pwd}</span><CopyButton text={pwd} /></>
+                          : <span className="text-sm text-muted-foreground italic">Non disponible</span>
+                        }
                       </div>
                     </div>
                   </div>
                   <Button variant="outline" className="w-full mt-4 gap-2 text-sm border-violet-300 text-violet-700 hover:bg-violet-50"
-                    onClick={() => exportTeacherPDF([{ nom: t.nom, prenom: t.prenom, username, password: pwd }], agentUniv, agentDept)}>
+                    onClick={() => exportTeacherPDF([{ nom: t.nom, prenom: t.prenom, username, password: safePassword(pwd) }], agentUniv, agentDept)}>
                     <FileText className="w-3.5 h-3.5" />Exporter (PDF)
                   </Button>
                   <Button className="w-full mt-2" onClick={() => setShowTeacherCredentials(false)}>Fermer</Button>
