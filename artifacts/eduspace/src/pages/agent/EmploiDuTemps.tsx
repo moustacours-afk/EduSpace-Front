@@ -49,6 +49,64 @@ type NewSession = {
 
 const AGENT_DEPT = "Informatique";
 
+function exportTimetablePDF(
+  sessions: Session[], groupe: string, niveau: string, dept: string,
+  creneauxList: { debut: string; fin: string }[]
+) {
+  const jours = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Samedi"];
+  const typeColors: Record<string, string> = {
+    CM: "#dbeafe:#1d4ed8", TD: "#e0e7ff:#4338ca", TP: "#ccfbf1:#0f766e",
+  };
+
+  const headerCells = jours.map(j => `<th style="padding:10px 8px;background:#f1f5f9;font-size:12px;border:1px solid #e2e8f0">${j}</th>`).join("");
+
+  const rows = creneauxList.map(cr => {
+    const cells = jours.map(jour => {
+      const s = sessions.find(x => x.jour === jour && x.heureDebut === cr.debut && (x.groupes.includes(groupe) || groupe === "all"));
+      if (!s) return `<td style="border:1px solid #e2e8f0;padding:6px;min-height:60px"></td>`;
+      const [bg, color] = (typeColors[s.type] ?? "#f8fafc:#374151").split(":");
+      return `<td style="border:1px solid #e2e8f0;padding:6px;vertical-align:top">
+        <div style="background:${bg};border-radius:6px;padding:8px;font-size:11px">
+          <div style="font-weight:bold;color:${color};margin-bottom:2px">${s.module}</div>
+          <div style="color:#64748b;font-size:10px">${s.salle ?? ""}</div>
+          <div style="color:#94a3b8;font-size:10px">${s.enseignant}</div>
+          <span style="background:${color};color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;margin-top:3px;display:inline-block">${s.type}</span>
+        </div>
+      </td>`;
+    }).join("");
+    return `<tr>
+      <td style="border:1px solid #e2e8f0;padding:8px;font-size:11px;color:#64748b;white-space:nowrap;background:#f8fafc">${cr.debut}<br/>${cr.fin}</td>
+      ${cells}
+    </tr>`;
+  }).join("");
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+  <title>Emploi du temps — ${dept} ${niveau} ${groupe}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;padding:20px}
+    h2{font-size:16px;font-weight:bold;color:#1e293b;margin-bottom:4px}
+    p{font-size:12px;color:#64748b;margin-bottom:16px}
+    table{width:100%;border-collapse:collapse}
+    th{text-align:center;font-weight:600;color:#374151;border:1px solid #e2e8f0}
+    @media print{@page{size:A4 landscape;margin:10mm}}
+  </style></head>
+  <body>
+    <h2>Emploi du temps — ${dept} ${niveau}</h2>
+    <p>${groupe} • Document généré le ${new Date().toLocaleDateString("fr-DZ")}</p>
+    <table>
+      <thead><tr><th style="padding:10px 8px;background:#f1f5f9;font-size:12px;border:1px solid #e2e8f0">Horaire</th>${headerCells}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <script>window.onload=function(){window.print()}</script>
+  </body></html>`;
+
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+}
+
 function detectConflict(sessions: Session[], newS: NewSession, excludeId?: string) {
   const cands = sessions.filter(s => s.id !== excludeId && s.jour === newS.jour && s.heureDebut === newS.debut);
   for (const c of cands) {
@@ -209,6 +267,10 @@ export default function AgentEmploiDuTemps() {
     setRooms(prev => prev.map(r => r.id === id ? { ...r, disponible: !r.disponible } : r));
   }
 
+  function deleteRoom(id: string) {
+    setRooms(prev => prev.filter(r => r.id !== id));
+  }
+
   function addGroup() {
     if (!newGroup.nom) return;
     setCustomGroups(prev => [...prev, { nom: newGroup.nom, filiere: AGENT_DEPT, niveau: newGroup.niveau, nb: 0 }]);
@@ -256,7 +318,9 @@ export default function AgentEmploiDuTemps() {
             <div className="flex gap-2">
               {activeTab === "timetable" && (
                 <>
-                  <Button variant="outline" size="sm" className="gap-1.5 text-xs"><Download className="w-3.5 h-3.5" />Exporter PDF</Button>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => exportTimetablePDF(filteredSessions, groupe, niveau, AGENT_DEPT, activeCreneaux)}>
+                    <Download className="w-3.5 h-3.5" />Exporter PDF
+                  </Button>
                   <Button className="gap-2" size="sm" onClick={() => openAddModal()}>
                     <Plus className="w-4 h-4" />Ajouter une séance
                   </Button>
@@ -309,7 +373,7 @@ export default function AgentEmploiDuTemps() {
                   <label className="text-xs text-muted-foreground block mb-1">Niveau</label>
                   <Select value={niveau} onValueChange={setNiveau}>
                     <SelectTrigger className="w-28 h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>{["L1","L2","L3","M1","M2"].map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+                    <SelectContent>{["L1","L2","L3","M1","M2","ING1","ING2","ING3","ING4","ING5"].map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
@@ -463,9 +527,14 @@ export default function AgentEmploiDuTemps() {
                                 <span className="text-xs text-muted-foreground"> séance(s)</span>
                               </td>
                               <td className="px-4 py-3 text-center">
-                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => toggleRoomAvailability(r.id)}>
-                                  {r.disponible ? "Désactiver" : "Activer"}
-                                </Button>
+                                <div className="flex items-center justify-center gap-1">
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => toggleRoomAvailability(r.id)}>
+                                    {r.disponible ? "Désactiver" : "Activer"}
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => deleteRoom(r.id)} title="Supprimer">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
                               </td>
                             </tr>
                           );

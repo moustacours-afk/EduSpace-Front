@@ -167,6 +167,32 @@ const MODULES_PAR_DEPARTEMENT: Record<string, { id: string; intitule: string }[]
   ],
 };
 
+const MODULES_INFORMATIQUE_PAR_NIVEAU: Record<string, { id: string; intitule: string }[]> = {
+  L1:   [{ id:"inf-1",intitule:"Algorithmique" },{ id:"inf-12",intitule:"Architecture des Ordinateurs" },{ id:"inf-15",intitule:"Mathématiques pour l'Informatique" },{ id:"inf-16",intitule:"Logique et Calculabilité" }],
+  ING1: [{ id:"inf-1",intitule:"Algorithmique" },{ id:"inf-12",intitule:"Architecture des Ordinateurs" },{ id:"inf-15",intitule:"Mathématiques pour l'Informatique" },{ id:"inf-16",intitule:"Logique et Calculabilité" }],
+  L2:   [{ id:"inf-2",intitule:"Structures de Données" },{ id:"inf-6",intitule:"Programmation Orientée Objet" },{ id:"inf-17",intitule:"Graphes et Algorithmes" },{ id:"inf-3",intitule:"Base de Données" }],
+  ING2: [{ id:"inf-2",intitule:"Structures de Données" },{ id:"inf-6",intitule:"Programmation Orientée Objet" },{ id:"inf-17",intitule:"Graphes et Algorithmes" },{ id:"inf-3",intitule:"Base de Données" }],
+  L3:   [{ id:"inf-4",intitule:"Réseaux Informatiques" },{ id:"inf-5",intitule:"Systèmes d'Exploitation" },{ id:"inf-9",intitule:"Compilation" },{ id:"inf-13",intitule:"Théorie des Langages" },{ id:"inf-10",intitule:"Génie Logiciel" },{ id:"inf-7",intitule:"Programmation Web" }],
+  ING3: [{ id:"inf-4",intitule:"Réseaux Informatiques" },{ id:"inf-5",intitule:"Systèmes d'Exploitation" },{ id:"inf-9",intitule:"Compilation" },{ id:"inf-13",intitule:"Théorie des Langages" },{ id:"inf-10",intitule:"Génie Logiciel" }],
+  M1:   [{ id:"inf-8",intitule:"Intelligence Artificielle" },{ id:"inf-14",intitule:"Systèmes Distribués" },{ id:"inf-19",intitule:"Traitement d'Images" },{ id:"inf-18",intitule:"Interface Homme-Machine" },{ id:"inf-20",intitule:"Programmation Fonctionnelle" }],
+  ING4: [{ id:"inf-8",intitule:"Intelligence Artificielle" },{ id:"inf-14",intitule:"Systèmes Distribués" },{ id:"inf-11",intitule:"Sécurité Informatique" },{ id:"inf-18",intitule:"Interface Homme-Machine" }],
+  M2:   [{ id:"inf-11",intitule:"Sécurité Informatique" },{ id:"inf-21",intitule:"Cloud Computing" },{ id:"inf-22",intitule:"Développement Mobile" }],
+  ING5: [{ id:"inf-21",intitule:"Cloud Computing" },{ id:"inf-22",intitule:"Développement Mobile" },{ id:"inf-14",intitule:"Systèmes Distribués" },{ id:"inf-19",intitule:"Traitement d'Images" }],
+};
+
+function getModulesForDeptsAndNiveau(depts: string[], niveau: string): { id: string; intitule: string }[] {
+  if (!niveau) return getModulesForDepts(depts);
+  const all: { id: string; intitule: string }[] = [];
+  const seen = new Set<string>();
+  depts.forEach(dept => {
+    const mods = (dept === "Informatique" && MODULES_INFORMATIQUE_PAR_NIVEAU[niveau])
+      ? MODULES_INFORMATIQUE_PAR_NIVEAU[niveau]
+      : (MODULES_PAR_DEPARTEMENT[dept] ?? []);
+    mods.forEach(m => { if (!seen.has(m.id)) { seen.add(m.id); all.push(m); } });
+  });
+  return all.length > 0 ? all : getModulesForDepts(depts);
+}
+
 const statutCompteBadge: Record<CompteStatut, string> = {
   actif:    "bg-green-100 text-green-800 border-green-200",
   suspendu: "bg-amber-100 text-amber-800 border-amber-200",
@@ -214,6 +240,11 @@ function getModulesForDepts(depts: string[]): { id: string; intitule: string }[]
   return all;
 }
 
+function safePassword(raw: string | undefined): string {
+  if (!raw || raw === "••••••" || raw === "——") return "—";
+  return raw;
+}
+
 function exportStudentPDF(list: { nom: string; prenom: string; matricule: string; password: string }[], univ: string, dept: string) {
   const pages = list.map(s => `
     <div class="page">
@@ -252,6 +283,56 @@ function exportStudentPDF(list: { nom: string; prenom: string; matricule: string
     .box.highlight{background:#f0eeff;border-color:#a78bfa}
     .box-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
     .box-value{font-size:30px;font-family:'Courier New',monospace;font-weight:bold;color:#1a1a4e;letter-spacing:4px}
+    .pw{color:#5b21b6}
+    .footer{font-size:10px;color:#ccc;margin-top:24px;font-style:italic}
+    @media print{@page{margin:0;size:A4}}
+  </style></head>
+  <body>${pages}<script>window.onload=function(){window.print()}</script></body></html>`;
+
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+}
+
+function exportTeacherPDF(list: { nom: string; prenom: string; username: string; password: string }[], univ: string, dept: string) {
+  const pages = list.map(t => `
+    <div class="page">
+      <div class="card">
+        <div class="logo-row">🎓</div>
+        <h1>${univ}</h1>
+        <p class="dept">Département ${dept}</p>
+        <hr/>
+        <div class="student-name">${t.prenom} ${t.nom}</div>
+        <p class="sub">Identifiants d'accès — Plateforme EduSpace</p>
+        <div class="box">
+          <div class="box-label">Nom d'utilisateur</div>
+          <div class="box-value">${t.username}</div>
+        </div>
+        <div class="box highlight">
+          <div class="box-label">Mot de passe</div>
+          <div class="box-value pw">${t.password}</div>
+        </div>
+        <p class="footer">Document confidentiel — à remettre en main propre</p>
+      </div>
+    </div>`).join("");
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Identifiants enseignants</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif}
+    .page{width:210mm;min-height:297mm;display:flex;align-items:center;justify-content:center;page-break-after:always}
+    .card{width:160mm;border:2px solid #2d2d7a;border-radius:12px;padding:44px;text-align:center}
+    .logo-row{font-size:48px;margin-bottom:16px}
+    h1{font-size:15px;font-weight:bold;color:#1a1a4e;margin-bottom:8px;line-height:1.5}
+    .dept{font-size:12px;color:#666;margin-bottom:24px}
+    hr{border:none;border-top:1px solid #e5e7eb;margin-bottom:24px}
+    .student-name{font-size:22px;font-weight:bold;color:#111;margin-bottom:6px}
+    .sub{font-size:11px;color:#aaa;margin-bottom:28px}
+    .box{background:#f8f8ff;border:1px solid #ddd;border-radius:8px;padding:18px;margin-bottom:14px}
+    .box.highlight{background:#f0eeff;border-color:#a78bfa}
+    .box-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+    .box-value{font-size:24px;font-family:'Courier New',monospace;font-weight:bold;color:#1a1a4e;letter-spacing:2px;word-break:break-all}
     .pw{color:#5b21b6}
     .footer{font-size:10px;color:#ccc;margin-top:24px;font-style:italic}
     @media print{@page{margin:0;size:A4}}
@@ -565,13 +646,15 @@ export default function AgentComptes() {
   }
   function exportSelectedStudentsPDF() {
     const list = students.filter(s => selectedStudentIds.has(s.id)).map(s => ({
-      nom: s.nom, prenom: s.prenom, matricule: s.matricule, password: studentPasswordStore[s.id] ?? "——",
+      nom: s.nom, prenom: s.prenom, matricule: s.matricule,
+      password: safePassword(studentPasswordStore[s.id]),
     }));
     if (list.length) exportStudentPDF(list, agentUniv, agentDept);
   }
   function exportAllStudentsPDF() {
     const list = students.map(s => ({
-      nom: s.nom, prenom: s.prenom, matricule: s.matricule, password: studentPasswordStore[s.id] ?? "——",
+      nom: s.nom, prenom: s.prenom, matricule: s.matricule,
+      password: safePassword(studentPasswordStore[s.id]),
     }));
     if (list.length) exportStudentPDF(list, agentUniv, agentDept);
   }
@@ -586,16 +669,24 @@ export default function AgentComptes() {
   function exportAllTeachersPDF() {
     const list = teachers.map(t => {
       const creds = teacherPasswordStore[t.id];
-      return { nom: t.nom, prenom: t.prenom, matricule: t.matricule, password: creds?.password ?? "——" };
+      return {
+        nom: t.nom, prenom: t.prenom,
+        username: creds?.username || t.username || t.matricule || "—",
+        password: safePassword(creds?.password),
+      };
     });
-    if (list.length) exportStudentPDF(list, agentUniv, agentDept);
+    if (list.length) exportTeacherPDF(list, agentUniv, agentDept);
   }
   function exportSelectedTeachersPDF() {
     const list = teachers.filter(t => selectedTeacherIds.has(t.id)).map(t => {
       const creds = teacherPasswordStore[t.id];
-      return { nom: t.nom, prenom: t.prenom, matricule: t.matricule, password: creds?.password ?? "——" };
+      return {
+        nom: t.nom, prenom: t.prenom,
+        username: creds?.username || t.username || t.matricule || "—",
+        password: safePassword(creds?.password),
+      };
     });
-    if (list.length) exportStudentPDF(list, agentUniv, agentDept);
+    if (list.length) exportTeacherPDF(list, agentUniv, agentDept);
   }
 
   // ── filtered data ──
@@ -962,13 +1053,6 @@ export default function AgentComptes() {
                         Prénom[1-3] + Nom[1-3] + 4 chars aléatoires, max 10 chars
                       </p>
                     </div>
-                    {/* Email shown only if teacher has set one */}
-                    {t.email && (
-                      <div className="bg-muted/20 rounded-lg p-3">
-                        <p className="text-xs text-muted-foreground">Email (renseigné par l'enseignant)</p>
-                        <p className="font-medium mt-0.5 text-sm break-all">{t.email}</p>
-                      </div>
-                    )}
                     <div className="col-span-2 bg-muted/20 rounded-lg p-3 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="text-sm">Statut :</span>
@@ -1136,7 +1220,7 @@ export default function AgentComptes() {
                     </div>
                   </div>
                   <Button variant="outline" className="w-full mt-4 gap-2 text-sm border-violet-300 text-violet-700 hover:bg-violet-50"
-                    onClick={() => exportStudentPDF([{ nom: t.nom, prenom: t.prenom, matricule: t.matricule, password: pwd }], agentUniv, agentDept)}>
+                    onClick={() => exportTeacherPDF([{ nom: t.nom, prenom: t.prenom, username, password: pwd }], agentUniv, agentDept)}>
                     <FileText className="w-3.5 h-3.5" />Exporter (PDF)
                   </Button>
                   <Button className="w-full mt-2" onClick={() => setShowTeacherCredentials(false)}>Fermer</Button>
@@ -1151,7 +1235,7 @@ export default function AgentComptes() {
       <AnimatePresence>
         {showEditModal && editingTeacher && (() => {
           const depts = editingTeacher.departement.split(",").map(d => d.trim());
-          const availableMods = getModulesForDepts(depts.length > 0 ? depts : [agentDept]);
+          const teacherDepts = depts.length > 0 ? depts : [agentDept];
           return (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
               <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
@@ -1173,22 +1257,25 @@ export default function AgentComptes() {
                         <div className="flex gap-3 items-start">
                           <div className="flex-1 grid grid-cols-2 gap-3">
                             <div>
-                              <label className="text-xs font-medium text-muted-foreground block mb-1">Module</label>
-                              <Select value={row.module} onValueChange={v => updateModuleRow(row.id, { module: v })}>
-                                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choisir un module…" /></SelectTrigger>
+                              <label className="text-xs font-medium text-muted-foreground block mb-1">Niveau *</label>
+                              <Select value={row.niveau} onValueChange={v => updateModuleRow(row.id, { niveau: v, module: "" })}>
+                                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choisir le niveau…" /></SelectTrigger>
                                 <SelectContent>
-                                  {availableMods.length === 0
-                                    ? <SelectItem value="__none" disabled>Aucun module dans ce département</SelectItem>
-                                    : availableMods.map(m => <SelectItem key={m.id} value={m.intitule}>{m.intitule}</SelectItem>)}
+                                  {NIVEAUX.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
                                 </SelectContent>
                               </Select>
                             </div>
                             <div>
-                              <label className="text-xs font-medium text-muted-foreground block mb-1">Niveau</label>
-                              <Select value={row.niveau} onValueChange={v => updateModuleRow(row.id, { niveau: v })}>
-                                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Niveau…" /></SelectTrigger>
+                              <label className="text-xs font-medium text-muted-foreground block mb-1">Module</label>
+                              <Select value={row.module} onValueChange={v => updateModuleRow(row.id, { module: v })} disabled={!row.niveau}>
+                                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={row.niveau ? "Choisir un module…" : "Choisissez d'abord le niveau"} /></SelectTrigger>
                                 <SelectContent>
-                                  {NIVEAUX.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                                  {(() => {
+                                    const mods = getModulesForDeptsAndNiveau(teacherDepts, row.niveau);
+                                    return mods.length === 0
+                                      ? <SelectItem value="__none" disabled>Aucun module pour ce niveau</SelectItem>
+                                      : mods.map(m => <SelectItem key={m.id} value={m.intitule}>{m.intitule}</SelectItem>);
+                                  })()}
                                 </SelectContent>
                               </Select>
                             </div>

@@ -256,7 +256,7 @@ export default function AgentDeliberations() {
     } else if (annualMoy >= 10) {
       const allPassed = perSem.every(p => p.semMoy === null || p.semMoy >= 10);
       decision = allPassed ? "Admis (session normale)" : "Admis par compensation";
-    } else if (session === "Rattrapage" && annualMoy >= 5) {
+    } else if (annualMoy >= 5) {
       decision = "Admis (session rattrapage)";
     } else {
       decision = "Ajourné";
@@ -274,7 +274,7 @@ export default function AgentDeliberations() {
     });
 
     return { idx: idx + 1, ...s, perSem, perNiveauSummary, totalCredits, annualMoy, decision };
-  }), [studentsInGroupe, submissionsPerSem, activeSems, activeNiveauGroups, session]);
+  }), [studentsInGroupe, submissionsPerSem, activeSems, activeNiveauGroups]);
 
   // ── Print functions ──
   function printPV() {
@@ -396,7 +396,7 @@ export default function AgentDeliberations() {
         <p style="font-size:13px;font-weight:bold;margin:4px 0">Université des Sciences et de la Technologie Houari Boumediene</p>
         <p style="font-size:11px">Faculté d'Informatique — Département Informatique</p>
         <p style="margin:8px 0;font-size:12px">Année Académique 2025-2026 &nbsp;|&nbsp; Filière : Informatique &nbsp;|&nbsp; Niveau : ${niveau} &nbsp;|&nbsp; Groupe : ${groupe}</p>
-        <p style="font-size:14px;font-weight:bold;margin:10px 0;text-decoration:underline">PV de délibération global — ${semestresLabel} — Session ${session}</p>
+        <p style="font-size:14px;font-weight:bold;margin:10px 0;text-decoration:underline">PV de délibération global — ${semestresLabel} — 2025/2026</p>
       </div>
       <button onclick="window.print()" style="margin-bottom:12px;padding:8px 16px;background:#4f46e5;color:white;border:none;border-radius:6px;cursor:pointer">Imprimer</button>
       <table>
@@ -534,14 +534,16 @@ export default function AgentDeliberations() {
                   </div>
                 )}
 
-                {/* Session */}
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Session</label>
-                  <Select value={session} onValueChange={setSession}>
-                    <SelectTrigger className="w-36 h-9 text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>{SESSIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
+                {/* Session — only shown for par matière mode */}
+                {typeDelib === "par_matiere" && (
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Session</label>
+                    <Select value={session} onValueChange={setSession}>
+                      <SelectTrigger className="w-36 h-9 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>{SESSIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                )}
 
               </div>
             </Card>
@@ -573,7 +575,7 @@ export default function AgentDeliberations() {
               <div className="text-center">
                 <h2 className="text-lg font-bold underline">
                   {typeDelib === "annuelle"
-                    ? `PV de délibération global — ${semestresLabel} — 2025/2026 (Session : ${session})`
+                    ? `PV de délibération global — ${semestresLabel} — 2025/2026`
                     : `PV de délibération — ${semestre} — 2025/2026 (Session : ${session})`}
                 </h2>
               </div>
@@ -581,12 +583,13 @@ export default function AgentDeliberations() {
           </motion.div>
 
           {/* Results summary */}
-          <motion.div variants={item} className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <motion.div variants={item} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {[
-              { label: "Total étudiants", value: activeRows.length, color: "text-foreground", sub: "" },
-              { label: "Admis (normale)", value: activeRows.filter(r => r.decision === "Admis (session normale)").length, color: "text-green-700", sub: "" },
-              { label: "Admis (compensation)", value: activeRows.filter(r => r.decision === "Admis par compensation").length, color: "text-teal-700", sub: "Moy. ≥ 10" },
-              { label: "Ajournés", value: activeRows.filter(r => r.decision === "Ajourné").length, color: "text-red-700", sub: "" },
+              { label: "Total étudiants",    value: activeRows.length,                                                              color: "text-foreground",  sub: "" },
+              { label: "Admis (normale)",    value: activeRows.filter(r => r.decision === "Admis (session normale)").length,        color: "text-green-700",   sub: "Moy. ≥ 10 partout" },
+              { label: "Admis (rattrapage)", value: activeRows.filter(r => r.decision === "Admis (session rattrapage)").length,     color: "text-amber-700",   sub: "Session rattrapage" },
+              { label: "Admis (dette)",      value: activeRows.filter(r => r.decision === "Admis par compensation").length,         color: "text-teal-700",    sub: "Avec modules en dette" },
+              { label: "Ajournés",           value: activeRows.filter(r => r.decision === "Ajourné").length,                       color: "text-red-700",     sub: "" },
             ].map(c => (
               <Card key={c.label} className="p-4 text-center">
                 <p className="text-xs text-muted-foreground">{c.label}</p>

@@ -91,7 +91,9 @@ export default function AgentOrganisationEtudiants() {
     nbGroupes: "4",
   });
 
-  const fetchStudents = useCallback(async () => {
+  const [fillSuccess, setFillSuccess] = useState("");
+
+  const fetchStudents = useCallback(async (fillAfter = false) => {
     setLoadingStudents(true);
     try {
       const data = await api.students() as Record<string, unknown>[];
@@ -105,13 +107,28 @@ export default function AgentOrganisationEtudiants() {
         groupe:   String(s.groupe ?? ""),
       }));
       setApiStudents(mapped);
+      if (fillAfter) {
+        const current = getOrgState();
+        const filled = fillEmptySpots(mapped, current);
+        const prevTotal = current.sections.reduce((acc, s) => acc + s.groupes.reduce((a, g) => a + g.studentIds.length, 0), 0);
+        const newTotal  = filled.sections.reduce((acc, s) => acc + s.groupes.reduce((a, g) => a + g.studentIds.length, 0), 0);
+        const added = newTotal - prevTotal;
+        setOrgState(filled);
+        setLocalOrg(filled);
+        setFillSuccess(
+          added > 0
+            ? `${added} étudiant(s) réparti(s) dans les emplacements disponibles.`
+            : "Aucun emplacement vide ou aucun étudiant non affecté trouvé."
+        );
+        setTimeout(() => setFillSuccess(""), 5000);
+      }
     } catch { /* keep empty */ }
     finally { setLoadingStudents(false); }
   }, []);
 
   useEffect(() => {
     setLocalOrg(getOrgState());
-    fetchStudents();
+    fetchStudents(false);
   }, [fetchStudents]);
 
   // Reset specialite when niveau changes in filter
@@ -133,6 +150,34 @@ export default function AgentOrganisationEtudiants() {
     const ids = new Set<string>();
     orgState.sections.forEach(s => s.groupes.forEach(g => g.studentIds.forEach(id => ids.add(id))));
     return ids;
+  }
+
+  function fillEmptySpots(students: LocalStudent[], currentOrg: OrgState): OrgState {
+    const assigned = new Set<string>();
+    currentOrg.sections.forEach(s => s.groupes.forEach(g => g.studentIds.forEach(id => assigned.add(id))));
+
+    let updatedSections = currentOrg.sections.map(section => {
+      const eligible = students.filter(
+        s => s.filiere === AGENT_FILIERE && s.niveau === section.niveau && !assigned.has(s.id)
+      );
+      if (eligible.length === 0) return section;
+
+      const shuffled = shuffleArray(eligible);
+      let pool = [...shuffled];
+
+      const updatedGroupes = section.groupes.map(groupe => {
+        const emptySpots = groupe.nbMax - groupe.studentIds.length;
+        if (emptySpots <= 0 || pool.length === 0) return groupe;
+
+        const toAdd = pool.splice(0, emptySpots);
+        toAdd.forEach(s => assigned.add(s.id));
+        return { ...groupe, studentIds: [...groupe.studentIds, ...toAdd.map(s => s.id)] };
+      });
+
+      return { ...section, groupes: updatedGroupes };
+    });
+
+    return { sections: updatedSections };
   }
 
   function createSection() {
@@ -290,7 +335,7 @@ export default function AgentOrganisationEtudiants() {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="gap-2" onClick={fetchStudents} disabled={loadingStudents} title="Actualiser la liste des étudiants">
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => fetchStudents(true)} disabled={loadingStudents} title="Actualiser et remplir les emplacements vides">
                 <RefreshCw className={`w-4 h-4 ${loadingStudents ? "animate-spin" : ""}`} />Actualiser
               </Button>
               <Button className="gap-2" size="sm" onClick={() => setShowCreateModal(true)}>
@@ -340,6 +385,14 @@ export default function AgentOrganisationEtudiants() {
             <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
               <div className="flex items-center gap-2.5 p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800">
                 <CheckCircle className="w-4 h-4 flex-shrink-0" />{createSuccess}
+              </div>
+            </motion.div>
+          )}
+
+          {fillSuccess && (
+            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="flex items-center gap-2.5 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800">
+                <RefreshCw className="w-4 h-4 flex-shrink-0" />{fillSuccess}
               </div>
             </motion.div>
           )}
