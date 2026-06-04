@@ -73,12 +73,21 @@ export default function EnseignantSupports() {
     ? supports
     : supports.filter(s => s.module === moduleFilter);
 
+  const MAX_FILE_MB = 50;
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
-    setSelectedFile(file);
+    setSelectedFile(null);
     setUploaded(false);
     setUploadError("");
-    if (file && !nomSupport) setNomSupport(file.name.replace(/\.[^/.]+$/, ""));
+    if (!file) return;
+    if (file.size > MAX_FILE_MB * 1024 * 1024) {
+      setUploadError(`Le fichier dépasse la taille maximale autorisée (${MAX_FILE_MB} Mo). Votre fichier : ${(file.size / 1024 / 1024).toFixed(1)} Mo.`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    setSelectedFile(file);
+    if (!nomSupport) setNomSupport(file.name.replace(/\.[^/.]+$/, ""));
   }
 
   async function handleDeposer() {

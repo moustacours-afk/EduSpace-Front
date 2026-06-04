@@ -1,47 +1,28 @@
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { GraduationCap, BookOpen, Users, ShieldCheck, ArrowRight } from "lucide-react";
+import { BookMarked, Presentation, Building2, GraduationCap, ArrowRight } from "lucide-react";
 
 const roles = [
   {
     href: "/login/etudiant",
-    icon: GraduationCap,
+    icon: BookMarked,
     title: "Étudiant",
-    description: "Consultez vos notes, emploi du temps et supports de cours.",
-    accent: "#3b82f6",
-    iconBg: "bg-blue-600",
-    badge: "Espace Étudiant",
-    badgeColor: "bg-blue-50 text-blue-700",
+    eyebrow: "Espace personnel",
+    description: "Consultez vos notes, votre emploi du temps et vos supports de cours.",
   },
   {
     href: "/login/enseignant",
-    icon: BookOpen,
+    icon: Presentation,
     title: "Enseignant",
+    eyebrow: "Espace pédagogique",
     description: "Déposez des supports, saisissez les notes et gérez vos séances.",
-    accent: "#10b981",
-    iconBg: "bg-emerald-600",
-    badge: "Espace Enseignant",
-    badgeColor: "bg-emerald-50 text-emerald-700",
   },
   {
     href: "/login/agent",
-    icon: Users,
+    icon: Building2,
     title: "Agent Pédagogique",
-    description: "Gérez les comptes, emplois du temps et validez les notes.",
-    accent: "#8b5cf6",
-    iconBg: "bg-violet-600",
-    badge: "Administration",
-    badgeColor: "bg-violet-50 text-violet-700",
-  },
-  {
-    href: "/login/super-agent",
-    icon: ShieldCheck,
-    title: "Super Agent",
-    description: "Créez les comptes agents et définissez les modules par niveau.",
-    accent: "#7c3aed",
-    iconBg: "bg-purple-700",
-    badge: "Administration Centrale",
-    badgeColor: "bg-purple-50 text-purple-700",
+    eyebrow: "Administration",
+    description: "Gérez les comptes, les emplois du temps et validez les notes.",
   },
 ];
 
@@ -49,49 +30,51 @@ export default function Landing() {
   const [, setLocation] = useLocation();
 
   return (
-    <div className="min-h-screen bg-[#f8f9fc] flex flex-col items-center justify-center p-8">
+    <div className="min-h-screen bg-background relative overflow-hidden flex flex-col items-center justify-center p-8">
+      {/* subtle academic top wash */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-brand/[0.06] to-transparent" />
+      <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[640px] h-[640px] rounded-full bg-primary/[0.04] blur-3xl" />
+
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45 }}
-        className="text-center mb-10"
+        className="relative text-center mb-12"
       >
-        <div className="inline-flex items-center gap-3 mb-6 px-5 py-3 bg-white border border-gray-200 rounded-2xl shadow-sm">
-          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center">
-            <GraduationCap className="w-5 h-5 text-white" />
+        <div className="inline-flex items-center gap-3 mb-7 px-4 py-2.5 bg-card border border-card-border rounded-xl shadow-sm">
+          <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
+            <GraduationCap className="w-5 h-5 text-primary-foreground" />
           </div>
-          <span className="font-bold text-xl text-gray-900 tracking-tight">EduSpace</span>
+          <span className="font-serif font-bold text-xl text-foreground tracking-tight">EduSpace</span>
         </div>
-        <h1 className="text-3xl font-extrabold text-gray-900 mb-3">
-          Bienvenue sur votre plateforme académique
+        <h1 className="font-serif text-[2.1rem] leading-tight font-bold text-foreground mb-3">
+          Plateforme académique universitaire
         </h1>
-        <p className="text-gray-500 text-base max-w-sm mx-auto">
-          Choisissez votre profil pour accéder à votre espace personnalisé.
+        <p className="text-muted-foreground text-base max-w-md mx-auto">
+          Choisissez votre profil pour accéder à votre espace de travail.
         </p>
       </motion.div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-3xl w-full">
+      <div className="relative grid grid-cols-1 md:grid-cols-3 gap-5 max-w-4xl w-full">
         {roles.map((role, i) => (
           <motion.button
             key={role.href}
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.08 * (i + 1) }}
-            whileHover={{ y: -3, boxShadow: "0 12px 32px rgba(0,0,0,0.10)" }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={{ y: -4 }}
+            whileTap={{ scale: 0.985 }}
             onClick={() => setLocation(role.href)}
-            className="bg-white border border-gray-200 rounded-2xl p-7 text-left cursor-pointer group transition-all duration-200 shadow-sm"
+            className="group bg-card border border-card-border rounded-2xl p-7 text-left cursor-pointer shadow-sm hover:shadow-lg hover:border-primary/30 transition-all duration-200"
             data-testid={`button-role-${role.title.toLowerCase().replace(" ", "-")}`}
           >
-            <div className="flex items-center justify-between mb-5">
-              <div className={`w-12 h-12 rounded-xl ${role.iconBg} flex items-center justify-center shadow-md`}>
-                <role.icon className="w-6 h-6 text-white" />
-              </div>
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${role.badgeColor}`}>{role.badge}</span>
+            <div className="mb-6 w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center transition-colors duration-200 group-hover:bg-primary group-hover:text-primary-foreground">
+              <role.icon className="w-6 h-6" strokeWidth={1.75} />
             </div>
-            <h2 className="font-bold text-lg text-gray-900 mb-2">{role.title}</h2>
-            <p className="text-sm text-gray-500 leading-relaxed mb-4">{role.description}</p>
-            <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-400 group-hover:text-gray-700 transition-colors">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-1.5">{role.eyebrow}</p>
+            <h2 className="font-bold text-lg text-foreground mb-2">{role.title}</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-5">{role.description}</p>
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground group-hover:text-brand transition-colors">
               Se connecter
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </div>
@@ -99,14 +82,23 @@ export default function Landing() {
         ))}
       </div>
 
-      <motion.p
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
-        className="mt-10 text-gray-400 text-xs"
+        className="relative mt-12 flex flex-col items-center gap-2.5"
       >
-        Plateforme de gestion pédagogique universitaire — EduSpace v1.0
-      </motion.p>
+        <div className="h-px w-24 bg-border" />
+        <p className="text-muted-foreground/70 text-xs">
+          Plateforme de gestion pédagogique universitaire — EduSpace v1.0
+        </p>
+        <button
+          onClick={() => setLocation("/login/super-agent")}
+          className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+        >
+          Accès administration centrale
+        </button>
+      </motion.div>
     </div>
   );
 }

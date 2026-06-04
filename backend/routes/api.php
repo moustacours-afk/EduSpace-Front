@@ -76,6 +76,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/students/{id}', [AgentController::class, 'updateStudent']);
         Route::patch('/students/{id}/account', [AgentController::class, 'updateStudentAccount']);
 
+        // Modules (read-only for agent)
+        Route::get('/modules', [AgentController::class, 'modules']);
+
         // Teachers
         Route::get('/teachers', [AgentController::class, 'teachers']);
         Route::post('/teachers', [AgentController::class, 'storeTeacher']);
@@ -83,6 +86,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Grade submissions
         Route::get('/grade-submissions', [AgentController::class, 'gradeSubmissions']);
+        Route::get('/grade-submissions/{id}', [AgentController::class, 'showGradeSubmission']);
         Route::post('/grade-submissions/{id}/validate', [AgentController::class, 'validateGradeSubmission']);
         Route::post('/grade-submissions/{id}/publish', [AgentController::class, 'publishGradeSubmission']);
         Route::post('/grade-submissions/{id}/reject', [AgentController::class, 'rejectGradeSubmission']);

@@ -202,6 +202,7 @@ const statutCompteBadge: Record<CompteStatut, string> = {
 type ModuleRow = {
   id: string; module: string; niveau: string; types: ("CM" | "TD" | "TP")[];
   sections: string[]; tdGroups: string[]; tpGroups: string[]; responsable: boolean;
+  moduleId?: number;
 };
 type CreatedInfo = { username: string; password: string; name: string };
 
@@ -499,6 +500,7 @@ export default function AgentComptes() {
   const [showEditModal, setShowEditModal]       = useState(false);
   const [editingTeacher, setEditingTeacher]     = useState<AgentTeacher | null>(null);
   const [editModules, setEditModules]           = useState<ModuleRow[]>([]);
+  const [dbModules, setDbModules]               = useState<{ id: number; intitule: string; niveau: string }[]>([]);
 
   const [addSuccess, setAddSuccess]             = useState("");
 
@@ -543,14 +545,46 @@ export default function AgentComptes() {
 
   function openEditTeacher(t: AgentTeacher) {
     setEditingTeacher(t);
-    if (t.modulesDetails.length > 0) {
-      setEditModules(t.modulesDetails.map((row, i) => ({ ...row, id: `em${i}`, niveau: row.niveau ?? "" })));
-    } else {
-      setEditModules(t.modulesAssignes.map((mod, i) => ({
-        id: `em${i}`, module: mod, niveau: "", types: [], sections: [], tdGroups: [], tpGroups: [], responsable: false,
-      })));
-    }
+    setEditModules([]);
     setShowEditModal(true);
+
+    // Load DB modules first, then cross-reference with saved details
+    api.modules().then(data => {
+      const mods = data as { id: number; intitule: string; niveau: string }[];
+      setDbModules(mods);
+      const byName = new Map(mods.map(m => [m.intitule, m]));
+
+      let rows: ModuleRow[];
+      if (t.modulesDetails.length > 0) {
+        rows = t.modulesDetails.map((row, i) => {
+          const dbMod = byName.get(row.module);
+          return {
+            ...row,
+            id: `em${i}`,
+            niveau: row.niveau ?? "",
+            module: dbMod ? row.module : "",   // clear names that no longer exist in DB
+            moduleId: dbMod?.id ?? row.moduleId,
+          };
+        });
+      } else {
+        rows = t.modulesAssignes
+          .filter(mod => byName.has(mod))
+          .map((mod, i) => {
+            const dbMod = byName.get(mod)!;
+            return { id: `em${i}`, module: mod, niveau: dbMod.niveau ?? "", types: [], sections: [], tdGroups: [], tpGroups: [], responsable: false, moduleId: dbMod.id };
+          });
+      }
+      setEditModules(rows);
+    }).catch(() => {
+      // Fallback: show data as-is if API fails
+      if (t.modulesDetails.length > 0) {
+        setEditModules(t.modulesDetails.map((row, i) => ({ ...row, id: `em${i}`, niveau: row.niveau ?? "" })));
+      } else {
+        setEditModules(t.modulesAssignes.map((mod, i) => ({
+          id: `em${i}`, module: mod, niveau: "", types: [], sections: [], tdGroups: [], tpGroups: [], responsable: false,
+        })));
+      }
+    });
   }
   function addModuleRow() {
     setEditModules(prev => [...prev, { id: `em${Date.now()}`, module: "", niveau: "", types: [], sections: [], tdGroups: [], tpGroups: [], responsable: false }]);
@@ -585,7 +619,13 @@ export default function AgentComptes() {
   }
   async function saveTeacherEdit() {
     if (!editingTeacher) return;
-    const details = editModules.filter(r => r.module);
+    const byName = new Map(dbModules.map(m => [m.intitule, m]));
+    const details = editModules
+      .filter(r => r.module)
+      .map(r => {
+        const dbMod = byName.get(r.module);
+        return { ...r, moduleId: dbMod?.id ?? r.moduleId };
+      });
     const updated = details.map(r => r.module);
     try { await api.updateTeacher(Number(editingTeacher.id), { modules_details: details }); } catch { /* persist local */ }
     setTeachers(prev => prev.map(t => t.id === editingTeacher.id
@@ -1305,14 +1345,19 @@ export default function AgentComptes() {
                             </div>
                             <div>
                               <label className="text-xs font-medium text-muted-foreground block mb-1">Module</label>
-                              <Select value={row.module} onValueChange={v => updateModuleRow(row.id, { module: v })} disabled={!row.niveau}>
+                              <Select value={row.module} onValueChange={v => {
+                                const dbMod = dbModules.find(m => m.intitule === v);
+                                updateModuleRow(row.id, { module: v, moduleId: dbMod?.id });
+                              }} disabled={!row.niveau}>
                                 <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={row.niveau ? "Choisir un module…" : "Choisissez d'abord le niveau"} /></SelectTrigger>
                                 <SelectContent>
                                   {(() => {
-                                    const mods = getModulesForDeptsAndNiveau(teacherDepts, row.niveau);
+                                    const mods = dbModules.length > 0
+                                      ? dbModules.filter(m => !row.niveau || m.niveau === row.niveau)
+                                      : getModulesForDeptsAndNiveau(teacherDepts, row.niveau);
                                     return mods.length === 0
                                       ? <SelectItem value="__none" disabled>Aucun module pour ce niveau</SelectItem>
-                                      : mods.map(m => <SelectItem key={m.id} value={m.intitule}>{m.intitule}</SelectItem>);
+                                      : mods.map(m => <SelectItem key={m.id ?? m.intitule} value={m.intitule}>{m.intitule}</SelectItem>);
                                   })()}
                                 </SelectContent>
                               </Select>

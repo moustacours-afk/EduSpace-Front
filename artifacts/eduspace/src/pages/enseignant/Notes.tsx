@@ -56,7 +56,7 @@ function roleLabel(role: TeacherRole) {
 
 function buildHeaders(role: TeacherRole, tab: TabType) {
   const base = ["Matricule", "Nom", "Prénom"];
-  if (tab === "examen") return [...base, "Note Examen (/20)", "Absent", "Observation"];
+  if (tab === "examen") return [...base, "Groupe", "Note Examen (/20)", "Absent", "Observation"];
   if (role === "cc")    return [...base, "Note Contrôle (/20)", "Absent", "Observation"];
   if (role === "tp")    return [...base, "Note TP (/20)", "Absent", "Observation"];
   return [...base, "Note Contrôle (/20)", "Note TP (/20)", "Absent", "Observation"];
@@ -73,7 +73,7 @@ function exportCSV(
   const rows = students.map((s) => {
     const g = grades[s.id] ?? { cc: "", tp: "", absent: false, observation: "" };
     const abs = g.absent ? "ABS" : "";
-    if (tab === "examen") return [s.matricule, s.nom, s.prenom, g.absent ? "ABS" : g.cc, abs, g.observation];
+    if (tab === "examen") return [s.matricule, s.nom, s.prenom, s.groupe, g.absent ? "ABS" : g.cc, abs, g.observation];
     if (role === "cc")    return [s.matricule, s.nom, s.prenom, g.absent ? "ABS" : g.cc, abs, g.observation];
     if (role === "tp")    return [s.matricule, s.nom, s.prenom, g.absent ? "ABS" : g.tp, abs, g.observation];
     return [s.matricule, s.nom, s.prenom, g.absent ? "ABS" : g.cc, g.absent ? "ABS" : g.tp, abs, g.observation];
@@ -118,7 +118,33 @@ export default function EnseignantNotes() {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [draftSaved, setDraftSaved] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
+
+  function draftKey() {
+    if (!selectedModule) return null;
+    if (tab === "examen") return `notes_draft_${selectedModule.key}_ALL_examen_${session}`;
+    if (!selectedGroupe) return null;
+    return `notes_draft_${selectedModule.key}_${selectedGroupe}_cc`;
+  }
+
+  function saveDraft() {
+    const key = draftKey();
+    if (!key) return;
+    localStorage.setItem(key, JSON.stringify(grades));
+    setDraftSaved(true);
+    setTimeout(() => setDraftSaved(false), 2000);
+  }
+
+  function loadDraft(modKey: string, groupe: string, t: TabType, sess: string) {
+    const key = `notes_draft_${modKey}_${groupe}_${t}_${sess}`;
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      try { setGrades(JSON.parse(raw)); } catch { /* ignore */ }
+    } else {
+      setGrades({});
+    }
+  }
 
   // Real data from API
   const [allAssignments, setAllAssignments] = useState<Assignment[]>([]);
@@ -147,8 +173,8 @@ export default function EnseignantNotes() {
     }).catch(() => {});
   }, []);
 
-  // Load students when a module+groupe is selected
-  const fetchStudents = useCallback(async (niv: string, grp: string) => {
+  // Load students when a module+groupe is selected (groupe optional for examen)
+  const fetchStudents = useCallback(async (niv: string, grp?: string) => {
     setLoadingStudents(true);
     try {
       const data = await api.students(niv, grp) as Record<string, unknown>[];
@@ -164,12 +190,15 @@ export default function EnseignantNotes() {
   }, []);
 
   useEffect(() => {
-    if (selectedModule && selectedGroupe && niveau) {
+    if (tab === "examen" && selectedModule && niveau && semestre) {
+      // Examen: responsable fills notes for ALL students at this niveau
+      fetchStudents(niveau);
+    } else if (tab === "cc" && selectedModule && selectedGroupe && niveau) {
       fetchStudents(niveau, selectedGroupe);
     } else {
       setStudents([]);
     }
-  }, [selectedModule, selectedGroupe, niveau, fetchStudents]);
+  }, [selectedModule, selectedGroupe, niveau, semestre, tab, fetchStudents]);
 
   const semestres = niveau ? semestresParNiveau[niveau] ?? [] : [];
 
@@ -304,7 +333,7 @@ export default function EnseignantNotes() {
                 {tab === "examen" && (
                   <div className="flex-1 min-w-[170px]">
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Session</label>
-                    <Select value={session} onValueChange={(v) => { setSession(v); setGrades({}); setSubmitted(false); }}>
+                    <Select value={session} onValueChange={(v) => { setSession(v); setSubmitted(false); if (selectedModule && selectedGroupe) loadDraft(selectedModule.key, selectedGroupe, tab, v); else setGrades({}); }}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Session normale">Session normale</SelectItem>
@@ -376,9 +405,9 @@ export default function EnseignantNotes() {
             )}
           </AnimatePresence>
 
-          {/* Groups */}
+          {/* Groups — CC/TP only; examen loads all students automatically */}
           <AnimatePresence>
-            {selectedModule && (
+            {tab === "cc" && selectedModule && (
               <motion.div key="groups" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 <Card className="p-5">
                   <p className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -391,7 +420,7 @@ export default function EnseignantNotes() {
                       return (
                         <button
                           key={g}
-                          onClick={() => { setSelectedGroupe(g); setGrades({}); setSubmitted(false); }}
+                          onClick={() => { setSelectedGroupe(g); setSubmitted(false); if (selectedModule) loadDraft(selectedModule.key, g, tab, session); }}
                           className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
                             selectedGroupe === g
                               ? "bg-primary text-white border-primary shadow-sm"
@@ -409,6 +438,22 @@ export default function EnseignantNotes() {
             )}
           </AnimatePresence>
 
+          {/* Examen info banner */}
+          <AnimatePresence>
+            {tab === "examen" && selectedModule && students.length > 0 && !loadingStudents && (
+              <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800">
+                  <ShieldCheck className="w-4 h-4 flex-shrink-0 text-blue-600" />
+                  <span>
+                    Examen — <strong>{niveau}</strong> · {students.length} étudiant(s) réparti(s) en{" "}
+                    <strong>{[...new Set(students.map(s => s.groupe))].length} groupe(s)</strong> :{" "}
+                    {[...new Set(students.map(s => s.groupe))].join(", ")}
+                  </span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Loading indicator for students */}
           {loadingStudents && (
             <Card className="p-6 text-center text-sm text-muted-foreground">
@@ -418,7 +463,7 @@ export default function EnseignantNotes() {
 
           {/* Student table */}
           <AnimatePresence>
-            {selectedModule && selectedGroupe && students.length > 0 && !submitted && !loadingStudents && (
+            {selectedModule && (tab === "examen" || selectedGroupe) && students.length > 0 && !submitted && !loadingStudents && (
               <motion.div key="table" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 <Card>
                   {/* Table header */}
@@ -426,8 +471,9 @@ export default function EnseignantNotes() {
                     <div className="flex items-center gap-2">
                       <ClipboardList className="w-4 h-4 text-primary" />
                       <span className="font-semibold text-sm">
-                        {selectedModule.intitule} — {selectedGroupe}
-                        {tab === "examen" && <span className="ml-1 text-muted-foreground font-normal">({session})</span>}
+                        {selectedModule.intitule}
+                        {tab === "cc" && <> — {selectedGroupe}</>}
+                        {tab === "examen" && <span className="ml-1 text-muted-foreground font-normal">— Tous les groupes ({session})</span>}
                         <span className="ml-2 text-muted-foreground font-normal text-xs">({students.length} étudiants)</span>
                       </span>
                     </div>
@@ -455,7 +501,10 @@ export default function EnseignantNotes() {
                           <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Nom</th>
                           <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Prénom</th>
                           {tab === "examen" ? (
-                            <th className="text-center px-3 py-3 font-semibold text-muted-foreground">Note Examen /20</th>
+                            <>
+                              <th className="text-left px-3 py-3 font-semibold text-muted-foreground">Groupe</th>
+                              <th className="text-center px-3 py-3 font-semibold text-muted-foreground">Note Examen /20</th>
+                            </>
                           ) : role === "cc+tp" ? (
                             <>
                               <th className="text-center px-3 py-3 font-semibold text-muted-foreground">Note Contrôle /20</th>
@@ -484,13 +533,16 @@ export default function EnseignantNotes() {
                               <td className="px-4 py-2.5">{s.prenom}</td>
 
                               {tab === "examen" ? (
-                                <td className="px-3 py-2.5 text-center">
-                                  <Input type="number" min="0" max="20" step="0.25"
-                                    value={g.absent ? "" : g.cc}
-                                    onChange={(e) => setGradeField(s.id, "cc", e.target.value)}
-                                    disabled={g.absent}
-                                    className="w-20 mx-auto text-center h-8 text-xs" placeholder="—" />
-                                </td>
+                                <>
+                                  <td className="px-3 py-2.5 text-xs text-muted-foreground font-medium">{s.groupe}</td>
+                                  <td className="px-3 py-2.5 text-center">
+                                    <Input type="number" min="0" max="20" step="0.25"
+                                      value={g.absent ? "" : g.cc}
+                                      onChange={(e) => setGradeField(s.id, "cc", e.target.value)}
+                                      disabled={g.absent}
+                                      className="w-20 mx-auto text-center h-8 text-xs" placeholder="—" />
+                                  </td>
+                                </>
                               ) : role === "cc+tp" ? (
                                 <>
                                   <td className="px-3 py-2.5 text-center">
@@ -559,7 +611,9 @@ export default function EnseignantNotes() {
                         <p className="text-xs text-red-600">{submitError}</p>
                       )}
                       <div className="flex gap-3">
-                        <Button variant="outline" disabled={submitting}>Enregistrer (brouillon)</Button>
+                        <Button variant="outline" disabled={submitting} onClick={saveDraft} className="gap-2">
+                          {draftSaved ? <><CheckCircle className="w-4 h-4 text-green-600" /><span className="text-green-700">Brouillon enregistré</span></> : "Enregistrer (brouillon)"}
+                        </Button>
                         <Button
                           disabled={submitting}
                           onClick={async () => {
@@ -567,24 +621,54 @@ export default function EnseignantNotes() {
                             setSubmitting(true);
                             setSubmitError("");
                             try {
-                              await api.submitGrades({
-                                module_id: selectedModule.id,
-                                niveau,
-                                groupe: selectedGroupe,
-                                semestre,
-                                session,
-                                students: students.map(s => {
-                                  const g = grades[s.id] ?? { cc: "", tp: "", absent: false, observation: "" };
-                                  return {
-                                    matricule: s.matricule,
-                                    noteCC:   g.absent ? null : (g.cc   !== "" ? parseFloat(g.cc)   : null),
-                                    noteExam: g.absent ? null : (g.cc   !== "" && tab === "examen" ? parseFloat(g.cc) : null),
-                                    noteTP:   g.absent ? null : (g.tp   !== "" ? parseFloat(g.tp)   : null),
-                                    absent:   g.absent,
-                                  };
-                                }),
-                              });
+                              if (tab === "examen") {
+                                // Submit one soumission per distinct groupe
+                                const groupeMap = new Map<string, typeof students>();
+                                students.forEach(s => {
+                                  if (!groupeMap.has(s.groupe)) groupeMap.set(s.groupe, []);
+                                  groupeMap.get(s.groupe)!.push(s);
+                                });
+                                for (const [grp, grpStudents] of groupeMap.entries()) {
+                                  await api.submitGrades({
+                                    module_id: selectedModule.id,
+                                    niveau,
+                                    groupe: grp,
+                                    semestre,
+                                    session,
+                                    students: grpStudents.map(s => {
+                                      const g = grades[s.id] ?? { cc: "", tp: "", absent: false, observation: "" };
+                                      return {
+                                        matricule: s.matricule,
+                                        noteCC:   null,
+                                        noteExam: g.absent ? null : (g.cc !== "" ? parseFloat(g.cc) : null),
+                                        noteTP:   null,
+                                        absent:   g.absent,
+                                      };
+                                    }),
+                                  });
+                                }
+                              } else {
+                                await api.submitGrades({
+                                  module_id: selectedModule.id,
+                                  niveau,
+                                  groupe: selectedGroupe,
+                                  semestre,
+                                  session,
+                                  students: students.map(s => {
+                                    const g = grades[s.id] ?? { cc: "", tp: "", absent: false, observation: "" };
+                                    return {
+                                      matricule: s.matricule,
+                                      noteCC:   g.absent ? null : (g.cc !== "" ? parseFloat(g.cc) : null),
+                                      noteExam: null,
+                                      noteTP:   g.absent ? null : (g.tp !== "" ? parseFloat(g.tp) : null),
+                                      absent:   g.absent,
+                                    };
+                                  }),
+                                });
+                              }
                               setSubmitted(true);
+                              const key = draftKey();
+                              if (key) localStorage.removeItem(key);
                             } catch (err: unknown) {
                               setSubmitError(err instanceof Error ? err.message : "Erreur lors de la soumission.");
                             } finally {
@@ -594,7 +678,7 @@ export default function EnseignantNotes() {
                           className="gap-2"
                         >
                           {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                          {submitting ? "Envoi…" : "Soumettre pour validation"}
+                          {submitting ? "Envoi en cours…" : "Soumettre pour validation"}
                         </Button>
                       </div>
                     </div>
@@ -612,14 +696,19 @@ export default function EnseignantNotes() {
                   <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
                   <p className="font-semibold text-green-800 text-lg">Notes soumises pour validation</p>
                   <p className="text-green-600 text-sm mt-2">
-                    {selectedModule?.intitule} — {selectedGroupe} — {niveau} {semestre}
-                    {tab === "examen" && ` (${session})`} ont été envoyées à l'agent pédagogique.
+                    {selectedModule?.intitule} —{" "}
+                    {tab === "examen"
+                      ? `${niveau} — tous les groupes (${session})`
+                      : `${selectedGroupe} — ${niveau} ${semestre}`
+                    } ont été envoyées à l'agent pédagogique.
                   </p>
                   <Badge className="mt-4 bg-amber-100 text-amber-800 border-amber-200">En attente de validation</Badge>
                   <div className="mt-4 flex gap-3 justify-center">
-                    <Button variant="outline" size="sm" onClick={() => { setSubmitted(false); setSelectedGroupe(""); setGrades({}); }}>
-                      Autre groupe
-                    </Button>
+                    {tab === "cc" && (
+                      <Button variant="outline" size="sm" onClick={() => { setSubmitted(false); setSelectedGroupe(""); setGrades({}); }}>
+                        Autre groupe
+                      </Button>
+                    )}
                     <Button variant="outline" size="sm" onClick={() => { setSubmitted(false); resetSelection(); }}>
                       Autre module
                     </Button>

@@ -13,15 +13,15 @@ export function TeacherSidebar() {
   const [location, setLocation] = useLocation();
 
   return (
-    <aside className="w-64 min-h-screen flex flex-col bg-sidebar text-sidebar-foreground">
-      <div className="p-6 border-b border-sidebar-border">
+    <aside className="w-64 min-h-screen flex flex-col" style={{ background: "hsl(222 47% 15%)" }}>
+      <div className="p-6 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-brand flex items-center justify-center">
-            <GraduationCap className="w-5 h-5 text-brand-foreground" />
+          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
+            <GraduationCap className="w-5 h-5 text-white" />
           </div>
           <div>
-            <p className="font-bold text-lg leading-tight text-sidebar-foreground">EduSpace</p>
-            <p className="text-xs text-sidebar-foreground/50">Espace Enseignant</p>
+            <p className="font-bold text-lg leading-tight text-white">EduSpace</p>
+            <p className="text-xs text-white/50">Espace Enseignant</p>
           </div>
         </div>
       </div>
@@ -35,8 +35,8 @@ export function TeacherSidebar() {
               href={item.href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                 active
-                  ? "bg-brand text-brand-foreground"
-                  : "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  ? "bg-primary text-white"
+                  : "text-white/60 hover:bg-white/10 hover:text-white"
               }`}
             >
               <item.icon className="w-4 h-4 flex-shrink-0" />
@@ -46,10 +46,10 @@ export function TeacherSidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-sidebar-border">
+      <div className="p-4 border-t border-white/10">
         <button
           onClick={() => (window.location.href = "/")}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all w-full"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-white/50 hover:bg-white/10 hover:text-white transition-all w-full"
           data-testid="button-logout-teacher"
         >
           <LogOut className="w-4 h-4" />

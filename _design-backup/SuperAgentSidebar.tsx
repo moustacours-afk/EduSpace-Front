@@ -25,22 +25,23 @@ export function SuperAgentSidebar() {
 
   return (
     <aside
-      className={`${collapsed ? "w-16" : "w-64"} min-h-screen flex flex-col flex-shrink-0 transition-all duration-200 bg-sidebar text-sidebar-foreground`}
+      className={`${collapsed ? "w-16" : "w-64"} min-h-screen flex flex-col flex-shrink-0 transition-all duration-200`}
+      style={{ background: "hsl(270 60% 10%)" }}
     >
-      <div className={`p-4 border-b border-sidebar-border flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
+      <div className={`p-4 border-b border-white/10 flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
         <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : ""}`}>
-          <div className="w-9 h-9 rounded-xl bg-brand flex items-center justify-center flex-shrink-0">
-            <ShieldCheck className="w-4 h-4 text-brand-foreground" />
+          <div className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center flex-shrink-0">
+            <ShieldCheck className="w-4 h-4 text-white" />
           </div>
           {!collapsed && (
             <div>
-              <p className="font-bold text-base leading-tight text-sidebar-foreground">EduSpace</p>
-              <p className="text-xs text-sidebar-foreground/50">Super Agent</p>
+              <p className="font-bold text-base leading-tight text-white">EduSpace</p>
+              <p className="text-xs text-white/50">Super Agent</p>
             </div>
           )}
         </div>
         {!collapsed && (
-          <button onClick={toggle} className="text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors p-1 rounded ml-2">
+          <button onClick={toggle} className="text-white/40 hover:text-white transition-colors p-1 rounded ml-2">
             <ChevronLeft className="w-4 h-4" />
           </button>
         )}
@@ -52,7 +53,7 @@ export function SuperAgentSidebar() {
           return (
             <Link key={href} href={href}>
               <a className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
-                active ? "bg-brand text-brand-foreground" : "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                active ? "bg-purple-600 text-white" : "text-white/60 hover:bg-white/10 hover:text-white"
               } ${collapsed ? "justify-center" : ""}`}>
                 <Icon className="w-4 h-4 flex-shrink-0" />
                 {!collapsed && <span className="text-sm font-medium">{label}</span>}
@@ -62,15 +63,15 @@ export function SuperAgentSidebar() {
         })}
       </nav>
 
-      <div className="p-2 border-t border-sidebar-border">
+      <div className="p-2 border-t border-white/10">
         {collapsed ? (
-          <button onClick={toggle} className="w-full flex justify-center p-2 text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors">
+          <button onClick={toggle} className="w-full flex justify-center p-2 text-white/40 hover:text-white transition-colors">
             <ChevronRight className="w-4 h-4" />
           </button>
         ) : (
           <Link href="/login/super-agent">
             <a
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all cursor-pointer"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
               onClick={() => sessionStorage.removeItem("superAgentLoggedIn")}
             >
               <LogOut className="w-4 h-4" />

@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { GraduationCap, ArrowLeft, Lock, Hash } from "lucide-react";
+import { BookMarked, ArrowLeft, Lock, Hash } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -47,36 +47,37 @@ export default function LoginEtudiant() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center p-8">
+    <div className="min-h-screen bg-background flex items-center justify-center p-8 relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-brand/[0.06] to-transparent" />
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="w-full max-w-md"
+        className="w-full max-w-md relative"
       >
         <button
           onClick={() => setLocation("/")}
-          className="flex items-center gap-2 text-gray-500 hover:text-gray-800 mb-8 text-sm transition-colors"
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-8 text-sm transition-colors"
           data-testid="button-back"
         >
           <ArrowLeft className="w-4 h-4" />
           Retour au choix du profil
         </button>
 
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-8">
+        <div className="bg-card border border-card-border rounded-2xl shadow-lg p-8">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center shadow-md">
-              <GraduationCap className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-sm">
+              <BookMarked className="w-6 h-6 text-primary-foreground" strokeWidth={1.75} />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Espace Étudiant</h1>
-              <p className="text-sm text-gray-400">Connexion à votre compte</p>
+              <h1 className="text-xl font-bold text-foreground">Espace Étudiant</h1>
+              <p className="text-sm text-muted-foreground">Connexion à votre compte</p>
             </div>
           </div>
 
           {/* Demo credentials hint */}
-          <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-5 text-xs text-blue-700">
-            <span className="font-semibold">Compte démo :</span> matricule = <span className="font-mono">k.bensalem@univ-alger.dz</span> — mot de passe: <span className="font-mono">password</span>
+          <div className="bg-muted border border-border rounded-lg px-3 py-2 mb-5 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">Compte démo :</span> matricule = <span className="font-mono">k.bensalem@univ-alger.dz</span> — mot de passe: <span className="font-mono">password</span>
           </div>
 
           <Form {...form}>
@@ -86,10 +87,10 @@ export default function LoginEtudiant() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-gray-700 font-medium">Numéro Matricule</FormLabel>
+                    <FormLabel className="text-foreground font-medium">Numéro Matricule</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                           {...field}
                           className="pl-10"
@@ -108,10 +109,10 @@ export default function LoginEtudiant() {
                 name="motDePasse"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-gray-700 font-medium">Mot de passe</FormLabel>
+                    <FormLabel className="text-foreground font-medium">Mot de passe</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                           {...field}
                           type="password"
@@ -127,7 +128,7 @@ export default function LoginEtudiant() {
               />
 
               {loginError && (
-                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">
+                <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-2.5">
                   {loginError}
                 </div>
               )}
@@ -135,7 +136,7 @@ export default function LoginEtudiant() {
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-5 rounded-xl transition-all"
+                className="w-full font-semibold py-5 rounded-xl"
                 data-testid="button-submit-login"
               >
                 {loading ? "Connexion…" : "Se connecter"}

@@ -26,7 +26,7 @@ export function StudentSidebar() {
   const navItemClass = (active: boolean) =>
     `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
       active
-        ? "bg-brand text-brand-foreground"
+        ? "bg-primary text-white"
         : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
     }`;
 
@@ -37,8 +37,8 @@ export function StudentSidebar() {
       <div className={`p-4 border-b border-sidebar-border flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
         {!collapsed && (
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center flex-shrink-0">
-              <GraduationCap className="w-4 h-4 text-brand-foreground" />
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+              <GraduationCap className="w-4 h-4 text-white" />
             </div>
             <div>
               <p className="font-bold text-sm leading-tight">EduSpace</p>
@@ -64,7 +64,7 @@ export function StudentSidebar() {
           <Home className="w-4 h-4 flex-shrink-0" />
           {!collapsed && <span>Accueil</span>}
           {!collapsed && unread > 0 && (
-            <Badge className="ml-auto bg-brand text-brand-foreground text-xs px-1.5 py-0">{unread}</Badge>
+            <Badge className="ml-auto bg-amber-500 text-white text-xs px-1.5 py-0">{unread}</Badge>
           )}
         </Link>
 
@@ -90,7 +90,7 @@ export function StudentSidebar() {
                   href={sub.href}
                   className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all duration-150 ${
                     location === sub.href
-                      ? "bg-brand text-brand-foreground"
+                      ? "bg-primary text-white"
                       : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                   }`}
                 >

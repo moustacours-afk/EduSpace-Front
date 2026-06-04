@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AgentSidebar } from "@/components/AgentSidebar";
 import { Card } from "@/components/ui/card";
@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  CheckCircle, XCircle, Clock, Send, Eye, X, AlertTriangle,
-  Search, FileText, ChevronRight, ArrowLeft, UserX, Flag,
+  CheckCircle, XCircle, Clock, Send, Eye, AlertTriangle,
+  Search, FileText, ArrowLeft, UserX, Flag, Loader2,
 } from "lucide-react";
-import { gradeSubmissions, type GradeSubmission, type GradeStatus } from "@/data/mockData";
+import { type GradeSubmission, type GradeStatus } from "@/data/mockData";
+import { agent as api } from "@/lib/api";
 import {
   getAcceptedAppealsForAgent, agentValidateAppeal,
   type Appeal, type AppealNoteType,
@@ -41,7 +42,9 @@ function calcMoyenne(cc: number | null, exam: number | null) {
 }
 
 export default function AgentValidationNotes() {
-  const [submissions, setSubmissions] = useState<GradeSubmission[]>(gradeSubmissions);
+  const [submissions, setSubmissions] = useState<GradeSubmission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [search, setSearch] = useState("");
   const [filterNiveau, setFilterNiveau] = useState("all");
   const [filterStatut, setFilterStatut] = useState("all");
@@ -51,6 +54,14 @@ export default function AgentValidationNotes() {
   const [publishAll, setPublishAll] = useState(false);
   const [pendingAppeals, setPendingAppeals] = useState<Appeal[]>(() => getAcceptedAppealsForAgent());
   const [appealConfirm, setAppealConfirm] = useState<Appeal | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    api.gradeSubmissions()
+      .then((data) => setSubmissions(data as GradeSubmission[]))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = submissions.filter((s) => {
     if (filterStatut !== "all" && s.statut !== filterStatut) return false;
@@ -67,25 +78,54 @@ export default function AgentValidationNotes() {
   };
 
   function validate(id: string) {
-    setSubmissions((prev) => prev.map((s) => s.id === id ? { ...s, statut: "valide" as GradeStatus } : s));
-    if (selected?.id === id) setSelected((prev) => prev ? { ...prev, statut: "valide" } : null);
+    api.validateGrade(Number(id)).then(() => {
+      setSubmissions((prev) => prev.map((s) => s.id === id ? { ...s, statut: "valide" as GradeStatus } : s));
+      if (selected?.id === id) setSelected((prev) => prev ? { ...prev, statut: "valide" } : null);
+    }).catch(() => {});
   }
 
   function publish(id: string) {
-    setSubmissions((prev) => prev.map((s) => s.id === id ? { ...s, statut: "publie" as GradeStatus } : s));
-    if (selected?.id === id) setSelected((prev) => prev ? { ...prev, statut: "publie" } : null);
+    api.publishGrade(Number(id)).then(() => {
+      setSubmissions((prev) => prev.map((s) => s.id === id ? { ...s, statut: "publie" as GradeStatus } : s));
+      if (selected?.id === id) setSelected((prev) => prev ? { ...prev, statut: "publie" } : null);
+    }).catch(() => {});
   }
 
   function reject(id: string, reason: string) {
-    setSubmissions((prev) =>
-      prev.map((s) => s.id === id ? { ...s, statut: "en_attente" as GradeStatus, rejectionReason: reason } : s)
-    );
-    if (selected?.id === id) setSelected((prev) => prev ? { ...prev, statut: "en_attente", rejectionReason: reason } : null);
+    api.rejectGrade(Number(id), reason).then(() => {
+      setSubmissions((prev) =>
+        prev.map((s) => s.id === id ? { ...s, statut: "en_attente" as GradeStatus, rejectionReason: reason } : s)
+      );
+      if (selected?.id === id) setSelected((prev) => prev ? { ...prev, statut: "en_attente", rejectionReason: reason } : null);
+    }).catch(() => {});
   }
 
   function publishAllValidated() {
-    setSubmissions((prev) => prev.map((s) => s.statut === "valide" ? { ...s, statut: "publie" as GradeStatus } : s));
-    setPublishAll(true);
+    const validated = submissions.filter((s) => s.statut === "valide");
+    Promise.all(validated.map((s) => api.publishGrade(Number(s.id)))).then(() => {
+      setSubmissions((prev) => prev.map((s) => s.statut === "valide" ? { ...s, statut: "publie" as GradeStatus } : s));
+      setPublishAll(true);
+    }).catch(() => {});
+  }
+
+  function openDetail(sub: GradeSubmission) {
+    if (sub.students && sub.students.length > 0) { setSelected(sub); return; }
+    setLoadingDetail(true);
+    api.gradeSubmission(Number(sub.id))
+      .then((data) => { setSelected(data as GradeSubmission); })
+      .catch(() => { setSelected(sub); })
+      .finally(() => setLoadingDetail(false));
+  }
+
+  if (loadingDetail) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <AgentSidebar />
+        <main className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </main>
+      </div>
+    );
   }
 
   if (selected) {
@@ -164,7 +204,7 @@ export default function AgentValidationNotes() {
                     </tr>
                   </thead>
                   <tbody>
-                    {currentSub.students.map((s, i) => {
+                    {(currentSub.students ?? []).map((s, i) => {
                       const moy = calcMoyenne(s.noteCC, s.noteExam);
                       const resultat = s.absent ? "Absent" : moy === null ? "—" : moy >= 10 ? "Admis" : "Ajourné";
                       return (
@@ -354,10 +394,14 @@ export default function AgentValidationNotes() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.length === 0 ? (
+                    {loading ? (
+                      <tr><td colSpan={7} className="text-center py-10 text-muted-foreground text-sm">
+                        <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />Chargement…
+                      </td></tr>
+                    ) : filtered.length === 0 ? (
                       <tr><td colSpan={7} className="text-center py-10 text-muted-foreground text-sm">Aucun module trouvé</td></tr>
                     ) : filtered.map((sub) => {
-                      const cfg = statusConfig[sub.statut];
+                      const cfg = statusConfig[sub.statut] ?? statusConfig["en_attente"];
                       return (
                         <tr key={sub.id} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
                           <td className="px-4 py-3 font-medium">{sub.module}
@@ -366,13 +410,13 @@ export default function AgentValidationNotes() {
                           <td className="px-4 py-3 text-xs text-muted-foreground">{sub.filiere}<br/>{sub.niveau}</td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">{sub.groupe}</td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">{sub.enseignant}</td>
-                          <td className="px-4 py-3 text-center font-semibold">{sub.students.length}</td>
+                          <td className="px-4 py-3 text-center font-semibold">{(sub as unknown as { nbEtudiants?: number }).nbEtudiants ?? sub.students?.length ?? 0}</td>
                           <td className="px-4 py-3 text-center">
                             <Badge className={`text-xs border ${cfg.color}`}>{cfg.label}</Badge>
                           </td>
                           <td className="px-4 py-3 text-center">
                             <div className="flex justify-center gap-1">
-                              <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={() => setSelected(sub)}>
+                              <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={() => openDetail(sub)}>
                                 <Eye className="w-3.5 h-3.5" />Voir
                               </Button>
                               {sub.statut === "soumis" && (

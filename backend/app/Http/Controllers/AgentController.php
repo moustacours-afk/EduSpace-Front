@@ -182,8 +182,14 @@ class AgentController extends Controller
         if ($request->has('modules_details') && is_array($request->modules_details)) {
             $syncData = [];
             foreach ($request->modules_details as $row) {
-                $module = Module::where('intitule', $row['module'] ?? '')->first();
+                // Prefer explicit moduleId, fall back to name lookup
+                $moduleId = $row['moduleId'] ?? null;
+                $module   = $moduleId ? Module::find((int) $moduleId) : null;
+                if (! $module && ! empty($row['module'])) {
+                    $module = Module::where('intitule', $row['module'])->first();
+                }
                 if (! $module) continue;
+
                 $types  = $row['types'] ?? [];
                 $role   = (in_array('CM', $types) && in_array('TP', $types)) ? 'cc+tp'
                         : (in_array('CM', $types) ? 'cc'
@@ -199,6 +205,20 @@ class AgentController extends Controller
         }
 
         return response()->json($ens);
+    }
+
+    public function modules(Request $request)
+    {
+        $q = Module::query();
+        if ($request->has('niveau'))   $q->where('niveau', $request->niveau);
+        if ($request->has('filiere'))  $q->where('filiere', $request->filiere);
+        return response()->json($q->orderBy('intitule')->get()->map(fn ($m) => [
+            'id'       => $m->id,
+            'intitule' => $m->intitule,
+            'niveau'   => $m->niveau,
+            'filiere'  => $m->filiere,
+            'semestre' => $m->semestre,
+        ]));
     }
 
     // ─── Grade submissions ──────────────────────────────────────────────────────
@@ -221,6 +241,38 @@ class AgentController extends Controller
             'nbEtudiants' => $s->nb_etudiants,
         ]);
         return response()->json($submissions);
+    }
+
+    public function showGradeSubmission(Request $request, int $id)
+    {
+        $sub = SoumissionNote::with(['module', 'enseignant'])->findOrFail($id);
+        $notes = Note::with('etudiant')
+            ->where('module_id', $sub->module_id)
+            ->where('semestre', $sub->semestre)
+            ->whereHas('etudiant', fn ($q) => $q->where('niveau', $sub->niveau)->where('groupe', $sub->groupe))
+            ->get()
+            ->map(fn ($n) => [
+                'matricule' => $n->etudiant->matricule,
+                'nom'       => $n->etudiant->nom,
+                'prenom'    => $n->etudiant->prenom,
+                'noteCC'    => $n->note_controle,
+                'noteExam'  => $n->note_exam,
+                'absent'    => (bool) $n->absent,
+            ]);
+        return response()->json([
+            'id'          => $sub->id,
+            'module'      => $sub->module->intitule,
+            'filiere'     => $sub->filiere,
+            'niveau'      => $sub->niveau,
+            'groupe'      => $sub->groupe,
+            'enseignant'  => $sub->enseignant ? 'Dr. ' . $sub->enseignant->nom : '—',
+            'semestre'    => $sub->semestre,
+            'statut'      => $sub->statut,
+            'dateDepot'   => $sub->date_depot,
+            'notesSoumises' => $sub->notes_soumises,
+            'rejectionReason' => $sub->rejection_reason,
+            'students'    => $notes,
+        ]);
     }
 
     public function validateGradeSubmission(Request $request, int $id)
