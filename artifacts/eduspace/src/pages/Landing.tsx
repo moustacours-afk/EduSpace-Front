@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { BookMarked, Presentation, Building2, GraduationCap, ArrowRight } from "lucide-react";
+import { BookMarked, Presentation, Building2, ArrowRight } from "lucide-react";
 
 const roles = [
   {
@@ -42,8 +42,8 @@ export default function Landing() {
         className="relative text-center mb-12"
       >
         <div className="inline-flex items-center gap-3 mb-7 px-4 py-2.5 bg-card border border-card-border rounded-xl shadow-sm">
-          <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
-            <GraduationCap className="w-5 h-5 text-primary-foreground" />
+          <div className="w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center shadow-sm">
+            <img src="/logo.svg" className="w-full h-full object-cover" alt="EduSpace" />
           </div>
           <span className="font-serif font-bold text-xl text-foreground tracking-tight">EduSpace</span>
         </div>

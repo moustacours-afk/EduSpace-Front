@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { clearAuth } from "@/lib/auth";
 import {
   Home, BookOpen, Calendar, FolderOpen, User, LogOut,
-  GraduationCap, ChevronLeft, ChevronRight, ChevronDown,
+  ChevronLeft, ChevronRight, ChevronDown,
   ClipboardList, FileCheck, BarChart2, AlertOctagon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -37,8 +38,8 @@ export function StudentSidebar() {
       <div className={`p-4 border-b border-sidebar-border flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
         {!collapsed && (
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center flex-shrink-0">
-              <GraduationCap className="w-4 h-4 text-brand-foreground" />
+            <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 shadow-sm ring-1 ring-white/10">
+              <img src="/logo.svg" className="w-full h-full object-cover" alt="EduSpace" />
             </div>
             <div>
               <p className="font-bold text-sm leading-tight">EduSpace</p>
@@ -124,7 +125,7 @@ export function StudentSidebar() {
 
       <div className="p-3 border-t border-sidebar-border">
         <button
-          onClick={() => setLocation("/")}
+          onClick={() => { clearAuth(); setLocation("/"); }}
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all w-full ${collapsed ? "justify-center px-2" : ""}`}
           title={collapsed ? "Déconnexion" : undefined}
           data-testid="button-logout"

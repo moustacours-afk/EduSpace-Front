@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { clearAuth } from "@/lib/auth";
 import {
   LayoutDashboard, Users, CalendarDays, CheckSquare, LogOut,
   GraduationCap, Bell, BookOpen, Calendar,
@@ -62,8 +63,8 @@ export function AgentSidebar() {
     >
       <div className={`p-4 border-b border-sidebar-border flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
         <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : ""}`}>
-          <div className="w-9 h-9 rounded-xl bg-brand flex items-center justify-center flex-shrink-0">
-            <BookOpen className="w-4 h-4 text-brand-foreground" />
+          <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 shadow-sm ring-1 ring-white/10">
+            <img src="/logo.svg" className="w-full h-full object-cover" alt="EduSpace" />
           </div>
           {!collapsed && (
             <div>
@@ -115,7 +116,7 @@ export function AgentSidebar() {
             <p className="text-xs text-sidebar-foreground/40">agent001</p>
           </div>
         )}
-        <button onClick={() => { sessionStorage.removeItem("agentLoggedIn"); sessionStorage.removeItem("sidebarCollapsed"); window.location.href = "/"; }}
+        <button onClick={() => { clearAuth(); window.location.href = "/"; }}
           className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all w-full ${collapsed ? "justify-center" : ""}`}
           title={collapsed ? "Déconnexion" : undefined}>
           <LogOut className="w-4 h-4" />

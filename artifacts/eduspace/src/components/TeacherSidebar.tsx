@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
-import { Home, Upload, ClipboardList, Calendar, Megaphone, LogOut, GraduationCap } from "lucide-react";
+import { clearAuth } from "@/lib/auth";
+import { Home, Upload, ClipboardList, Calendar, Megaphone, LogOut } from "lucide-react";
 
 const navItems = [
   { href: "/enseignant/dashboard", icon: Home, label: "Accueil" },
@@ -16,8 +17,8 @@ export function TeacherSidebar() {
     <aside className="w-64 min-h-screen flex flex-col bg-sidebar text-sidebar-foreground">
       <div className="p-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-brand flex items-center justify-center">
-            <GraduationCap className="w-5 h-5 text-brand-foreground" />
+          <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-sm ring-1 ring-white/10">
+            <img src="/logo.svg" className="w-full h-full object-cover" alt="EduSpace" />
           </div>
           <div>
             <p className="font-bold text-lg leading-tight text-sidebar-foreground">EduSpace</p>
@@ -48,7 +49,7 @@ export function TeacherSidebar() {
 
       <div className="p-4 border-t border-sidebar-border">
         <button
-          onClick={() => (window.location.href = "/")}
+          onClick={() => { clearAuth(); window.location.href = "/"; }}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all w-full"
           data-testid="button-logout-teacher"
         >
