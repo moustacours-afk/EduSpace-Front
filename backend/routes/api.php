@@ -60,6 +60,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Announcements (teacher-authored)
         Route::post('/annonces', [EnseignantController::class, 'storeAnnonce']);
+        Route::delete('/annonces/{id}', [EnseignantController::class, 'deleteAnnonce']);
 
         // Recours
         Route::get('/recours', [EnseignantController::class, 'recours']);

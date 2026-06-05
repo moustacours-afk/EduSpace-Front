@@ -89,6 +89,7 @@ export const enseignant = {
   students: (niveau: string, groupe?: string) => get<unknown[]>(`/enseignant/students?niveau=${encodeURIComponent(niveau)}${groupe ? `&groupe=${encodeURIComponent(groupe)}` : ''}`),
   annonces: () => get<unknown[]>("/enseignant/annonces"),
   storeAnnonce: (body: unknown) => post<unknown>("/enseignant/annonces", body),
+  deleteAnnonce: (id: number) => del<void>(`/enseignant/annonces/${id}`),
   supports: () => get<unknown[]>("/enseignant/supports"),
   uploadSupport: (body: FormData) => uploadFile<unknown>("/enseignant/supports", body),
   deleteSupport: (id: number) => del<void>(`/enseignant/supports/${id}`),

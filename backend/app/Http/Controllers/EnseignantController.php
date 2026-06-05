@@ -338,9 +338,24 @@ class EnseignantController extends Controller
         $annonces = Annonce::where(function ($q) use ($userId) {
             $q->where('audience', 'all')
               ->orWhere('audience', 'enseignant')
-              ->orWhere('auteur_id', $userId); // always show teacher's own announcements
+              ->orWhere('auteur_id', $userId);
         })->orderByDesc('date_publication')->get();
-        return response()->json($annonces);
+
+        $result = $annonces->map(fn($a) => array_merge($a->toArray(), ['is_mine' => $a->auteur_id === $userId]));
+        return response()->json($result);
+    }
+
+    public function deleteAnnonce(Request $request, int $id)
+    {
+        $userId = $request->user()->id;
+        $annonce = Annonce::findOrFail($id);
+
+        if ($annonce->auteur_id !== $userId) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $annonce->delete();
+        return response()->json(['ok' => true]);
     }
 
     public function recours(Request $request)

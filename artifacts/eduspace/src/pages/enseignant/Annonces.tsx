@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Megaphone, Send, Plus, Clock, Loader2 } from "lucide-react";
+import { Megaphone, Send, Plus, Clock, Loader2, Trash2 } from "lucide-react";
 import { enseignant as api } from "@/lib/api";
 
 interface AnnonceRow {
@@ -16,6 +16,7 @@ interface AnnonceRow {
   categorie: string | null;
   date_publication: string;
   audience: string;
+  is_mine: boolean;
 }
 
 interface ModuleRow { id: number; intitule: string; }
@@ -24,6 +25,14 @@ const container = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } 
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
 export default function EnseignantAnnonces() {
+  const DISMISSED_KEY = "enseignant_dismissed_annonces";
+  const getDismissed = (): number[] => {
+    try { return JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "[]"); } catch { return []; }
+  };
+  const addDismissed = (id: number) => {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify([...new Set([...getDismissed(), id])]));
+  };
+
   const [annonces, setAnnonces] = useState<AnnonceRow[]>([]);
   const [myModules, setMyModules] = useState<ModuleRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,11 +43,13 @@ export default function EnseignantAnnonces() {
   const [moduleSelect, setModuleSelect] = useState("");
   const [sending, setSending]     = useState(false);
   const [sendError, setSendError] = useState("");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const fetchAnnonces = useCallback(async () => {
     try {
       const data = await api.annonces() as AnnonceRow[];
-      setAnnonces(data);
+      const dismissed = getDismissed();
+      setAnnonces(data.filter(a => !dismissed.includes(a.id)));
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, []);
@@ -53,6 +64,19 @@ export default function EnseignantAnnonces() {
       if (mods.length > 0) setModuleSelect(mods[0].intitule);
     }).catch(() => {});
   }, [fetchAnnonces]);
+
+  async function handleDelete(annonce: AnnonceRow) {
+    setDeletingId(annonce.id);
+    try {
+      if (annonce.is_mine) {
+        await api.deleteAnnonce(annonce.id);
+      } else {
+        addDismissed(annonce.id);
+      }
+      setAnnonces(prev => prev.filter(a => a.id !== annonce.id));
+    } catch { /* ignore */ }
+    finally { setDeletingId(null); }
+  }
 
   async function handleSend() {
     if (!titre.trim() || !contenu.trim()) return;
@@ -149,8 +173,21 @@ export default function EnseignantAnnonces() {
               <Card key={a.id} className="p-5">
                 <div className="flex items-start justify-between mb-2">
                   <h3 className="font-semibold">{a.titre}</h3>
-                  <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                    <Clock className="w-3 h-3" />{a.date_publication}
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center gap-1 text-muted-foreground text-xs">
+                      <Clock className="w-3 h-3" />{a.date_publication}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-red-500 hover:bg-red-50"
+                      disabled={deletingId === a.id}
+                      onClick={() => handleDelete(a)}
+                    >
+                      {deletingId === a.id
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <Trash2 className="w-3.5 h-3.5" />}
+                    </Button>
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground mb-3">{a.contenu}</p>
