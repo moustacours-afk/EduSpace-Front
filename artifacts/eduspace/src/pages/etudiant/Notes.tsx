@@ -97,7 +97,8 @@ export default function EtudiantNotes() {
             {filtered.length === 0 ? (
               <Card className="p-12 text-center text-muted-foreground">
                 <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p>Aucune note disponible.</p>
+                <p className="font-medium">Aucune note publiée pour le moment</p>
+                <p className="text-sm mt-1 opacity-70">Vos résultats apparaîtront ici une fois saisis par vos enseignants et validés par l'agent pédagogique.</p>
               </Card>
             ) : (
               <Card>

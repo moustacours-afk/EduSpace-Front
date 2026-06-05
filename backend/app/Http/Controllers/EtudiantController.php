@@ -18,7 +18,7 @@ class EtudiantController extends Controller
     public function notes(Request $request)
     {
         $etudiant = $this->etudiant($request);
-        $notes = $etudiant->notes()->with('module')->get()->map(function ($n) {
+        $notes = $etudiant->notes()->with('module')->where('statut', 'publie')->get()->map(function ($n) {
             return [
                 'id' => $n->id,
                 'moduleId' => $n->module_id,

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Annonce;
+use App\Models\Enseignant;
+use App\Models\EnseignantPermission;
 use App\Models\Etudiant;
 use App\Models\Module;
 use App\Models\Note;
@@ -97,9 +99,36 @@ class EnseignantController extends Controller
         return response()->json($annonce, 201);
     }
 
+    public function myPermissions(Request $request)
+    {
+        $e = $this->enseignant($request);
+        $perm = EnseignantPermission::where('enseignant_id', $e->id)->with('agent')->first();
+        return response()->json([
+            'peut_saisir_cc'     => $perm?->peut_saisir_cc ?? false,
+            'peut_saisir_examen' => $perm?->peut_saisir_examen ?? false,
+            'semestre'           => $perm?->semestre,
+            'grantedBy'          => $perm?->agent ? $perm->agent->prenom . ' ' . $perm->agent->nom : null,
+            'grantedAt'          => $perm?->updated_at?->toDateString(),
+        ]);
+    }
+
     public function submitGrades(Request $request)
     {
         $e = $this->enseignant($request);
+
+        // Check permission
+        $perm = EnseignantPermission::where('enseignant_id', $e->id)->first();
+        $students = $request->input('students', []);
+        $hasCC   = collect($students)->contains(fn ($s) => isset($s['noteCC'])   && $s['noteCC']   !== null && !($s['absent'] ?? false));
+        $hasExam = collect($students)->contains(fn ($s) => isset($s['noteExam']) && $s['noteExam'] !== null && !($s['absent'] ?? false));
+
+        if ($hasCC && (!$perm || !$perm->peut_saisir_cc)) {
+            return response()->json(['message' => 'Permission de saisie Contrôle Continu non accordée. Contactez l\'agent pédagogique.'], 403);
+        }
+        if ($hasExam && (!$perm || !$perm->peut_saisir_examen)) {
+            return response()->json(['message' => 'Permission de saisie Examen non accordée. Contactez l\'agent pédagogique.'], 403);
+        }
+
         $request->validate([
             'module_id'           => 'required|exists:modules,id',
             'niveau'              => 'required|string',

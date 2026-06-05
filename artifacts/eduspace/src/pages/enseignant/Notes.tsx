@@ -146,6 +146,18 @@ export default function EnseignantNotes() {
     }
   }
 
+  // Permission check
+  type Perm = { peut_saisir_cc: boolean; peut_saisir_examen: boolean; grantedBy: string | null };
+  const [perm, setPerm] = useState<Perm | null>(null);
+  const [permLoading, setPermLoading] = useState(true);
+
+  useEffect(() => {
+    api.myPermissions()
+      .then((p) => setPerm(p))
+      .catch(() => setPerm({ peut_saisir_cc: false, peut_saisir_examen: false, grantedBy: null }))
+      .finally(() => setPermLoading(false));
+  }, []);
+
   // Real data from API
   const [allAssignments, setAllAssignments] = useState<Assignment[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -250,6 +262,45 @@ export default function EnseignantNotes() {
     ? `${selectedModule.intitule}_${niveau}_${semestre}_${selectedGroupe}_${tab === "examen" ? session : tab}`
     : "";
 
+  if (permLoading) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <TeacherSidebar />
+        <main className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </main>
+      </div>
+    );
+  }
+
+  const noPermission = !perm?.peut_saisir_cc && !perm?.peut_saisir_examen;
+
+  if (noPermission) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <TeacherSidebar />
+        <main className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center max-w-md space-y-4">
+            <div className="w-20 h-20 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto">
+              <Lock className="w-10 h-10 text-muted-foreground/40" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold mb-2">Saisie de notes non autorisée</h2>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Vous n'avez pas encore la permission de saisir des notes.
+                Contactez l'agent pédagogique pour obtenir l'autorisation de saisie (Contrôle Continu et/ou Examen).
+              </p>
+            </div>
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-left text-sm text-amber-800">
+              <p className="font-medium mb-1">Que faire ?</p>
+              <p>L'agent pédagogique doit vous accorder la permission depuis la section <strong>Permissions Enseignants</strong> de son interface.</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen bg-background">
       <TeacherSidebar />
@@ -264,17 +315,24 @@ export default function EnseignantNotes() {
 
           {/* Tabs */}
           <motion.div variants={item} className="flex border-b border-border">
-            {(["cc", "examen"] as TabType[]).map((t) => (
-              <button
-                key={t}
-                onClick={() => { setTab(t); resetAll(); }}
-                className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-all -mb-px ${
-                  tab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t === "cc" ? "Contrôle Continu & TP" : "Examen"}
-              </button>
-            ))}
+            {(["cc", "examen"] as TabType[]).map((t) => {
+              const locked = (t === "cc" && !perm?.peut_saisir_cc) || (t === "examen" && !perm?.peut_saisir_examen);
+              return (
+                <button
+                  key={t}
+                  onClick={() => { if (!locked) { setTab(t); resetAll(); } }}
+                  disabled={locked}
+                  className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-all -mb-px flex items-center gap-1.5 ${
+                    locked ? "border-transparent text-muted-foreground/40 cursor-not-allowed" :
+                    tab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                  title={locked ? "Permission non accordée" : undefined}
+                >
+                  {locked && <Lock className="w-3 h-3" />}
+                  {t === "cc" ? "Contrôle Continu & TP" : "Examen"}
+                </button>
+              );
+            })}
             <button
               onClick={() => { setTab("recours"); setAppeals(getPendingTeacherAppeals()); }}
               className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-all -mb-px flex items-center gap-2 ${

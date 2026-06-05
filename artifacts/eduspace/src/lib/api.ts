@@ -96,6 +96,7 @@ export const enseignant = {
   soumissionStudents: (id: number) => get<unknown[]>(`/enseignant/soumissions/${id}/students`),
   soumettrNotes: (id: number, body: unknown) => post<void>(`/enseignant/soumissions/${id}/submit`, body),
   submitGrades: (body: unknown) => post<void>("/enseignant/grades", body),
+  myPermissions: () => get<{ peut_saisir_cc: boolean; peut_saisir_examen: boolean; semestre: string | null; grantedBy: string | null; grantedAt: string | null }>("/enseignant/my-permissions"),
   recours: () => get<unknown[]>("/enseignant/recours"),
   decidRecours: (id: number, body: unknown) => post<void>(`/enseignant/recours/${id}/decision`, body),
 };
@@ -139,6 +140,9 @@ export const agent = {
   deleteAnnonce: (id: number) => del<void>(`/agent/annonces/${id}`),
   reinscriptions: () => get<unknown[]>("/agent/reinscriptions"),
   updateReinscription: (id: number, body: unknown) => patch<void>(`/agent/reinscriptions/${id}`, body),
+  permissions: () => get<unknown[]>("/agent/permissions"),
+  updatePermission: (enseignantId: number, body: unknown) => post<void>(`/agent/permissions/${enseignantId}`, body),
+  revokePermission: (enseignantId: number) => del<void>(`/agent/permissions/${enseignantId}`),
 };
 
 // ── Super Agent ───────────────────────────────────────────────────────

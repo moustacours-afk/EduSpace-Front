@@ -46,4 +46,9 @@ class Enseignant extends Model
     {
         return $this->hasMany(Recour::class);
     }
+
+    public function permission()
+    {
+        return $this->hasOne(EnseignantPermission::class);
+    }
 }

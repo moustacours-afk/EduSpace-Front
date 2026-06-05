@@ -4,7 +4,7 @@ import { clearAuth } from "@/lib/auth";
 import {
   LayoutDashboard, Users, CalendarDays, CheckSquare, LogOut,
   GraduationCap, Bell, BookOpen, Calendar,
-  ChevronLeft, ChevronRight, ListChecks, Layers, FileSpreadsheet,
+  ChevronLeft, ChevronRight, ListChecks, Layers, FileSpreadsheet, ShieldCheck,
 } from "lucide-react";
 
 const navSections = [
@@ -34,6 +34,7 @@ const navSections = [
       { href: "/agent/notes", icon: CheckSquare, label: "Notes & Validation" },
       { href: "/agent/deliberations", icon: ListChecks, label: "Délibérations" },
       { href: "/agent/feuilles", icon: FileSpreadsheet, label: "Feuilles" },
+      { href: "/agent/permissions", icon: ShieldCheck, label: "Permissions Enseignants" },
     ],
   },
   {

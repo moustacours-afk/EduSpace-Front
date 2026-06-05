@@ -9,51 +9,28 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { FileCheck, Flag, Clock, CheckCircle, XCircle } from "lucide-react";
-import { notes, notesS6, currentStudent } from "@/data/mockData";
 import {
   submitAppeal, getAppealForModule, markAppealNotified, getStudentAppeals,
   type Appeal, type AppealNoteType,
 } from "@/lib/appealStore";
 import { useToast } from "@/hooks/use-toast";
+import { etudiant as api } from "@/lib/api";
+import { getUser } from "@/lib/auth";
 
 const sessions = ["Session normale", "Session rattrapage"];
-
-const situationConfig = {
-  admis:     { label: "Admis",     color: "bg-green-100 text-green-800 border-green-200" },
-  ajourne:   { label: "Ajourné",   color: "bg-red-100 text-red-800 border-red-200" },
-  rattrapage:{ label: "Rattrapage",color: "bg-amber-100 text-amber-800 border-amber-200" },
-};
-
-const rattrapageS5 = notes
-  .filter((n) => n.situation === "rattrapage" || n.situation === "ajourne")
-  .map((n) => ({
-    ...n,
-    exam: n.situation === "rattrapage" ? 11.5 : undefined,
-    moyenne: n.situation === "rattrapage" ? 10.8 : undefined,
-    situation: n.situation === "rattrapage" ? ("admis" as const) : ("ajourne" as const),
-  }));
-
-const rattrapageS6 = notesS6
-  .filter((n) => (n.situation as string) === "rattrapage" || n.situation === "ajourne")
-  .map((n) => ({
-    ...n,
-    exam: (n.situation as string) === "rattrapage" ? 12.0 : undefined,
-    moyenne: (n.situation as string) === "rattrapage" ? 11.2 : undefined,
-    situation: (n.situation as string) === "rattrapage" ? ("admis" as const) : ("ajourne" as const),
-  }));
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
-type NoteRow = {
-  id: string;
-  moduleId: string;
+interface NoteRow {
+  id: number;
+  moduleId: number;
   module: string;
-  exam: number | undefined;
-  moyenne: number | undefined;
+  exam: number | null;
+  moyenne: number | null;
   situation: "admis" | "ajourne" | "rattrapage";
   semestre: string;
-};
+}
 
 type AppealDialogState = {
   moduleId: string;
@@ -64,9 +41,9 @@ type AppealDialogState = {
 } | null;
 
 function AppealCell({
-  moduleId, moduleName, semestre, noteType, currentNote, refreshKey, onOpen,
+  studentId, moduleId, moduleName, semestre, noteType, currentNote, refreshKey, onOpen,
 }: {
-  moduleId: string; moduleName: string; semestre: string;
+  studentId: string; moduleId: string; moduleName: string; semestre: string;
   noteType: AppealNoteType; currentNote: number;
   refreshKey: number;
   onOpen: (s: AppealDialogState) => void;
@@ -74,8 +51,8 @@ function AppealCell({
   const [appeal, setAppeal] = useState<Appeal | undefined>();
 
   useEffect(() => {
-    setAppeal(getAppealForModule(currentStudent.id, moduleId, noteType));
-  }, [moduleId, noteType, refreshKey]);
+    setAppeal(getAppealForModule(studentId, moduleId, noteType));
+  }, [studentId, moduleId, noteType, refreshKey]);
 
   if (!appeal) {
     return (
@@ -93,7 +70,7 @@ function AppealCell({
     return (
       <span className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg font-medium">
         <Clock className="w-3 h-3" />
-        Le traitement est en cours
+        Traitement en cours
       </span>
     );
   }
@@ -121,62 +98,52 @@ function AppealCell({
 }
 
 function ExamTable({
-  label, data, refreshKey, onOpen, session,
+  label, data, studentId, refreshKey, onOpen, session,
 }: {
-  label: string; data: NoteRow[]; refreshKey: number;
+  label: string; data: NoteRow[]; studentId: string; refreshKey: number;
   onOpen: (s: AppealDialogState) => void;
   session: string;
 }) {
-  if (data.length === 0) {
-    return (
-      <Card>
-        <div className="p-4 border-b border-border flex items-center gap-2">
-          <FileCheck className="w-4 h-4 text-primary" />
-          <h2 className="font-semibold text-sm">{label}</h2>
-        </div>
-        <p className="text-center text-muted-foreground text-sm py-8">
-          Aucun module à afficher pour ce semestre.
-        </p>
-      </Card>
-    );
-  }
-
   return (
     <Card>
       <div className="p-4 border-b border-border flex items-center gap-2">
         <FileCheck className="w-4 h-4 text-primary" />
         <h2 className="font-semibold text-sm">{label}</h2>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/30 border-b border-border">
-            <tr>
-              <th className="text-left px-5 py-3 font-semibold text-muted-foreground">Module</th>
-              <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Note Examen</th>
-              <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Recours</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((n, i) => {
-              return (
+      {data.length === 0 ? (
+        <p className="text-center text-muted-foreground text-sm py-8">
+          Aucune note publiée pour ce semestre.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/30 border-b border-border">
+              <tr>
+                <th className="text-left px-5 py-3 font-semibold text-muted-foreground">Module</th>
+                <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Note Examen</th>
+                <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Recours</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((n, i) => (
                 <motion.tr
                   key={n.id}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: i * 0.04 }}
                   className="border-b border-border/50 hover:bg-muted/10 transition-colors"
-                  data-testid={`examen-row-${n.id}`}
                 >
                   <td className="px-5 py-3.5 font-medium">{n.module}</td>
                   <td className="text-center px-4 py-3.5">
-                    {n.exam !== undefined
+                    {n.exam !== null
                       ? <span className={`font-semibold ${n.exam >= 10 ? "text-green-600" : "text-red-500"}`}>{n.exam}</span>
                       : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-4 py-3.5 text-center">
-                    {session === "Session normale" && n.exam !== undefined ? (
+                    {session === "Session normale" && n.exam !== null ? (
                       <AppealCell
-                        moduleId={n.moduleId}
+                        studentId={studentId}
+                        moduleId={String(n.moduleId)}
                         moduleName={n.module}
                         semestre={n.semestre}
                         noteType="exam"
@@ -189,30 +156,37 @@ function ExamTable({
                     )}
                   </td>
                 </motion.tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Card>
   );
 }
 
 export default function EtudiantExamens() {
+  const user = getUser();
+  const profile = user?.profile as Record<string, unknown> | null;
+  const studentId = String(profile?.id ?? user?.id ?? "");
+  const matricule = String(profile?.matricule ?? "");
+  const filiere   = String(profile?.filiere ?? "");
+  const niveau    = String(profile?.niveau ?? "");
+
   const [session, setSession] = useState("Session normale");
   const [dialogState, setDialogState] = useState<AppealDialogState>(null);
   const [reason, setReason] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [notes, setNotes] = useState<NoteRow[]>([]);
   const { toast } = useToast();
 
-  const s5Raw = session === "Session normale" ? notes : rattrapageS5;
-  const s6Raw = session === "Session normale" ? notesS6 : rattrapageS6;
-
-  const s5Data: NoteRow[] = s5Raw.map((n) => ({ ...n, moduleId: n.moduleId ?? n.id }));
-  const s6Data: NoteRow[] = s6Raw.map((n) => ({ ...n, moduleId: n.moduleId ?? n.id }));
+  useEffect(() => {
+    api.notes().then((d) => setNotes(d as NoteRow[])).catch(() => {});
+  }, []);
 
   useEffect(() => {
-    const pending = getStudentAppeals(currentStudent.id).filter(
+    if (!studentId) return;
+    const pending = getStudentAppeals(studentId).filter(
       (a) => (a.status === "accepte" || a.status === "refuse" || a.status === "valide_agent") && !a.notifiedStudent
     );
     for (const a of pending) {
@@ -230,15 +204,15 @@ export default function EtudiantExamens() {
         });
       }
     }
-  }, [toast]);
+  }, [toast, studentId]);
 
   function handleSubmit() {
     if (!dialogState || !reason.trim()) return;
     submitAppeal({
-      studentId: currentStudent.id,
-      studentNom: currentStudent.nom,
-      studentPrenom: currentStudent.prenom,
-      studentMatricule: currentStudent.matricule,
+      studentId,
+      studentNom: String(profile?.nom ?? ""),
+      studentPrenom: String(profile?.prenom ?? ""),
+      studentMatricule: matricule,
       moduleId: dialogState.moduleId,
       moduleName: dialogState.moduleName,
       semestre: dialogState.semestre,
@@ -252,6 +226,12 @@ export default function EtudiantExamens() {
     toast({ title: "Recours soumis", description: `Votre recours pour "${dialogState.moduleName}" a été envoyé à l'enseignant.` });
   }
 
+  const bySemestre = notes.reduce<Record<string, NoteRow[]>>((acc, n) => {
+    (acc[n.semestre] ??= []).push(n);
+    return acc;
+  }, {});
+  const semestres = Object.keys(bySemestre).sort();
+
   return (
     <div className="flex min-h-screen bg-background">
       <StudentSidebar />
@@ -261,7 +241,7 @@ export default function EtudiantExamens() {
           <motion.div variants={item}>
             <h1 className="text-2xl font-bold">Examens</h1>
             <p className="text-muted-foreground mt-1">
-              Matricule : {currentStudent.matricule} — {currentStudent.filiere} {currentStudent.niveau}
+              Matricule : {matricule} — {filiere} {niveau}
             </p>
           </motion.div>
 
@@ -275,20 +255,36 @@ export default function EtudiantExamens() {
                     ? "bg-primary text-white border-primary shadow-sm"
                     : "bg-card text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
                 }`}
-                data-testid={`filter-session-${s.replace(/ /g, "-").toLowerCase()}`}
               >
                 {s}
               </button>
             ))}
           </motion.div>
 
-          <motion.div variants={item}>
-            <ExamTable label={`Semestre 5 — ${session}`} data={s5Data} refreshKey={refreshKey} onOpen={setDialogState} session={session} />
-          </motion.div>
-
-          <motion.div variants={item}>
-            <ExamTable label={`Semestre 6 — ${session}`} data={s6Data} refreshKey={refreshKey} onOpen={setDialogState} session={session} />
-          </motion.div>
+          {notes.length === 0 ? (
+            <motion.div variants={item}>
+              <Card className="p-12 text-center text-muted-foreground">
+                <Clock className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                <p className="font-medium">Aucune note d'examen publiée</p>
+                <p className="text-sm mt-1 opacity-70">
+                  Vos notes d'examen apparaîtront ici une fois publiées par l'agent pédagogique.
+                </p>
+              </Card>
+            </motion.div>
+          ) : (
+            semestres.map((s) => (
+              <motion.div variants={item} key={s}>
+                <ExamTable
+                  label={`${s} — ${session}`}
+                  data={bySemestre[s]}
+                  studentId={studentId}
+                  refreshKey={refreshKey}
+                  onOpen={setDialogState}
+                  session={session}
+                />
+              </motion.div>
+            ))
+          )}
 
         </motion.div>
       </main>

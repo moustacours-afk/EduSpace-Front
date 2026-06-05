@@ -33,6 +33,7 @@ import AgentCalendrier from "@/pages/agent/Calendrier";
 import AgentNotifications from "@/pages/agent/Notifications";
 import AgentOrganisationEtudiants from "@/pages/agent/OrganisationEtudiants";
 import AgentFeuilles from "@/pages/agent/Sheets";
+import AgentPermissions from "@/pages/agent/Permissions";
 
 import LoginSuperAgent from "@/pages/LoginSuperAgent";
 import SuperAgentDashboard from "@/pages/super-agent/Dashboard";
@@ -120,6 +121,9 @@ function Router() {
       </Route>
       <Route path="/agent/feuilles">
         <AgentGuard component={AgentFeuilles} />
+      </Route>
+      <Route path="/agent/permissions">
+        <AgentGuard component={AgentPermissions} />
       </Route>
 
       <Route path="/login/super-agent" component={LoginSuperAgent} />

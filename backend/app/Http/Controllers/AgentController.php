@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Annonce;
 use App\Models\Deliberation;
 use App\Models\Enseignant;
+use App\Models\EnseignantPermission;
 use App\Models\Etudiant;
 use App\Models\Evenement;
 use App\Models\Module;
@@ -511,6 +512,56 @@ class AgentController extends Controller
             'traite_le' => now(),
         ]);
         return response()->json($reinscription);
+    }
+
+    // ─── Permissions enseignants ─────────────────────────────────────────────
+
+    public function permissions(Request $request)
+    {
+        $enseignants = Enseignant::with(['user', 'permission.agent'])->get();
+        return response()->json($enseignants->map(fn ($e) => [
+            'id'              => $e->id,
+            'nom'             => $e->nom,
+            'prenom'          => $e->prenom,
+            'grade'           => $e->grade,
+            'departement'     => $e->departement,
+            'peutSaisirCC'    => (bool) ($e->permission?->peut_saisir_cc ?? false),
+            'peutSaisirExamen'=> (bool) ($e->permission?->peut_saisir_examen ?? false),
+            'semestre'        => $e->permission?->semestre,
+            'notesAdmin'      => $e->permission?->notes_admin,
+            'grantedBy'       => $e->permission?->agent ? $e->permission->agent->prenom . ' ' . $e->permission->agent->nom : null,
+            'grantedAt'       => $e->permission?->updated_at?->toDateString(),
+        ]));
+    }
+
+    public function updatePermission(Request $request, int $enseignantId)
+    {
+        $agent = $this->agent($request);
+        $request->validate([
+            'peutSaisirCC'    => 'required|boolean',
+            'peutSaisirExamen'=> 'required|boolean',
+            'semestre'        => 'nullable|string',
+            'notesAdmin'      => 'nullable|string|max:500',
+        ]);
+
+        EnseignantPermission::updateOrCreate(
+            ['enseignant_id' => $enseignantId],
+            [
+                'agent_id'           => $agent->id,
+                'peut_saisir_cc'     => $request->peutSaisirCC,
+                'peut_saisir_examen' => $request->peutSaisirExamen,
+                'semestre'           => $request->semestre,
+                'notes_admin'        => $request->notesAdmin,
+            ]
+        );
+
+        return response()->json(['message' => 'Permissions mises à jour.']);
+    }
+
+    public function revokePermission(Request $request, int $enseignantId)
+    {
+        EnseignantPermission::where('enseignant_id', $enseignantId)->delete();
+        return response()->json(['message' => 'Permissions révoquées.']);
     }
 
     // ─── Stats ───────────────────────────────────────────────────────────────

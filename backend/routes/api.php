@@ -56,6 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Grades (direct submit, creates soumission if needed)
         Route::post('/grades', [EnseignantController::class, 'submitGrades']);
+        Route::get('/my-permissions', [EnseignantController::class, 'myPermissions']);
 
         // Announcements (teacher-authored)
         Route::post('/annonces', [EnseignantController::class, 'storeAnnonce']);
@@ -126,6 +127,11 @@ Route::middleware('auth:sanctum')->group(function () {
         // Reinscriptions
         Route::get('/reinscriptions', [AgentController::class, 'reinscriptions']);
         Route::patch('/reinscriptions/{id}', [AgentController::class, 'updateReinscription']);
+
+        // Enseignant permissions
+        Route::get('/permissions', [AgentController::class, 'permissions']);
+        Route::post('/permissions/{enseignantId}', [AgentController::class, 'updatePermission']);
+        Route::delete('/permissions/{enseignantId}', [AgentController::class, 'revokePermission']);
     });
 
     // ─── Super Agent ─────────────────────────────────────────────────────────
