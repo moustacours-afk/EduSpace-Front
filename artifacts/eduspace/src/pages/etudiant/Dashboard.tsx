@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Bell, Calendar, CheckCircle, AlertCircle, Clock, ChevronLeft, ChevronRight, Megaphone } from "lucide-react";
+import { Bell, Calendar, CheckCircle, AlertCircle, Clock, Info, ChevronLeft, ChevronRight, Megaphone } from "lucide-react";
 import { StudentSidebar } from "@/components/StudentSidebar";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -141,6 +141,8 @@ export default function EtudiantDashboard() {
                             <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                           ) : notif.type === "horaire" ? (
                             <Clock className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                          ) : notif.type === "info" ? (
+                            <Info className="w-4 h-4 text-teal-500 flex-shrink-0 mt-0.5" />
                           ) : (
                             <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
                           )}

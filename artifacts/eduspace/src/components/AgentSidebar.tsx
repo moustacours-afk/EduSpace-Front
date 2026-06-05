@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { clearAuth } from "@/lib/auth";
 import {
   LayoutDashboard, Users, CalendarDays, CheckSquare, LogOut,
-  GraduationCap, Bell, BookOpen, Calendar,
+  GraduationCap, Bell, BookOpen, Calendar, Megaphone,
   ChevronLeft, ChevronRight, ListChecks, Layers, FileSpreadsheet, ShieldCheck,
 } from "lucide-react";
 
@@ -41,6 +41,7 @@ const navSections = [
     label: "Outils",
     items: [
       { href: "/agent/calendrier", icon: Calendar, label: "Calendrier académique" },
+      { href: "/agent/annonces", icon: Megaphone, label: "Annonces" },
       { href: "/agent/notifications", icon: Bell, label: "Notifications" },
     ],
   },

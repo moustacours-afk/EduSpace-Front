@@ -1,14 +1,76 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { Link } from "wouter";
 import { TeacherSidebar } from "@/components/TeacherSidebar";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Upload, ClipboardList, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { BookOpen, Upload, ClipboardList, Users, Bell, Send, AlertCircle, Info, Megaphone, ChevronLeft, ChevronRight } from "lucide-react";
 import { enseignant as api } from "@/lib/api";
 import { getUser } from "@/lib/auth";
+import { teacherSentNotifs, agentNotificationsForTeacher, universityAnnouncements } from "@/data/mockData";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } };
 const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } };
+
+const categoryAccent: Record<string, string> = {
+  Club:          "border-l-violet-400 bg-violet-50",
+  Conférence:    "border-l-blue-400 bg-blue-50",
+  Formation:     "border-l-teal-400 bg-teal-50",
+  Compétition:   "border-l-amber-400 bg-amber-50",
+  Administratif: "border-l-slate-400 bg-slate-50",
+};
+const categoryBadge: Record<string, string> = {
+  Club:          "bg-violet-100 text-violet-700",
+  Conférence:    "bg-blue-100 text-blue-700",
+  Formation:     "bg-teal-100 text-teal-700",
+  Compétition:   "bg-amber-100 text-amber-700",
+  Administratif: "bg-slate-100 text-slate-700",
+};
+
+function AnnonceCarousel() {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  function scrollLeft()  { scrollRef.current?.scrollBy({ left: -320, behavior: "smooth" }); }
+  function scrollRight() { scrollRef.current?.scrollBy({ left:  320, behavior: "smooth" }); }
+
+  if (universityAnnouncements.length === 0) return null;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-base flex items-center gap-2">
+          <Megaphone className="w-4 h-4 text-primary" />
+          Annonces universitaires
+        </h2>
+        <div className="flex gap-1">
+          <button onClick={scrollLeft}  className="w-7 h-7 rounded-lg border border-border bg-white hover:bg-muted flex items-center justify-center transition-colors">
+            <ChevronLeft  className="w-4 h-4 text-muted-foreground" />
+          </button>
+          <button onClick={scrollRight} className="w-7 h-7 rounded-lg border border-border bg-white hover:bg-muted flex items-center justify-center transition-colors">
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </button>
+        </div>
+      </div>
+      <div ref={scrollRef} className="flex gap-3 overflow-x-auto scroll-smooth pb-1" style={{ scrollSnapType: "x mandatory", scrollbarWidth: "none" }}>
+        {universityAnnouncements.map((ann) => (
+          <div
+            key={ann.id}
+            className={`flex-shrink-0 w-[280px] bg-white border border-border border-l-4 rounded-xl p-4 ${categoryAccent[ann.categorie] ?? "border-l-gray-300 bg-gray-50"}`}
+            style={{ scrollSnapAlign: "start" }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg leading-none">{ann.icon}</span>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${categoryBadge[ann.categorie] ?? "bg-gray-100 text-gray-600"}`}>{ann.categorie}</span>
+            </div>
+            <h3 className="font-semibold text-sm text-foreground leading-snug mb-1.5">{ann.titre}</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{ann.contenu}</p>
+            <p className="text-xs text-muted-foreground/60 mt-2.5 pt-2.5 border-t border-border/50">{ann.date}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface Module { id: number; intitule: string; code: string; niveau: string; semestre: string; credits: number }
 interface Student { id: number; nom: string; prenom: string; matricule: string }
@@ -59,6 +121,49 @@ export default function EnseignantDashboard() {
               </Card>
             ))}
           </motion.div>
+
+          {/* ── Annonces universitaires ── */}
+          <motion.div variants={item}>
+            <AnnonceCarousel />
+          </motion.div>
+
+          {/* ── Admin notifications ── */}
+          {agentNotificationsForTeacher.length > 0 && (
+            <motion.div variants={item}>
+              <Card className="p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Bell className="w-4 h-4 text-amber-500" />
+                  <h2 className="font-semibold">Notifications de l'administration</h2>
+                  {agentNotificationsForTeacher.filter(n => !n.lu).length > 0 && (
+                    <Badge className="ml-auto bg-amber-100 text-amber-800 border-amber-200 text-xs">
+                      {agentNotificationsForTeacher.filter(n => !n.lu).length} non lues
+                    </Badge>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  {agentNotificationsForTeacher.map((notif) => (
+                    <div
+                      key={notif.id}
+                      className={`p-3 rounded-lg border text-sm flex items-start gap-2 ${
+                        notif.lu ? "bg-muted/30 border-border" : "bg-amber-50 border-amber-200"
+                      }`}
+                    >
+                      {notif.lu
+                        ? <Info className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                        : <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                      }
+                      <div>
+                        <p className={notif.lu ? "text-muted-foreground" : "text-foreground font-medium"}>
+                          {notif.message}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">{notif.date}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </motion.div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <motion.div variants={item}>
@@ -117,6 +222,43 @@ export default function EnseignantDashboard() {
               </Card>
             </motion.div>
           </div>
+
+          <motion.div variants={item}>
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-amber-500" />
+                  Dernières notifications envoyées
+                </h2>
+                <Link href="/enseignant/notifications">
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8">
+                    <Send className="w-3 h-3" />
+                    Envoyer
+                  </Button>
+                </Link>
+              </div>
+              {teacherSentNotifs.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Aucune notification envoyée récemment.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {teacherSentNotifs.slice(0, 3).map((n) => (
+                    <div key={n.id} className="flex items-start justify-between gap-3 p-3 rounded-lg bg-muted/20 text-sm">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-muted-foreground mb-0.5">{n.recipient}</p>
+                        <p className="truncate">{n.message}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                        {n.date.split(" ")[0]}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </motion.div>
+
         </motion.div>
       </main>
     </div>

@@ -1,13 +1,13 @@
 import { Link, useLocation } from "wouter";
 import { clearAuth } from "@/lib/auth";
-import { Home, Upload, ClipboardList, Calendar, Megaphone, LogOut } from "lucide-react";
+import { Home, Upload, ClipboardList, Calendar, Bell, LogOut } from "lucide-react";
 
 const navItems = [
   { href: "/enseignant/dashboard", icon: Home, label: "Accueil" },
   { href: "/enseignant/supports", icon: Upload, label: "Supports de cours" },
   { href: "/enseignant/notes", icon: ClipboardList, label: "Saisie des notes" },
   { href: "/enseignant/emploi-du-temps", icon: Calendar, label: "Emploi du temps" },
-  { href: "/enseignant/annonces", icon: Megaphone, label: "Annonces" },
+  { href: "/enseignant/notifications", icon: Bell, label: "Notifications" },
 ];
 
 export function TeacherSidebar() {

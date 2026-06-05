@@ -100,6 +100,8 @@ export const enseignant = {
   myPermissions: () => get<{ peut_saisir_cc: boolean; peut_saisir_examen: boolean; semestre: string | null; grantedBy: string | null; grantedAt: string | null }>("/enseignant/my-permissions"),
   recours: () => get<unknown[]>("/enseignant/recours"),
   decidRecours: (id: number, body: unknown) => post<void>(`/enseignant/recours/${id}/decision`, body),
+  sendNotification: (body: unknown) => post<unknown>("/enseignant/notifications", body),
+  sentNotifications: () => get<unknown[]>("/enseignant/notifications/sent"),
 };
 
 // ── Agent ────────────────────────────────────────────────────────────

@@ -22,7 +22,7 @@ import EnseignantDashboard from "@/pages/enseignant/Dashboard";
 import EnseignantSupports from "@/pages/enseignant/Supports";
 import EnseignantNotes from "@/pages/enseignant/Notes";
 import EnseignantEmploiDuTemps from "@/pages/enseignant/EmploiDuTemps";
-import EnseignantAnnonces from "@/pages/enseignant/Annonces";
+import EnseignantNotifications from "@/pages/enseignant/Notifications";
 
 import AgentDashboard from "@/pages/agent/Dashboard";
 import AgentComptes from "@/pages/agent/Comptes";
@@ -31,6 +31,7 @@ import AgentValidationNotes from "@/pages/agent/ValidationNotes";
 import AgentDeliberations from "@/pages/agent/Deliberations";
 import AgentCalendrier from "@/pages/agent/Calendrier";
 import AgentNotifications from "@/pages/agent/Notifications";
+import AgentAnnonces from "@/pages/agent/Annonces";
 import AgentOrganisationEtudiants from "@/pages/agent/OrganisationEtudiants";
 import AgentFeuilles from "@/pages/agent/Sheets";
 import AgentPermissions from "@/pages/agent/Permissions";
@@ -87,7 +88,7 @@ function Router() {
       <Route path="/enseignant/supports" component={EnseignantSupports} />
       <Route path="/enseignant/notes" component={EnseignantNotes} />
       <Route path="/enseignant/emploi-du-temps" component={EnseignantEmploiDuTemps} />
-      <Route path="/enseignant/annonces" component={EnseignantAnnonces} />
+      <Route path="/enseignant/notifications" component={EnseignantNotifications} />
 
       <Route path="/agent/dashboard">
         <AgentGuard component={AgentDashboard} />
@@ -112,6 +113,9 @@ function Router() {
       </Route>
       <Route path="/agent/calendrier">
         <AgentGuard component={AgentCalendrier} />
+      </Route>
+      <Route path="/agent/annonces">
+        <AgentGuard component={AgentAnnonces} />
       </Route>
       <Route path="/agent/notifications">
         <AgentGuard component={AgentNotifications} />

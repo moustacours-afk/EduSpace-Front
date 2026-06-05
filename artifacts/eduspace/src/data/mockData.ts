@@ -131,8 +131,23 @@ export const supports = [
 export const notifications = [
   { id: "notif1", message: "Le cours de Réseaux Informatiques du Lundi 10h est annulé.", type: "annulation" as const, date: "2025-05-12", lu: false },
   { id: "notif2", message: "Le TP Systèmes d'Exploitation est reporté au Jeudi 16h en Labo Unix 2.", type: "horaire" as const, date: "2025-05-11", lu: false },
+  { id: "notif5", message: "Dr. Hadj : Nouveau support SQL avancé disponible pour Base de Données.", type: "info" as const, date: "2025-05-09", lu: false },
   { id: "notif3", message: "Les notes de Base de Données ont été publiées.", type: "note" as const, date: "2025-05-10", lu: true },
   { id: "notif4", message: "Nouveau corrigé TD 1 disponible pour Algorithmique.", type: "note" as const, date: "2025-05-09", lu: true },
+  { id: "notif6", message: "Dr. Hadj : Rappel — TP Algorithmique à rendre avant le 15 mai.", type: "info" as const, date: "2025-05-08", lu: true },
+];
+
+export const teacherSentNotifs = [
+  { id: "tsn1", recipient: "Niveau L3 — 53 étudiants", message: "La séance d'Algorithmique du Lundi 10h est déplacée au Mardi 14h en Salle 204.", date: "2025-05-12 09:30", statut: "Envoyé" as const },
+  { id: "tsn2", recipient: "Bensalem Karim — 20221234", message: "Rappel : votre TP d'Algorithmique est noté et les résultats définitifs sont maintenant publiés.", date: "2025-05-10 14:00", statut: "Envoyé" as const },
+  { id: "tsn3", recipient: "Mes étudiants — 253 étudiants", message: "Un nouveau support SQL avancé est disponible dans les ressources en ligne. Consultez-le avant la séance de jeudi.", date: "2025-05-09 11:15", statut: "Envoyé" as const },
+];
+
+export const agentNotificationsForTeacher = [
+  { id: "ant1", message: "Rappel : la date limite de soumission des notes pour le semestre S5 est le 10 janvier 2026. Veillez à soumettre avant cette date.", type: "admin" as const, date: "2025-12-20", lu: false },
+  { id: "ant2", message: "Les permissions de saisie des contrôles continus ont été accordées pour le semestre S5. Vous pouvez désormais saisir vos notes.", type: "admin" as const, date: "2025-11-01", lu: false },
+  { id: "ant3", message: "Réunion pédagogique obligatoire le 15 novembre 2025 à 10h en Salle de conférence. Présence requise.", type: "admin" as const, date: "2025-11-08", lu: true },
+  { id: "ant4", message: "Le calendrier des délibérations du semestre S5 est disponible. Consultez-le dans votre espace ou auprès de la scolarité.", type: "admin" as const, date: "2025-10-15", lu: true },
 ];
 
 export const studentsForTeacher = [
