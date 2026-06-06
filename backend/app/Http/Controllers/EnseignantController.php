@@ -10,6 +10,7 @@ use App\Models\Module;
 use App\Models\Note;
 use App\Models\Notification;
 use App\Models\Recour;
+use App\Models\Seance;
 use App\Models\SoumissionNote;
 use App\Models\Support;
 use Illuminate\Http\Request;
@@ -36,6 +37,38 @@ class EnseignantController extends Controller
             'departement' => $e->departement,
             'modules' => $modules,
         ]);
+    }
+
+    public function emploiDuTemps(Request $request)
+    {
+        $e = $this->enseignant($request);
+        $ordreJours = ['Dimanche' => 1, 'Lundi' => 2, 'Mardi' => 3, 'Mercredi' => 4, 'Jeudi' => 5, 'Vendredi' => 6, 'Samedi' => 7];
+
+        $seances = Seance::with(['module', 'salle'])
+            ->where('enseignant_id', $e->id)
+            ->get()
+            ->map(fn ($s) => [
+                'id'         => $s->id,
+                'module'     => $s->module?->intitule ?? '—',
+                'moduleCode' => $s->module?->code,
+                'type'       => $s->type,
+                'jour'       => $s->jour,
+                'heureDebut' => $s->heure_debut,
+                'heureFin'   => $s->heure_fin,
+                'salle'      => $s->salle?->nom ?? '—',
+                'filiere'    => $s->filiere,
+                'niveau'     => $s->niveau,
+                'semestre'   => $s->semestre,
+                'groupes'    => $s->groupes ?? [],
+                'statut'     => $s->statut,
+            ])
+            ->sortBy([
+                fn ($a, $b) => ($ordreJours[$a['jour']] ?? 9) <=> ($ordreJours[$b['jour']] ?? 9),
+                fn ($a, $b) => $a['heureDebut'] <=> $b['heureDebut'],
+            ])
+            ->values();
+
+        return response()->json($seances);
     }
 
     public function modules(Request $request)

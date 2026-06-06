@@ -41,6 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:enseignant')->prefix('enseignant')->group(function () {
         Route::get('/profile', [EnseignantController::class, 'profile']);
         Route::get('/modules', [EnseignantController::class, 'modules']);
+        Route::get('/emploi-du-temps', [EnseignantController::class, 'emploiDuTemps']);
         Route::get('/students', [EnseignantController::class, 'students']);
         Route::get('/annonces', [EnseignantController::class, 'annonces']);
 

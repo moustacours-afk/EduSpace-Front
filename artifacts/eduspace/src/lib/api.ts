@@ -86,6 +86,7 @@ export const etudiant = {
 export const enseignant = {
   profile: () => get<Record<string, unknown>>("/enseignant/profile"),
   modules: () => get<unknown[]>("/enseignant/modules"),
+  emploiDuTemps: () => get<unknown[]>("/enseignant/emploi-du-temps"),
   students: (niveau: string, groupe?: string) => get<unknown[]>(`/enseignant/students?niveau=${encodeURIComponent(niveau)}${groupe ? `&groupe=${encodeURIComponent(groupe)}` : ''}`),
   annonces: () => get<unknown[]>("/enseignant/annonces"),
   storeAnnonce: (body: unknown) => post<unknown>("/enseignant/annonces", body),
