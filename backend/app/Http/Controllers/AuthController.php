@@ -33,6 +33,14 @@ class AuthController extends Controller
                 $user = User::where('email', $identifier)->where('role', 'agent')->first();
             }
 
+            // 2c. Username (email local-part) match for enseignant on ANY domain.
+            //     Lets "l.saidi" resolve to "l.saidi@univ-oran1.dz" as well as
+            //     "<username>@eduspace.local" — so every teacher can log in by username.
+            if (! $user && $identifier !== '' && ! str_contains($identifier, '@')) {
+                $user = User::where('email', 'like', str_replace(['%', '_'], ['\%', '\_'], $identifier) . '@%')
+                            ->where('role', 'enseignant')->first();
+            }
+
             // 3. Matricule lookup in enseignants table (fallback)
             if (! $user) {
                 $ens = \App\Models\Enseignant::where('matricule', $identifier)->first();
