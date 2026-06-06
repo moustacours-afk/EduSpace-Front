@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { clearAuth } from "@/lib/auth";
+import { clearAuth, getAgentFiliere } from "@/lib/auth";
+import { agent as api } from "@/lib/api";
+import { syncOrgFromStudents } from "@/lib/orgStore";
 import {
   LayoutDashboard, Users, CalendarDays, CheckSquare, LogOut,
   GraduationCap, Bell, BookOpen, Calendar, Megaphone,
@@ -47,11 +49,31 @@ const navSections = [
   },
 ];
 
+// Sync the shared org store (sections/groups) from the backend once per app load,
+// so every agent page reflects the real student section/groupe assignments.
+let orgSynced = false;
+
 export function AgentSidebar() {
   const [collapsed, setCollapsed] = useState(
     () => sessionStorage.getItem("sidebarCollapsed") === "true"
   );
   const [location] = useLocation();
+
+  useEffect(() => {
+    if (orgSynced) return;
+    orgSynced = true;
+    const filiere = getAgentFiliere();
+    api.students()
+      .then(data => {
+        const list = (data as Record<string, unknown>[]).map(s => ({
+          id: String(s.id), niveau: String(s.niveau ?? ""),
+          section: String(s.section ?? ""), groupe: String(s.groupe ?? ""),
+          filiere: String(s.filiere ?? ""),
+        }));
+        syncOrgFromStudents(filiere ? list.filter(s => s.filiere === filiere) : list);
+      })
+      .catch(() => { orgSynced = false; });
+  }, []);
 
   function toggle() {
     const next = !collapsed;
@@ -115,7 +137,7 @@ export function AgentSidebar() {
         {!collapsed && (
           <div className="px-3 py-2 mb-2">
             <p className="text-xs font-medium text-sidebar-foreground">Ferhat Nadia</p>
-            <p className="text-xs text-sidebar-foreground/40">agent001</p>
+            <p className="text-xs text-sidebar-foreground/40">Agent · Informatique</p>
           </div>
         )}
         <button onClick={() => { clearAuth(); window.location.href = "/"; }}

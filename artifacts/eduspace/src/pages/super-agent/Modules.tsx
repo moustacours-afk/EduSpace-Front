@@ -18,7 +18,7 @@ import { getUser } from "@/lib/auth";
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
-interface ModuleEntry { id: number; intitule: string; code: string; credits: number; semestre: string; filiere: string; niveau: string }
+interface ModuleEntry { id: number; intitule: string; code: string; credits: number; semestre: string; filiere: string; niveau: string; type_ue?: string }
 
 export default function SuperAgentModules() {
   // SA's university from profile

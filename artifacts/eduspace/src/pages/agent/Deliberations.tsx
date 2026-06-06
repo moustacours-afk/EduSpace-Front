@@ -314,7 +314,7 @@ export default function AgentDeliberations() {
       <div style="text-align:center;margin-bottom:12px">
         <p style="font-size:11px;color:#444">République Algérienne Démocratique et Populaire</p>
         <p style="font-size:11px;color:#444">Ministère de l'Enseignement Supérieur et de la Recherche Scientifique</p>
-        <p style="font-size:13px;font-weight:bold;margin:4px 0">Université des Sciences et de la Technologie Houari Boumediene</p>
+        <p style="font-size:13px;font-weight:bold;margin:4px 0">Université Oran 1 Ahmed Ben Bella</p>
         <p style="font-size:11px">Faculté d'Informatique — Département Informatique</p>
         <p style="margin:8px 0;font-size:12px">Année Académique 2025-2026 &nbsp;|&nbsp; Filière : Informatique &nbsp;|&nbsp; Niveau : ${niveau} &nbsp;|&nbsp; Groupe : ${groupe}</p>
         <p style="font-size:14px;font-weight:bold;margin:10px 0;text-decoration:underline">PV de délibération — ${semestre} — Session ${session}</p>
@@ -393,7 +393,7 @@ export default function AgentDeliberations() {
       <div style="text-align:center;margin-bottom:12px">
         <p style="font-size:11px;color:#444">République Algérienne Démocratique et Populaire</p>
         <p style="font-size:11px;color:#444">Ministère de l'Enseignement Supérieur et de la Recherche Scientifique</p>
-        <p style="font-size:13px;font-weight:bold;margin:4px 0">Université des Sciences et de la Technologie Houari Boumediene</p>
+        <p style="font-size:13px;font-weight:bold;margin:4px 0">Université Oran 1 Ahmed Ben Bella</p>
         <p style="font-size:11px">Faculté d'Informatique — Département Informatique</p>
         <p style="margin:8px 0;font-size:12px">Année Académique 2025-2026 &nbsp;|&nbsp; Filière : Informatique &nbsp;|&nbsp; Niveau : ${niveau} &nbsp;|&nbsp; Groupe : ${groupe}</p>
         <p style="font-size:14px;font-weight:bold;margin:10px 0;text-decoration:underline">PV de délibération global — ${semestresLabel} — 2025/2026</p>
@@ -555,7 +555,7 @@ export default function AgentDeliberations() {
               <div className="text-center border-b border-border pb-4 mb-4">
                 <p className="text-xs text-muted-foreground">République Algérienne Démocratique et Populaire</p>
                 <p className="text-xs text-muted-foreground">Ministère de l'Enseignement Supérieur et de la Recherche Scientifique</p>
-                <p className="font-bold text-base mt-1">Université des Sciences et de la Technologie Houari Boumediene</p>
+                <p className="font-bold text-base mt-1">Université Oran 1 Ahmed Ben Bella</p>
                 <p className="text-sm text-muted-foreground">Faculté d'Informatique — Département Informatique</p>
               </div>
               <div className="flex flex-wrap justify-center gap-6 text-sm mb-4">

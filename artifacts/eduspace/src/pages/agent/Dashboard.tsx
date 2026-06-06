@@ -106,7 +106,7 @@ export default function AgentDashboard() {
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Établissement</p>
                   <p className="font-bold text-base leading-snug">
-                    Université des Sciences et de la Technologie<br />Houari Boumediene
+                    Université Oran 1<br />Ahmed Ben Bella
                   </p>
                 </div>
                 <div className="flex items-center gap-3">

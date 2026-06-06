@@ -28,6 +28,11 @@ class AuthController extends Controller
                 $user = User::where('email', $identifier)->where('role', 'enseignant')->first();
             }
 
+            // 2b. Full email match for agent (demo/seeded accounts)
+            if (! $user) {
+                $user = User::where('email', $identifier)->where('role', 'agent')->first();
+            }
+
             // 3. Matricule lookup in enseignants table (fallback)
             if (! $user) {
                 $ens = \App\Models\Enseignant::where('matricule', $identifier)->first();

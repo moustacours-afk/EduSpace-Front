@@ -26,6 +26,18 @@ export function getUser(): AuthUser | null {
   }
 }
 
+/**
+ * The agent's filière, normalised to match the students' `filiere` field.
+ * The agent profile stores e.g. "Département d'Informatique" while students
+ * store "Informatique" — strip the "Département d'/de/des/du " prefix.
+ */
+export function getAgentFiliere(): string {
+  const profile = getUser()?.profile as Record<string, string> | undefined;
+  const dept = profile?.departement ?? "Informatique";
+  const stripped = dept.replace(/^d[ée]partement\s+(d['’]\s*|de\s+|des\s+|du\s+)/i, "").trim();
+  return stripped || dept;
+}
+
 export function isLoggedIn(role?: AuthUser["role"]): boolean {
   const user = getUser();
   if (!user || !getToken()) return false;

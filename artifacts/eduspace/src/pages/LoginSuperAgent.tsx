@@ -76,7 +76,7 @@ export default function LoginSuperAgent() {
 
           {/* Demo credentials hint */}
           <div className="bg-muted border border-border rounded-lg px-3 py-2 mb-5 text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">Compte démo :</span> matricule = <span className="font-mono">superagent@univ-alger.dz</span> — mot de passe: <span className="font-mono">password</span>
+            <span className="font-semibold text-foreground">Compte démo :</span> matricule = <span className="font-mono">superagent@univ-oran1.dz</span> — mot de passe: <span className="font-mono">password</span>
           </div>
 
           <Form {...form}>

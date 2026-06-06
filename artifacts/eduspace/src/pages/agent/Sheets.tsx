@@ -211,7 +211,7 @@ function buildDocHtml(
     <div class="header">
       <p>République Algérienne Démocratique et Populaire</p>
       <p>Ministère de l'Enseignement Supérieur et de la Recherche Scientifique</p>
-      <h2>Université des Sciences et de la Technologie Houari Boumediene</h2>
+      <h2>Université Oran 1 Ahmed Ben Bella</h2>
       <p>Faculté d'Informatique — Département Informatique</p>
       <p style="margin-top:6px;font-size:12px">Année Académique 2025-2026 &nbsp;|&nbsp; ${infoLine}</p>
       <h3>${title}</h3>

@@ -48,7 +48,7 @@ type SentNotif = { id: string; recipient: string; message: string; date: string;
 
 const initialHistory: SentNotif[] = [
   { id: "h1", recipient: "Niveau L3 — 53 étudiants",         message: "Rappel : la date limite de dépôt des dossiers de réinscription est le 30 septembre 2025.", date: "2025-09-15 10:30", statut: "Envoyé" },
-  { id: "h2", recipient: "Bensalem Karim — 20221234",        message: "Votre dossier est incomplet. Veuillez soumettre votre CNI avant la date limite.",           date: "2025-09-12 14:15", statut: "Envoyé" },
+  { id: "h2", recipient: "Kadi Islam — 222237400711",        message: "Votre dossier est incomplet. Veuillez soumettre votre CNI avant la date limite.",           date: "2025-09-12 14:15", statut: "Envoyé" },
   { id: "h3", recipient: "Tous les enseignants — 10 éts",    message: "Rappel : la date limite de soumission des notes S5 est le 10 janvier 2026.",                date: "2025-09-10 09:00", statut: "Envoyé" },
 ];
 

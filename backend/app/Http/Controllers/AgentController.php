@@ -47,6 +47,7 @@ class AgentController extends Controller
             'filiere'             => $s->filiere,
             'niveau'              => $s->niveau,
             'groupe'              => $s->groupe,
+            'section'             => $s->section,
             'date_naissance'      => $s->date_naissance,
             'wilaya'              => $s->wilaya,
             'email'               => $s->user?->email ?? '',
@@ -102,7 +103,7 @@ class AgentController extends Controller
     {
         $etudiant = Etudiant::findOrFail($id);
         $etudiant->update($request->only([
-            'nom', 'prenom', 'filiere', 'niveau', 'groupe',
+            'nom', 'prenom', 'filiere', 'niveau', 'groupe', 'section',
             'statut_compte', 'statut_reinscription', 'date_naissance', 'wilaya',
         ]));
         return response()->json($etudiant);
@@ -114,6 +115,109 @@ class AgentController extends Controller
         $request->validate(['statut_compte' => 'required|in:actif,suspendu,archive']);
         $etudiant->update(['statut_compte' => $request->statut_compte]);
         return response()->json($etudiant);
+    }
+
+    // ─── Organisation : répartir un niveau en sections/groupes ──────────────────
+
+    /**
+     * Assigne section + groupe à tous les étudiants d'un niveau, puis garantit
+     * qu'un emploi du temps existe pour chaque groupe/section (clone d'un modèle
+     * existant pour tout nouveau groupe introduit).
+     */
+    public function repartir(Request $request)
+    {
+        $request->validate([
+            'filiere'    => 'required|string',
+            'niveau'     => 'required|string',
+            'nbSections' => 'required|integer|min:1|max:6',
+            'nbGroupes'  => 'required|integer|min:1|max:6',
+        ]);
+
+        $students = Etudiant::where('filiere', $request->filiere)
+            ->where('niveau', $request->niveau)->get()->shuffle()->values();
+        if ($students->isEmpty()) {
+            return response()->json(['message' => 'Aucun étudiant pour ce niveau.'], 422);
+        }
+
+        $nbSec       = (int) $request->nbSections;
+        $nbGrp       = (int) $request->nbGroupes;
+        $perSection  = (int) ceil($students->count() / $nbSec);
+        $sectionsMap = [];
+
+        DB::transaction(function () use ($students, $nbSec, $nbGrp, $perSection, &$sectionsMap, $request) {
+            for ($si = 0; $si < $nbSec; $si++) {
+                $secStudents = $students->slice($si * $perSection, $perSection)->values();
+                if ($secStudents->isEmpty()) continue;
+                $sectionNom = 'Section '.($si + 1);
+                $perGroup   = (int) ceil($secStudents->count() / $nbGrp);
+                $groups     = [];
+                for ($g = 0; $g < $nbGrp; $g++) {
+                    $groupeNom = 'Groupe '.($si * $nbGrp + $g + 1);
+                    $groups[]  = $groupeNom;
+                    foreach ($secStudents->slice($g * $perGroup, $perGroup) as $stu) {
+                        $stu->update(['section' => $sectionNom, 'groupe' => $groupeNom]);
+                    }
+                }
+                $sectionsMap[$sectionNom] = $groups;
+            }
+
+            $this->ensureTimetable($request->filiere, $request->niveau, $sectionsMap);
+        });
+
+        return response()->json([
+            'message'  => 'Étudiants répartis et emplois du temps mis à jour.',
+            'sections' => $sectionsMap,
+            'total'    => $students->count(),
+        ]);
+    }
+
+    /**
+     * Garantit qu'un emploi du temps existe pour chaque groupe.
+     * On ne touche pas aux groupes déjà couverts : pour chaque NOUVEAU groupe
+     * introduit, on clone l'emploi du temps complet d'un groupe de référence
+     * existant (en le ré-étiquetant sur le seul nouveau groupe). Les groupes
+     * existants restent intacts — pas de doublons.
+     */
+    private function ensureTimetable(string $filiere, string $niveau, array $sections): void
+    {
+        $existing = Seance::where('filiere', $filiere)->where('niveau', $niveau)->get();
+        if ($existing->isEmpty()) return; // pas de modèle à cloner
+
+        // Groupes déjà présents dans un emploi du temps
+        $covered = [];
+        foreach ($existing as $s) {
+            foreach (($s->groupes ?? []) as $g) $covered[$g] = true;
+        }
+        if (empty($covered)) return;
+
+        // Groupe de référence = premier groupe couvert ; son emploi du temps = modèle
+        $refGroup    = array_key_first($covered);
+        $refSeances  = $existing->filter(fn ($s) => in_array($refGroup, $s->groupes ?? [], true))->values();
+
+        // Tous les groupes cibles, dans l'ordre
+        $targetGroups = [];
+        foreach ($sections as $groups) foreach ($groups as $g) $targetGroups[] = $g;
+
+        foreach ($targetGroups as $g) {
+            if (isset($covered[$g])) continue; // déjà un emploi du temps
+            foreach ($refSeances as $tpl) {
+                Seance::create([
+                    'module_id'   => $tpl->module_id,
+                    'enseignant_id' => $tpl->enseignant_id,
+                    'salle_id'    => $tpl->salle_id,
+                    'type'        => $tpl->type,
+                    'jour'        => $tpl->jour,
+                    'heure_debut' => $tpl->heure_debut,
+                    'heure_fin'   => $tpl->heure_fin,
+                    'groupes'     => [$g],
+                    'statut'      => 'normal',
+                    'filiere'     => $filiere,
+                    'niveau'      => $niveau,
+                    'semestre'    => $tpl->semestre,
+                ]);
+            }
+            $covered[$g] = true;
+        }
     }
 
     // ─── Teachers ──────────────────────────────────────────────────────────────

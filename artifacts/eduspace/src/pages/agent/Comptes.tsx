@@ -15,15 +15,14 @@ import {
 } from "lucide-react";
 import { gradeSubmissions } from "@/data/mockData";
 import { agent as api } from "@/lib/api";
-import { getStudentAssignment } from "@/lib/orgStore";
-import { getUser } from "@/lib/auth";
+import { getUser, getAgentFiliere } from "@/lib/auth";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type CompteStatut = "actif" | "suspendu" | "archive";
 
 interface AgentStudent {
   id: string; matricule: string; nom: string; prenom: string;
-  filiere: string; niveau: string; groupe: string;
+  filiere: string; niveau: string; groupe: string; section: string;
   dateNaissance: string; wilaya: string; email: string;
   statutCompte: CompteStatut; statutReinscription: string;
 }
@@ -40,10 +39,9 @@ const container = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } 
 const item      = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 const ITEMS_PER_PAGE = 10;
 
-// ── Agent dept from profile ───────────────────────────────────────────────────
+// ── Agent dept from profile (normalised to match student filière) ──────────────
 function getAgentDept(): string {
-  const profile = getUser()?.profile as Record<string, string> | undefined;
-  return profile?.departement ?? "Informatique";
+  return getAgentFiliere();
 }
 
 const DEPARTMENTS = ["Informatique", "Mathématiques", "Physique", "Réseaux", "Systèmes", "Électronique"];
@@ -362,7 +360,7 @@ export default function AgentComptes() {
 
   const agentDept = getAgentDept();
   const agentUniv = (getUser()?.profile as Record<string, string> | undefined)?.universite
-    ?? "Université des Sciences et de la Technologie Houari Boumediene";
+    ?? "Université Oran 1 Ahmed Ben Bella";
 
   const [search, setSearch]                   = useState("");
   const [filterNiveau, setFilterNiveau]       = useState("all");
@@ -415,6 +413,7 @@ export default function AgentComptes() {
         filiere:            String(s.filiere ?? ""),
         niveau:             String(s.niveau ?? ""),
         groupe:             String(s.groupe ?? ""),
+        section:            String(s.section ?? ""),
         dateNaissance:      String(s.date_naissance ?? ""),
         wilaya:             String(s.wilaya ?? ""),
         email:              String((s as Record<string, unknown>).email ?? ""),
@@ -661,7 +660,7 @@ export default function AgentComptes() {
         id: realId, matricule: newStudent.matricule,
         nom: newStudent.nom, prenom: newStudent.prenom,
         filiere: agentDept, niveau: newStudent.niveau,
-        groupe: "Groupe 1",
+        groupe: "Groupe 1", section: "Section 1",
         dateNaissance: newStudent.dateNaissance || "",
         wilaya: newStudent.wilayaNaissance || "Oran",
         email: String(created.email ?? (newStudent.matricule + "@eduspace.local")),
@@ -769,14 +768,8 @@ export default function AgentComptes() {
     if (!`${s.prenom} ${s.nom} ${s.matricule}`.toLowerCase().includes(q)) return false;
     if (filterNiveau !== "all" && s.niveau !== filterNiveau) return false;
     if (filterStatutCompte !== "all" && s.statutCompte !== filterStatutCompte) return false;
-    if (filterSection !== "all") {
-      const a = getStudentAssignment(s.id);
-      if (!a || a.section !== filterSection) return false;
-    }
-    if (filterGroupe !== "all") {
-      const a = getStudentAssignment(s.id);
-      if (!a || a.groupe !== filterGroupe) return false;
-    }
+    if (filterSection !== "all" && s.section !== filterSection) return false;
+    if (filterGroupe !== "all" && s.groupe !== filterGroupe) return false;
     return true;
   }), [students, search, filterNiveau, filterStatutCompte, filterSection, filterGroupe]);
 
@@ -927,7 +920,7 @@ export default function AgentComptes() {
                           <td className="px-4 py-3 font-medium">{s.prenom} {s.nom}</td>
                           <td className="px-4 py-3 text-muted-foreground text-xs">{s.filiere} — {s.niveau}</td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">
-                            {(() => { const a = getStudentAssignment(s.id); return a ? <>{a.section}<br />{a.groupe}</> : <span className="italic text-muted-foreground/50">—</span>; })()}
+                            {s.section || s.groupe ? <>{s.section || "—"}<br />{s.groupe || "—"}</> : <span className="italic text-muted-foreground/50">—</span>}
                           </td>
                           <td className="px-4 py-3 text-center"><Badge className={`text-xs border ${statutCompteBadge[s.statutCompte]}`}>{s.statutCompte}</Badge></td>
                           <td className="px-4 py-3 text-center">
@@ -1041,7 +1034,6 @@ export default function AgentComptes() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 mb-3"><GraduationCap className="w-4 h-4 text-primary" /><span className="font-semibold text-sm">Informations personnelles</span></div>
                     {(() => {
-                      const assignment = getStudentAssignment(s.id);
                       return (
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           {[
@@ -1049,12 +1041,12 @@ export default function AgentComptes() {
                             { label: "Wilaya de naissance", value: s.wilaya || "—" },
                             { label: "Filière", value: s.filiere },
                             { label: "Niveau", value: s.niveau },
-                            { label: "Section", value: assignment ? assignment.section : "—" },
-                            { label: "Groupe", value: assignment ? assignment.groupe : "—" },
+                            { label: "Section", value: s.section || "—" },
+                            { label: "Groupe", value: s.groupe || "—" },
                           ].map(f => (
                             <div key={f.label} className="bg-muted/20 rounded-lg p-3">
                               <p className="text-xs text-muted-foreground">{f.label}</p>
-                              <p className={`font-medium mt-0.5 break-all ${!assignment && (f.label === "Section" || f.label === "Groupe") ? "text-muted-foreground/50 italic" : ""}`}>{f.value}</p>
+                              <p className="font-medium mt-0.5 break-all">{f.value}</p>
                             </div>
                           ))}
                           <div className="bg-muted/20 rounded-lg p-3 flex items-center justify-between gap-2 col-span-2">

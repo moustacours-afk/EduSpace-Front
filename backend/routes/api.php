@@ -78,6 +78,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/students/{id}', [AgentController::class, 'updateStudent']);
         Route::patch('/students/{id}/account', [AgentController::class, 'updateStudentAccount']);
 
+        // Organisation : répartition d'un niveau en sections/groupes (+ emplois du temps)
+        Route::post('/organisation/repartir', [AgentController::class, 'repartir']);
+
         // Modules (read-only for agent)
         Route::get('/modules', [AgentController::class, 'modules']);
 

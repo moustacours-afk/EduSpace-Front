@@ -35,6 +35,53 @@ export function setOrgState(state: OrgState): void {
   localStorage.setItem(ORG_KEY, JSON.stringify(state));
 }
 
+/**
+ * Build the section/group organisation tree directly from the backend student
+ * records (their real `section` + `groupe` fields). This makes the Organisation
+ * page a faithful mirror of the Comptes étudiants data — single source of truth.
+ */
+export function buildOrgFromStudents(
+  students: { id: string; niveau: string; section?: string; groupe?: string; specialite?: string }[],
+): OrgState {
+  const sectionsMap = new Map<string, OrgSection>();
+  for (const s of students) {
+    const sectionNom = (s.section && s.section.trim()) || "Section A";
+    const groupeNom  = (s.groupe && s.groupe.trim())  || "Groupe 1";
+    const key = `${s.niveau}||${sectionNom}`;
+    let section = sectionsMap.get(key);
+    if (!section) {
+      section = {
+        id: `sec-${s.niveau}-${sectionNom}`.replace(/\s+/g, "-").toLowerCase(),
+        nom: sectionNom, niveau: s.niveau, specialite: s.specialite,
+        maxStudents: 200, nbGroupes: 0, groupes: [],
+      };
+      sectionsMap.set(key, section);
+    }
+    let groupe = section.groupes.find(g => g.nom === groupeNom);
+    if (!groupe) {
+      groupe = { id: `${section.id}-${groupeNom}`.replace(/\s+/g, "-").toLowerCase(), nom: groupeNom, nbMax: 40, studentIds: [] };
+      section.groupes.push(groupe);
+    }
+    groupe.studentIds.push(s.id);
+  }
+  const sections = [...sectionsMap.values()].map(sec => ({
+    ...sec,
+    nbGroupes: sec.groupes.length,
+    groupes: [...sec.groupes].sort((a, b) => a.nom.localeCompare(b.nom, undefined, { numeric: true })),
+  }));
+  sections.sort((a, b) => a.niveau.localeCompare(b.niveau) || a.nom.localeCompare(b.nom, undefined, { numeric: true }));
+  return { sections };
+}
+
+/** Rebuild the persisted org state from backend students and save it. */
+export function syncOrgFromStudents(
+  students: { id: string; niveau: string; section?: string; groupe?: string; specialite?: string }[],
+): OrgState {
+  const state = buildOrgFromStudents(students);
+  setOrgState(state);
+  return state;
+}
+
 export function getStudentAssignment(studentId: string): { section: string; groupe: string } | null {
   const org = getOrgState();
   for (const section of org.sections) {

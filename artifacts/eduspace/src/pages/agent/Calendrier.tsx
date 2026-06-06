@@ -125,7 +125,7 @@ export default function AgentCalendrier() {
       <html><head><title>Calendrier Académique 2025-2026</title>
       <style>body{font-family:Arial,sans-serif;padding:30px}table{width:100%;border-collapse:collapse}th{background:#f0f0f0;padding:10px 12px;text-align:left;font-size:12px;border-bottom:2px solid #ddd}@media print{button{display:none}}</style></head>
       <body>
-        <h2 style="margin:0 0 4px">Université des Sciences et de la Technologie Houari Boumediene</h2>
+        <h2 style="margin:0 0 4px">Université Oran 1 Ahmed Ben Bella</h2>
         <p style="color:#666;margin:0 0 20px">Calendrier Académique — Département Informatique — 2025-2026</p>
         <button onclick="window.print()" style="margin-bottom:16px;padding:8px 16px;background:#4f46e5;color:white;border:none;border-radius:6px;cursor:pointer">Imprimer</button>
         <table><thead><tr><th>Date</th><th>Événement</th><th>Description</th><th>Type</th></tr></thead>

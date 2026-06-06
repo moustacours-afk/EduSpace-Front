@@ -112,6 +112,8 @@ export const agent = {
   storeStudent: (body: unknown) => post<unknown>("/agent/students", body),
   updateStudent: (id: number, body: unknown) => patch<void>(`/agent/students/${id}`, body),
   updateStudentAccount: (id: number, body: unknown) => patch<void>(`/agent/students/${id}/account`, body),
+  repartir: (body: { filiere: string; niveau: string; nbSections: number; nbGroupes: number }) =>
+    post<{ message: string; sections: Record<string, string[]>; total: number }>("/agent/organisation/repartir", body),
   teachers: () => get<unknown[]>("/agent/teachers"),
   storeTeacher: (body: unknown) => post<unknown>("/agent/teachers", body),
   updateTeacher: (id: number, body: unknown) => patch<void>(`/agent/teachers/${id}`, body),

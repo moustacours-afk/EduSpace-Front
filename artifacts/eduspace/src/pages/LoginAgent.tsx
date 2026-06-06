@@ -79,7 +79,7 @@ export default function LoginAgent() {
 
           {/* Demo credentials hint */}
           <div className="bg-muted border border-border rounded-lg px-3 py-2 mb-5 text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">Compte démo :</span> nom d'utilisateur = <span className="font-mono">n.ferhat@univ-alger.dz</span> — mot de passe: <span className="font-mono">password</span>
+            <span className="font-semibold text-foreground">Compte démo :</span> nom d'utilisateur = <span className="font-mono">n.ferhat@univ-oran1.dz</span> — mot de passe: <span className="font-mono">password</span>
           </div>
 
           <Form {...form}>
@@ -166,7 +166,7 @@ export default function LoginAgent() {
                   Pour réinitialiser votre mot de passe, veuillez contacter le service informatique de l'université :
                 </p>
                 <div className="bg-muted border border-border rounded-lg p-3 space-y-1 text-sm">
-                  <p><span className="font-medium">Email :</span> support-si@univ-alger.dz</p>
+                  <p><span className="font-medium">Email :</span> support-si@univ-oran1.dz</p>
                   <p><span className="font-medium">Téléphone :</span> +213 21 XX XX XX</p>
                   <p><span className="font-medium">Bureau :</span> Bâtiment Administration — Rdc</p>
                 </div>
