@@ -613,6 +613,10 @@ class EduSpaceSeeder extends Seeder
             $this->seedBulkDepartments($agents, $salles);
         });
 
+        // Derive every teacher's module assignments (type CM/TD/TP, responsable,
+        // groups/sections) from the generated timetable.
+        $this->call(TeacherAssignmentsSeeder::class);
+
         // ════════════════════════════════════════════════════════════════════
         $this->command->info('');
         $this->command->info('═══════════════════════════════════════════════════════════');

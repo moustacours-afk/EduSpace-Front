@@ -462,14 +462,19 @@ class AgentController extends Controller
         return response()->json($q->get()->map(fn ($s) => [
             'id' => $s->id,
             'moduleId' => $s->module_id,
-            'module' => $s->module->intitule,
+            'module' => $s->module?->intitule,
             'type' => $s->type,
             'jour' => $s->jour,
             'heureDebut' => $s->heure_debut,
             'heureFin' => $s->heure_fin,
+            'salleId' => $s->salle_id,
             'salle' => $s->salle?->nom,
+            'enseignantId' => $s->enseignant_id,
             'enseignant' => $s->enseignant ? 'Dr. ' . $s->enseignant->nom : null,
             'statut' => $s->statut,
+            'filiere' => $s->filiere,
+            'niveau' => $s->niveau,
+            'semestre' => $s->semestre,
             'groupes' => $s->groupes ?? [],
         ]));
     }

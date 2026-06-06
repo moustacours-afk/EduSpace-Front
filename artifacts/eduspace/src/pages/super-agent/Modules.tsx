@@ -37,13 +37,18 @@ export default function SuperAgentModules() {
   const [modules, setModules]         = useState<ModuleEntry[]>([]);
   const [allModules, setAllModules]   = useState<ModuleEntry[]>([]);
 
-  // Faculties filtered to SA's university
-  const facultes    = saUniversite ? getFacultes(saUniversite) : [];
+  // Faculties for the SA's university, plus the SA's own faculty from their profile
+  const facultes    = [...new Set([
+    ...(saUniversite ? getFacultes(saUniversite) : []),
+    ...(saProfile?.faculte ? [saProfile.faculte] : []),
+  ])];
   const departements = faculte ? getDepartements(faculte) : [];
   const semestres   = SEMESTRES_PAR_NIVEAU[niveau] ?? ["S1", "S2"];
   const specialites = (faculte && departement && niveau) ? getSpecialites(departement, niveau) : [];
   const isAutoSpec  = niveau === "L1" || niveau === "L2";
-  const allFiltersSet = !!(faculte && departement && niveau && specialite && semestre);
+  // Modules in the DB are keyed by département (filière) + niveau + semestre.
+  // The spécialité is optional context and does not gate the listing.
+  const allFiltersSet = !!(faculte && departement && niveau && semestre);
 
   // Load all modules for the "all modules" view
   const refreshAllModules = useCallback(() => {
@@ -51,10 +56,10 @@ export default function SuperAgentModules() {
   }, []);
 
   const refreshModules = useCallback(() => {
-    if (!specialite || !niveau || !semestre) { setModules([]); return; }
-    const params = new URLSearchParams({ filiere: specialite, niveau, semestre }).toString();
+    if (!departement || !niveau || !semestre) { setModules([]); return; }
+    const params = new URLSearchParams({ filiere: departement, niveau, semestre }).toString();
     api.modules(params).then(d => setModules(d as ModuleEntry[])).catch(() => setModules([]));
-  }, [specialite, niveau, semestre]);
+  }, [departement, niveau, semestre]);
 
   useEffect(() => { refreshModules(); refreshAllModules(); }, [refreshModules, refreshAllModules]);
 
@@ -101,10 +106,10 @@ export default function SuperAgentModules() {
     } else {
       // Create mode
       await api.storeModule({
-        code:        mod.code || `${specialite.slice(0, 3).toUpperCase()}${Date.now().toString().slice(-4)}`,
+        code:        mod.code || `${departement.slice(0, 3).toUpperCase()}${Date.now().toString().slice(-4)}`,
         intitule:    mod.nom,
         credits:     mod.credits,
-        filiere:     specialite,
+        filiere:     departement,
         niveau,
         semestre,
         type_ue:     mod.ue,
@@ -266,7 +271,7 @@ export default function SuperAgentModules() {
             <motion.div variants={item}>
               <div className="flex items-center gap-4 flex-wrap text-sm mb-3">
                 <Badge variant="outline" className="gap-1.5">
-                  <GraduationCap className="w-3.5 h-3.5" />{niveau} — {semestre} — {specialite}
+                  <GraduationCap className="w-3.5 h-3.5" />{departement} — {niveau} — {semestre}
                 </Badge>
                 <span className="text-muted-foreground">{modules.length} module{modules.length !== 1 ? "s" : ""}</span>
                 <span className="text-muted-foreground">{totalCredits} crédit{totalCredits !== 1 ? "s" : ""} au total</span>
@@ -274,7 +279,7 @@ export default function SuperAgentModules() {
               {modules.length === 0 ? (
                 <Card className="p-10 text-center">
                   <BookOpen className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-muted-foreground mb-3">Aucun module pour {specialite} — {niveau} {semestre}.</p>
+                  <p className="text-muted-foreground mb-3">Aucun module pour {departement} — {niveau} {semestre}.</p>
                   <Button size="sm" className="bg-purple-600 hover:bg-purple-700 gap-1" onClick={() => setShowModal(true)}>
                     <Plus className="w-3.5 h-3.5" />Ajouter le premier module
                   </Button>
@@ -343,7 +348,7 @@ export default function SuperAgentModules() {
 
       <AjoutModule
         open={showModal}
-        contextLabel={`${faculte} · ${departement} · ${specialite} — ${niveau} ${semestre}`}
+        contextLabel={`${faculte} · ${departement}${specialite ? " · " + specialite : ""} — ${niveau} ${semestre}`}
         initialNiveau={niveau}
         initialSemestre={semestre}
         editModule={editingModule}
