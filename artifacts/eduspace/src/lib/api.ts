@@ -152,6 +152,14 @@ export const agent = {
 };
 
 // ── Super Agent ───────────────────────────────────────────────────────
+export interface UeOption { ue_order: number; ue_code: string; count: number; next_order: number; next_code: string }
+export interface UeOptions {
+  prefix: string;
+  semester_digit: number;
+  existing: UeOption[];
+  new_ue: { ue_order: number; ue_code: string; first_code: string };
+}
+
 export const superAgent = {
   profile: () => get<Record<string, unknown>>("/super-agent/profile"),
   stats: () => get<Record<string, unknown>>("/super-agent/stats"),
@@ -160,7 +168,16 @@ export const superAgent = {
   updateAgent: (id: number, body: unknown) => patch<void>(`/super-agent/agents/${id}`, body),
   toggleAgentStatus: (id: number, statut: string) => patch<{ statut: string }>(`/super-agent/agents/${id}/status`, { statut }),
   deleteAgent: (id: number) => del<void>(`/super-agent/agents/${id}`),
+  // Doyens (faculty accounts) — Director only
+  doyens: () => get<unknown[]>("/super-agent/doyens"),
+  storeDoyen: (body: { nom: string; prenom: string; username: string; password: string; faculte: string }) => post<unknown>("/super-agent/doyens", body),
+  updateDoyen: (id: number, body: unknown) => patch<void>(`/super-agent/doyens/${id}`, body),
+  toggleDoyenStatus: (id: number, statut: string) => patch<{ statut: string }>(`/super-agent/doyens/${id}/status`, { statut }),
+  deleteDoyen: (id: number) => del<void>(`/super-agent/doyens/${id}`),
+  // Student promotion statistics
+  studentStats: (params?: string) => get<{ normale: number; rattrapage: number; dettes: number; ajourne: number; total: number }>(`/super-agent/student-stats${params ? "?" + params : ""}`),
   modules: (params?: string) => get<unknown[]>(`/super-agent/modules${params ? "?" + params : ""}`),
+  moduleUeOptions: (params: string) => get<UeOptions>(`/super-agent/modules/ue-options?${params}`),
   storeModule: (body: unknown) => post<unknown>("/super-agent/modules", body),
   updateModule: (id: number, body: unknown) => patch<void>(`/super-agent/modules/${id}`, body),
   deleteModule: (id: number) => del<void>(`/super-agent/modules/${id}`),

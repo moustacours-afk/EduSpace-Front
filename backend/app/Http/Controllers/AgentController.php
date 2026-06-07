@@ -27,11 +27,30 @@ class AgentController extends Controller
         return $request->user()->agent;
     }
 
+    /**
+     * Département de l'agent connecté, normalisé pour correspondre au champ
+     * `filiere` des étudiants / `departement` des enseignants.
+     * "Département d'Informatique" → "Informatique". Renvoie null si inconnu.
+     */
+    private function agentDept(Request $request): ?string
+    {
+        $agent = $this->agent($request);
+        if (! $agent || ! $agent->departement) return null;
+        $stripped = preg_replace(
+            "/^d[ée]partement\\s+(d['’]\\s*|de\\s+|des\\s+|du\\s+)/iu",
+            '',
+            $agent->departement
+        );
+        return trim($stripped) ?: $agent->departement;
+    }
+
     // ─── Students ──────────────────────────────────────────────────────────────
 
     public function students(Request $request)
     {
         $q = Etudiant::with('user');
+        // Chaque agent ne voit que les étudiants de son propre département.
+        if ($dept = $this->agentDept($request)) $q->where('filiere', $dept);
         if ($request->has('filiere')) $q->where('filiere', $request->filiere);
         if ($request->has('niveau')) $q->where('niveau', $request->niveau);
         if ($request->has('groupe')) $q->where('groupe', $request->groupe);
@@ -83,6 +102,10 @@ class AgentController extends Controller
             $email = $matricule . $counter++ . '@eduspace.local';
         }
 
+        // Glisser le nouvel étudiant dans l'organisation déjà créée pour cette
+        // filière + niveau (section/groupe existants) s'il reste de la place.
+        $placement = $this->findAvailableGroup($request->filiere, $request->niveau);
+
         $user = User::create(['email' => $email, 'password' => $request->password, 'initial_password' => $request->password, 'role' => 'etudiant']);
         $etudiant = Etudiant::create([
             'user_id'        => $user->id,
@@ -91,12 +114,50 @@ class AgentController extends Controller
             'prenom'         => $request->prenom,
             'filiere'        => $request->filiere,
             'niveau'         => $request->niveau,
-            'groupe'         => $request->groupe ?? 'Groupe 1',
+            'section'        => $placement['section'] ?? null,
+            'groupe'         => $placement['groupe'] ?? ($request->groupe ?? 'Groupe 1'),
             'date_naissance' => $request->date_naissance,
             'wilaya'         => $request->wilaya,
         ]);
 
         return response()->json(array_merge($etudiant->toArray(), ['email' => $user->email]), 201);
+    }
+
+    /** Capacité maximale d'un groupe (cohérent avec l'org côté front : nbMax). */
+    private const GROUP_CAPACITY = 40;
+
+    /**
+     * Trouve le groupe le moins rempli (avec encore de la place) parmi les
+     * sections/groupes déjà créés pour une filière + niveau. Renvoie null si
+     * aucune organisation n'existe encore ou si tous les groupes sont pleins —
+     * dans ce cas l'étudiant reste non affecté en attendant une « Répartition ».
+     */
+    private function findAvailableGroup(string $filiere, string $niveau): ?array
+    {
+        $existing = Etudiant::where('filiere', $filiere)
+            ->where('niveau', $niveau)
+            ->whereNotNull('section')
+            ->where('section', '!=', '')
+            ->get(['section', 'groupe']);
+
+        if ($existing->isEmpty()) return null; // pas encore d'organisation
+
+        // Effectifs par (section, groupe).
+        $counts = [];
+        foreach ($existing as $e) {
+            $key = $e->section . '||' . $e->groupe;
+            $counts[$key] = ($counts[$key] ?? 0) + 1;
+        }
+
+        // Groupe le moins rempli ayant encore de la place.
+        asort($counts);
+        foreach ($counts as $key => $count) {
+            if ($count < self::GROUP_CAPACITY) {
+                [$section, $groupe] = explode('||', $key, 2);
+                return ['section' => $section, 'groupe' => $groupe];
+            }
+        }
+        return null; // tous pleins
     }
 
     public function updateStudent(Request $request, int $id)
@@ -225,6 +286,9 @@ class AgentController extends Controller
     public function teachers(Request $request)
     {
         $q = Enseignant::with('modules');
+        // Chaque agent ne voit que les enseignants de son département (un
+        // enseignant peut couvrir plusieurs départements → correspondance LIKE).
+        if ($dept = $this->agentDept($request)) $q->where('departement', 'like', "%$dept%");
         if ($request->has('search')) {
             $s = $request->search;
             $q->where(fn ($qq) => $qq->where('nom', 'like', "%$s%")->orWhere('prenom', 'like', "%$s%"));

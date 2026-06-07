@@ -43,3 +43,30 @@ export function isLoggedIn(role?: AuthUser["role"]): boolean {
   if (!user || !getToken()) return false;
   return role ? user.role === role : true;
 }
+
+// ── Super-agent account type ───────────────────────────────────────────────────
+// A super_agent WITH a faculté is a Doyen (faculty-level); WITHOUT one it is a
+// Directeur (university-level). The same interface adapts to the logged-in account.
+type SuperAgentProfile = { universite?: string; faculte?: string; accountType?: string };
+
+function superAgentProfile(): SuperAgentProfile | undefined {
+  return getUser()?.profile as SuperAgentProfile | undefined;
+}
+
+export function getSuperAgentAccountType(): "directeur" | "doyen" {
+  const p = superAgentProfile();
+  if (p?.accountType === "doyen" || p?.accountType === "directeur") return p.accountType;
+  return p?.faculte ? "doyen" : "directeur";
+}
+
+export function isDoyen(): boolean {
+  return getSuperAgentAccountType() === "doyen";
+}
+
+export function getSuperAgentFaculte(): string {
+  return superAgentProfile()?.faculte ?? "";
+}
+
+export function getSuperAgentUniversite(): string {
+  return superAgentProfile()?.universite ?? "";
+}

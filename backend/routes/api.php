@@ -151,8 +151,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/agents/{id}/status', [SuperAgentController::class, 'toggleAgentStatus']);
         Route::delete('/agents/{id}', [SuperAgentController::class, 'destroyAgent']);
 
+        // Doyens CRUD (faculty accounts — Director only)
+        Route::get('/doyens', [SuperAgentController::class, 'doyens']);
+        Route::post('/doyens', [SuperAgentController::class, 'storeDoyen']);
+        Route::patch('/doyens/{id}', [SuperAgentController::class, 'updateDoyen']);
+        Route::patch('/doyens/{id}/status', [SuperAgentController::class, 'toggleDoyenStatus']);
+        Route::delete('/doyens/{id}', [SuperAgentController::class, 'destroyDoyen']);
+
+        // Student promotion statistics
+        Route::get('/student-stats', [SuperAgentController::class, 'studentStats']);
+
         // Modules/Programmes CRUD
         Route::get('/modules', [SuperAgentController::class, 'modules']);
+        Route::get('/modules/ue-options', [SuperAgentController::class, 'moduleUeOptions']);
         Route::post('/modules', [SuperAgentController::class, 'storeModule']);
         Route::patch('/modules/{id}', [SuperAgentController::class, 'updateModule']);
         Route::delete('/modules/{id}', [SuperAgentController::class, 'destroyModule']);

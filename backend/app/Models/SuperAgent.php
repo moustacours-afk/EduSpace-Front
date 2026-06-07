@@ -8,7 +8,7 @@ class SuperAgent extends Model
 {
     protected $table = 'super_agents';
 
-    protected $fillable = ['user_id', 'nom', 'prenom', 'role', 'departement', 'universite', 'faculte'];
+    protected $fillable = ['user_id', 'nom', 'prenom', 'role', 'departement', 'universite', 'faculte', 'statut'];
 
     public function user()
     {

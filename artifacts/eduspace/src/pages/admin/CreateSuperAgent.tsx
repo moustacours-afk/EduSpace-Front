@@ -7,7 +7,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { WILAYAS, ETABLISSEMENTS_PAR_WILAYA, getFacultes, getDepartements } from "@/lib/superAgentStore";
+import { WILAYAS, ETABLISSEMENTS_PAR_WILAYA } from "@/lib/superAgentStore";
 
 // ─── OWNER PASSWORD ───────────────────────────────────────────────────────────
 // Change this value to set the owner access password.
@@ -174,8 +174,6 @@ function OwnerGate({ onUnlock }: { onUnlock: () => void }) {
 function CreateForm() {
   const [wilaya,      setWilaya]      = useState("");
   const [universite,  setUniversite]  = useState("");
-  const [faculte,     setFaculte]     = useState("");
-  const [departement, setDepartement] = useState("");
   const [nom,         setNom]         = useState("");
   const [prenom,      setPrenom]      = useState("");
   const [email,       setEmail]       = useState("");
@@ -185,13 +183,10 @@ function CreateForm() {
   const [error,       setError]       = useState("");
   const [success,     setSuccess]     = useState("");
 
-  const universites  = wilaya     ? (ETABLISSEMENTS_PAR_WILAYA[wilaya]  ?? []) : [];
-  const facultes     = universite ? getFacultes(universite)                      : [];
-  const departements = faculte    ? getDepartements(faculte)                     : [];
+  const universites  = wilaya ? (ETABLISSEMENTS_PAR_WILAYA[wilaya] ?? []) : [];
 
-  function resetUniv() { setUniversite(""); setFaculte(""); setDepartement(""); }
-  function resetFac()  { setFaculte(""); setDepartement(""); }
-
+  // A Directeur is scoped to a université only (no faculté). Faculty-level
+  // accounts (Doyens) are created later by the Director inside the app.
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!nom || !prenom || !email || !password || !universite) {
@@ -210,15 +205,14 @@ function CreateForm() {
           role:        "super_agent",
           nom, prenom,
           universite,
-          faculte:     faculte     || undefined,
-          departement: departement || undefined,
+          // No faculté → this super_agent is a Directeur (university level).
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? "Erreur");
-      setSuccess(`Compte Super Agent créé avec succès pour ${prenom} ${nom} (${universite}).`);
+      setSuccess(`Compte Directeur créé avec succès pour ${prenom} ${nom} (${universite}).`);
       setNom(""); setPrenom(""); setEmail(""); setPassword("");
-      setWilaya(""); resetUniv();
+      setWilaya(""); setUniversite("");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erreur lors de la création.");
     } finally {
@@ -238,7 +232,7 @@ function CreateForm() {
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold">Créer un Super Agent</h1>
+            <h1 className="text-xl font-bold">Créer un Directeur d'université</h1>
             <p className="text-purple-300 text-sm">Accès réservé au propriétaire de l'application</p>
           </div>
         </div>
@@ -296,7 +290,7 @@ function CreateForm() {
                 placeholder="Choisir une wilaya…"
                 options={WILAYAS}
                 value={wilaya}
-                onChange={v => { setWilaya(v); resetUniv(); }}
+                onChange={v => { setWilaya(v); setUniversite(""); }}
               />
 
               <div className="flex items-center gap-2 text-slate-300 text-xs pl-1">
@@ -309,27 +303,14 @@ function CreateForm() {
                 placeholder="Choisir un établissement…"
                 options={universites}
                 value={universite}
-                onChange={v => { setUniversite(v); resetFac(); }}
+                onChange={setUniversite}
                 disabled={universites.length === 0}
               />
 
-              <SearchableSelect
-                label="Faculté"
-                placeholder="Choisir une faculté…"
-                options={facultes}
-                value={faculte}
-                onChange={v => { setFaculte(v); setDepartement(""); }}
-                disabled={!universite}
-              />
-
-              <SearchableSelect
-                label="Département"
-                placeholder="Choisir un département…"
-                options={departements}
-                value={departement}
-                onChange={setDepartement}
-                disabled={!faculte}
-              />
+              <p className="text-[11px] text-slate-400 leading-snug pt-1">
+                Le compte Directeur gère toute l'université. Les comptes de faculté (Doyens)
+                sont créés ensuite par le Directeur depuis l'application.
+              </p>
             </div>
 
             {error && (
@@ -344,7 +325,7 @@ function CreateForm() {
 
             <Button type="submit" disabled={loading}
               className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-5 rounded-xl">
-              {loading ? "Création en cours…" : "Créer le compte Super Agent"}
+              {loading ? "Création en cours…" : "Créer le compte Directeur"}
             </Button>
           </form>
         </Card>

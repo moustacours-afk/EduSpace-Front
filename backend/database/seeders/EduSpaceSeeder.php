@@ -41,17 +41,42 @@ class EduSpaceSeeder extends Seeder
     private string $DOM   = 'univ-oran1.dz';
     private string $ANNEE = '2025-2026';
 
+    /** Per-(filière,niveau,semestre,type) course counter for UE-code generation. */
+    private array $ueCounters = [];
+
+    /**
+     * Official LMD canevas code: UE type + semester digit + UE order + course order.
+     * One UE per type per semester, so e.g. the Fundamental courses of Semester 1
+     * become UEF111, UEF112, UEF113… — never the subject-based legacy codes.
+     */
+    private function makeUeCode(string $filiere, string $niveau, string $semestre, string $type): string
+    {
+        $S   = preg_match('/(\d+)/', $semestre, $mm) ? (int) $mm[1] : 1;
+        $key = "$filiere|$niveau|$semestre|$type";
+        $this->ueCounters[$key] = ($this->ueCounters[$key] ?? 0) + 1;
+        return strtoupper($type) . $S . '1' . $this->ueCounters[$key];
+    }
+
     public function run(): void
     {
         mt_srand(2026); // reproducible random grades
 
         // ════════════════════════════════════════════════════════════════════
-        // 1. SUPER AGENT (niveau université / Vice-Rectorat Pédagogie)
+        // 1. SUPER AGENTS — Directeur (université) + Doyen (faculté)
+        //    Directeur = super_agent SANS faculté (niveau université).
+        //    Doyen     = super_agent AVEC faculté (niveau faculté).
         // ════════════════════════════════════════════════════════════════════
-        $saUser = User::create(['email' => 'superagent@'.$this->DOM, 'password' => Hash::make('password'), 'initial_password' => 'password', 'role' => 'super_agent']);
+        $dirUser = User::create(['email' => 'directeur@'.$this->DOM, 'password' => Hash::make('password'), 'initial_password' => 'password', 'role' => 'super_agent']);
         SuperAgent::create([
-            'user_id' => $saUser->id, 'nom' => 'Belabbas', 'prenom' => 'Karim',
-            'role' => 'Super Agent', 'departement' => 'Vice-Rectorat chargé de la Pédagogie',
+            'user_id' => $dirUser->id, 'nom' => 'Belabbas', 'prenom' => 'Karim',
+            'role' => 'Directeur', 'departement' => 'Direction de l\'Université',
+            'universite' => $this->UNIV, 'faculte' => null,
+        ]);
+
+        $doyenUser = User::create(['email' => 'doyen.sea@'.$this->DOM, 'password' => Hash::make('password'), 'initial_password' => 'password', 'role' => 'super_agent']);
+        SuperAgent::create([
+            'user_id' => $doyenUser->id, 'nom' => 'Cherif', 'prenom' => 'Yacine',
+            'role' => 'Doyen', 'departement' => 'Décanat',
             'universite' => $this->UNIV, 'faculte' => $this->FAC,
         ]);
 
@@ -180,7 +205,8 @@ class EduSpaceSeeder extends Seeder
         foreach ($curriculum as $m) {
             $teacher = $m[15] ? ($ens[$m[15]] ?? null) : null;
             $module = Module::create([
-                'code' => $m[0], 'intitule' => $m[1], 'credits' => $m[2], 'coefficient' => $m[3],
+                'code' => $this->makeUeCode($m[12], $m[13], $m[14], $m[4]),
+                'intitule' => $m[1], 'credits' => $m[2], 'coefficient' => $m[3],
                 'type_ue' => $m[4], 'nature' => 'obligatoire', 'vhs' => $m[5],
                 'has_cours' => (bool) $m[6], 'duree_cours' => '1h30',
                 'has_td' => (bool) $m[7], 'duree_td' => '1h30',
@@ -335,7 +361,7 @@ class EduSpaceSeeder extends Seeder
             $mods = Module::where('filiere', 'Informatique')->where('niveau', $stu->niveau)->where('semestre', $sem)->get();
             foreach ($mods as $m) {
                 // Compte principal : une note contestable en Compilation pour illustrer le recours
-                if ($mat === $primaryMat && $m->code === 'INF3504') {
+                if ($mat === $primaryMat && $m->intitule === 'Compilation') {
                     $makeNote($stu, $m, 9.0, 8.5, $m->has_tp ? 9.5 : null);
                     continue;
                 }
@@ -623,7 +649,8 @@ class EduSpaceSeeder extends Seeder
         $this->command->info('  EduSpace — Données de démonstration · '.$this->UNIV);
         $this->command->info('═══════════════════════════════════════════════════════════');
         $this->command->info('  Comptes de démonstration (mot de passe : password)');
-        $this->command->info('  • Super Agent : superagent@'.$this->DOM);
+        $this->command->info('  • Directeur   : directeur@'.$this->DOM.' (niveau université)');
+        $this->command->info('  • Doyen       : doyen.sea@'.$this->DOM.' (Faculté Sciences Exactes)');
         $this->command->info('  • Agent Info. : n.ferhat@'.$this->DOM);
         $this->command->info('  • Enseignant  : m.hadj@'.$this->DOM);
         $this->command->info('  • Étudiant    : '.$primaryMat.' (KADI Islam)');
@@ -775,12 +802,12 @@ class EduSpaceSeeder extends Seeder
                         if (in_array($title, $haveTitles, true)) continue;
                         $resp  = $pickTeacher();
                         $hasTp = $ti % 2 === 0;
-                        $code  = $d['prefix'].'-'.$niveau.'-'.$sem.'-'.str_pad((string)($ti + 1), 2, '0', STR_PAD_LEFT);
-                        while (in_array($code, $used['code'], true) || Module::where('code', $code)->exists()) { $code .= 'x'; }
+                        $type  = ['UEF','UEF','UEM','UED','UET'][$ti % 5];
+                        $code  = $this->makeUeCode($deptName, $niveau, $sem, $type);
                         $used['code'][] = $code;
                         $m = Module::create([
                             'code' => $code, 'intitule' => $title, 'credits' => mt_rand(2, 6), 'coefficient' => mt_rand(1, 4),
-                            'type_ue' => ['UEF','UEF','UEM','UED','UET'][$ti % 5], 'nature' => 'obligatoire', 'vhs' => $hasTp ? 90 : 67,
+                            'type_ue' => $type, 'nature' => 'obligatoire', 'vhs' => $hasTp ? 90 : 67,
                             'has_cours' => true, 'duree_cours' => '1h30', 'has_td' => true, 'duree_td' => '1h30',
                             'has_tp' => $hasTp, 'duree_tp' => '1h30',
                             'pct_examen' => 60, 'pct_td' => $hasTp ? 20 : 40, 'pct_tp' => $hasTp ? 20 : 0,

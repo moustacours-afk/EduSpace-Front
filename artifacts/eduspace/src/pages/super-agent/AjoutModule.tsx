@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { X, Plus, BookOpen, AlertCircle, CheckCircle2, Clock, BarChart2, Info } from "lucide-react";
+import { X, Plus, BookOpen, AlertCircle, CheckCircle2, Clock, BarChart2, Info, Hash, Layers } from "lucide-react";
 import type { ModuleEntry } from "@/lib/superAgentStore";
+import { superAgent as api, type UeOptions } from "@/lib/api";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -98,21 +99,51 @@ export interface EditModuleData {
 interface Props {
   open: boolean;
   contextLabel: string;
+  filiere?: string;            // parent's département — scope for code generation
   initialNiveau?: string;
   initialSemestre?: string;
   editModule?: EditModuleData; // when set → edit mode (all fields pre-filled)
   onClose: () => void;
-  onSave: (mod: Omit<ModuleEntry, "id"> & { _editId?: number }) => void;
+  onSave: (mod: Omit<ModuleEntry, "id"> & { _editId?: number; ue_order?: number | null; is_new_ue?: boolean }) => void;
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
 
-export default function AjoutModule({ open, contextLabel, initialNiveau, initialSemestre, editModule, onClose, onSave }: Props) {
+export default function AjoutModule({ open, contextLabel, filiere, initialNiveau, initialSemestre, editModule, onClose, onSave }: Props) {
   const isEditMode = !!editModule;
 
   const [form, setForm]     = useState<FormState>({ ...INITIAL });
   const [errors, setErrors] = useState<Errors>({});
   const [saved, setSaved]   = useState(false);
+
+  // ── Auto-generated module code (LMD canevas) ────────────────────────────────
+  // The code is never typed by hand. The admin only picks the Teaching Unit
+  // (an existing UE or a brand-new one); the code is derived server-side.
+  const [ueOptions, setUeOptions] = useState<UeOptions | null>(null);
+  const [ueChoice, setUeChoice]   = useState<string>("new"); // "new" or an ue_order
+
+  // Load the UE options for the current scope whenever the UE type changes.
+  useEffect(() => {
+    if (!open || isEditMode) { setUeOptions(null); return; }
+    if (!filiere || !initialNiveau || !initialSemestre || !form.type_ue) { setUeOptions(null); return; }
+    const params = new URLSearchParams({
+      filiere, niveau: initialNiveau, semestre: initialSemestre, type_ue: form.type_ue,
+    }).toString();
+    let cancelled = false;
+    api.moduleUeOptions(params)
+      .then(o => { if (!cancelled) { setUeOptions(o); setUeChoice("new"); } })
+      .catch(() => { if (!cancelled) setUeOptions(null); });
+    return () => { cancelled = true; };
+  }, [open, isEditMode, filiere, initialNiveau, initialSemestre, form.type_ue]);
+
+  // The code shown to the admin: fixed in edit mode, derived from the UE choice otherwise.
+  const generatedCode = useMemo(() => {
+    if (isEditMode) return editModule?.code ?? "";
+    if (!ueOptions) return "";
+    if (ueChoice === "new") return ueOptions.new_ue.first_code;
+    const opt = ueOptions.existing.find(e => String(e.ue_order) === ueChoice);
+    return opt ? opt.next_code : ueOptions.new_ue.first_code;
+  }, [isEditMode, editModule, ueOptions, ueChoice]);
 
   // Sync form whenever the modal opens — pre-fill edit data or use filter defaults
   useEffect(() => {
@@ -183,9 +214,8 @@ export default function AjoutModule({ open, contextLabel, initialNiveau, initial
   function validate(): boolean {
     const e: Errors = {};
     if (!form.nom.trim())       e.nom      = "Le nom du module est requis";
-    if (!form.code.trim())      e.code     = "Le code du module est requis";
-    else if (!/^[A-Z]{3}\d{3}$/.test(form.code.trim()))
-                                e.code     = "Format attendu : 3 lettres + 3 chiffres (ex: UEF111)";
+    // Code is auto-generated — in create mode it must be ready (UE type chosen + options loaded).
+    if (!isEditMode && !generatedCode) e.type_ue = "Sélectionnez le type d'UE pour générer le code";
     if (!form.semestre)         e.semestre = "Sélectionnez un semestre";
     if (!form.niveau)           e.niveau   = "Sélectionnez un niveau";
     if (!form.type_ue)          e.type_ue  = "Sélectionnez une UE";
@@ -205,7 +235,7 @@ export default function AjoutModule({ open, contextLabel, initialNiveau, initial
     if (!validate()) return;
     onSave({
       nom:         form.nom.trim(),
-      code:        form.code.trim().toUpperCase(),
+      code:        generatedCode,           // auto-generated, read-only
       coefficient: form.coefficient,
       credits:     form.credits,
       ue:          form.type_ue,
@@ -220,6 +250,11 @@ export default function AjoutModule({ open, contextLabel, initialNiveau, initial
       pct_examen:  effectivePcts.examen,
       pct_td:      effectivePcts.td,
       pct_tp:      effectivePcts.tp,
+      // UE selection (create only) → backend generates the authoritative code
+      ...(isEditMode ? {} : {
+        ue_order:  ueChoice === "new" ? (ueOptions?.new_ue.ue_order ?? null) : Number(ueChoice),
+        is_new_ue: ueChoice === "new",
+      }),
       // carry the edit id so parent can call updateModule
       ...(editModule ? { _editId: editModule.id } : {}),
     });
@@ -269,25 +304,13 @@ export default function AjoutModule({ open, contextLabel, initialNiveau, initial
 
           {/* ── Section 1 : Informations générales ── */}
           <Section title="Informations générales" icon={<BookOpen className="w-4 h-4" />}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Nom du module *" error={errors.nom}>
-                <Input
-                  placeholder="ex: Algorithmique Avancée"
-                  value={form.nom}
-                  onChange={e => set("nom", e.target.value)}
-                />
-              </Field>
-              <Field label="Code unique *" error={errors.code}
-                hint="3 lettres + 3 chiffres (ex: UEF111)">
-                <Input
-                  placeholder="UEF111"
-                  value={form.code}
-                  onChange={e => set("code", e.target.value.toUpperCase())}
-                  className="font-mono uppercase"
-                  maxLength={6}
-                />
-              </Field>
-            </div>
+            <Field label="Nom du module *" error={errors.nom}>
+              <Input
+                placeholder="ex: Algorithmique Avancée"
+                value={form.nom}
+                onChange={e => set("nom", e.target.value)}
+              />
+            </Field>
           </Section>
 
           {/* ── Section 2 : Contexte académique ── */}
@@ -366,6 +389,50 @@ export default function AjoutModule({ open, contextLabel, initialNiveau, initial
                 ))}
               </div>
             </div>
+          </Section>
+
+          {/* ── Section : Unité d'Enseignement & Code (auto-généré) ── */}
+          <Section title="Unité d'Enseignement & Code" icon={<Hash className="w-4 h-4" />}>
+            {isEditMode ? (
+              <Field label="Code du module (généré — non modifiable)">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/30">
+                  <Hash className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="font-mono font-bold text-base tracking-wider">{generatedCode || "—"}</span>
+                  <span className="ml-auto text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Auto</span>
+                </div>
+              </Field>
+            ) : !form.type_ue ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 border border-border rounded-lg px-3 py-2.5">
+                <Info className="w-3.5 h-3.5 flex-shrink-0" />
+                Sélectionnez d'abord le type d'UE ci-dessus — le code sera généré automatiquement.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Field label="Unité d'Enseignement (UE)" hint="Ajoutez ce cours à une UE existante ou créez-en une nouvelle.">
+                  <Select value={ueChoice} onValueChange={setUeChoice}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {ueOptions?.existing.map(e => (
+                        <SelectItem key={e.ue_order} value={String(e.ue_order)}>
+                          {e.ue_code} — {e.count} cours
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="new">
+                        ➕ Nouvelle unité{ueOptions ? ` (${ueOptions.new_ue.ue_code})` : ""}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-purple-200 bg-purple-50">
+                  <Layers className="w-5 h-5 text-purple-600 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-purple-700 font-medium uppercase tracking-wide">Code généré automatiquement</p>
+                    <p className="font-mono font-bold text-2xl tracking-widest text-purple-800">{generatedCode || "…"}</p>
+                  </div>
+                  <span className="text-[10px] text-purple-600 bg-white/70 px-2 py-0.5 rounded whitespace-nowrap">non modifiable</span>
+                </div>
+              </div>
+            )}
           </Section>
 
           {/* ── Section 3 : Coefficients & Crédits ── */}

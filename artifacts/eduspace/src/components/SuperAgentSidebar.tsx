@@ -1,22 +1,29 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { clearAuth } from "@/lib/auth";
+import { clearAuth, getSuperAgentAccountType, getSuperAgentFaculte } from "@/lib/auth";
 import {
-  LayoutDashboard, Users, BookOpen,
+  LayoutDashboard, Users, BookOpen, BarChart3,
   ChevronLeft, ChevronRight, LogOut,
 } from "lucide-react";
-
-const navItems = [
-  { href: "/super-agent/dashboard", icon: LayoutDashboard, label: "Accueil" },
-  { href: "/super-agent/comptes", icon: Users, label: "Comptes agents" },
-  { href: "/super-agent/modules", icon: BookOpen, label: "Modules par niveau" },
-];
 
 export function SuperAgentSidebar() {
   const [collapsed, setCollapsed] = useState(
     () => sessionStorage.getItem("superSidebarCollapsed") === "true"
   );
   const [location] = useLocation();
+
+  const accountType = getSuperAgentAccountType();
+  const isDirector  = accountType === "directeur";
+  const faculte     = getSuperAgentFaculte();
+  const roleLabel   = isDirector ? "Directeur" : (faculte ? `Doyen — ${faculte}` : "Doyen");
+
+  const navItems = [
+    { href: "/super-agent/dashboard", icon: LayoutDashboard, label: "Accueil" },
+    { href: "/super-agent/comptes", icon: Users, label: "Comptes agents" },
+    { href: "/super-agent/modules", icon: BookOpen, label: "Modules par niveau" },
+    // Statistiques étudiants — Directeur uniquement
+    ...(isDirector ? [{ href: "/super-agent/statistiques", icon: BarChart3, label: "Statistiques étudiants" }] : []),
+  ];
 
   function toggle() {
     const next = !collapsed;
@@ -36,7 +43,7 @@ export function SuperAgentSidebar() {
           {!collapsed && (
             <div>
               <p className="font-bold text-base leading-tight text-sidebar-foreground">EduSpace</p>
-              <p className="text-xs text-sidebar-foreground/50">Super Agent</p>
+              <p className="text-xs text-sidebar-foreground/50 truncate max-w-[170px]" title={roleLabel}>{roleLabel}</p>
             </div>
           )}
         </div>
@@ -61,24 +68,30 @@ export function SuperAgentSidebar() {
             </Link>
           );
         })}
+
+        {/* Déconnexion — kept right under the menu so it is always easy to reach */}
+        <div className="pt-1 mt-1 border-t border-sidebar-border/60">
+          <Link href="/login/super-agent">
+            <a
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all text-red-300/80 hover:bg-red-500/10 hover:text-red-200 ${collapsed ? "justify-center" : ""}`}
+              onClick={() => { clearAuth(); }}
+              title="Déconnexion"
+            >
+              <LogOut className="w-4 h-4 flex-shrink-0" />
+              {!collapsed && <span className="text-sm font-medium">Déconnexion</span>}
+            </a>
+          </Link>
+        </div>
       </nav>
 
       <div className="p-2 border-t border-sidebar-border">
-        {collapsed ? (
-          <button onClick={toggle} className="w-full flex justify-center p-2 text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        ) : (
-          <Link href="/login/super-agent">
-            <a
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all cursor-pointer"
-              onClick={() => { clearAuth(); }}
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="text-sm">Déconnexion</span>
-            </a>
-          </Link>
-        )}
+        <button
+          onClick={toggle}
+          title={collapsed ? "Déployer" : "Réduire"}
+          className={`w-full flex ${collapsed ? "justify-center" : "justify-end"} p-2 text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors`}
+        >
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+        </button>
       </div>
     </aside>
   );

@@ -30,10 +30,12 @@ php artisan migrate:fresh --seed
 
 ## 2. Comptes de démonstration — mot de passe : `password`
 
-### 🟣 Super-Agent (niveau université) — page `/login/super-agent`
+### 🟣 Super-Agent — page `/login/super-agent`
+Deux types de compte sur la même interface, distingués automatiquement par le compte connecté :
 | Identifiant | Rôle |
 |---|---|
-| `superagent@univ-oran1.dz` | Vice-Rectorat Pédagogie — gère les agents & les modules |
+| `directeur@univ-oran1.dz` | **Directeur (niveau université)** — crée les doyens, voit tous les agents, statistiques étudiants |
+| `doyen.sea@univ-oran1.dz` | **Doyen (Faculté des Sciences Exactes)** — crée les agents de sa faculté, modules (faculté fixée) |
 
 ### 🔵 Agents pédagogiques (par département) — page `/login/agent`
 | Identifiant | Département |

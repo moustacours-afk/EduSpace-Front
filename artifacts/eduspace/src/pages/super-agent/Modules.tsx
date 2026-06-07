@@ -6,26 +6,135 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BookOpen, Plus, Trash2, GraduationCap, ChevronRight, Building2, Edit2 } from "lucide-react";
+import { BookOpen, Plus, Trash2, GraduationCap, ChevronRight, Building2, Edit2, Printer } from "lucide-react";
 import AjoutModule, { type EditModuleData } from "./AjoutModule";
 import {
   getFacultes, getDepartements, getSpecialites,
   NIVEAUX_LIST, SEMESTRES_PAR_NIVEAU,
 } from "@/lib/superAgentStore";
 import { superAgent as api } from "@/lib/api";
-import { getUser } from "@/lib/auth";
+import { getUser, getSuperAgentAccountType, getSuperAgentFaculte } from "@/lib/auth";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
-interface ModuleEntry { id: number; intitule: string; code: string; credits: number; semestre: string; filiere: string; niveau: string; type_ue?: string }
+interface ModuleEntry {
+  id: number; intitule: string; code: string; credits: number;
+  semestre: string; filiere: string; niveau: string; type_ue?: string;
+  nature?: string; coefficient?: number; vhs?: number;
+  has_cours?: boolean; duree_cours?: string;
+  has_td?: boolean; duree_td?: string;
+  has_tp?: boolean; duree_tp?: string;
+  pct_examen?: number; pct_td?: number; pct_tp?: number;
+}
+
+// ─── canevas helpers ────────────────────────────────────────────────────────────
+// Parse "1h30" / "3h" / "2h00" → minutes
+function dureeToMin(d?: string): number {
+  if (!d) return 0;
+  const m = d.match(/(\d+)\s*h\s*(\d*)/i);
+  if (!m) return 0;
+  return parseInt(m[1], 10) * 60 + (m[2] ? parseInt(m[2], 10) : 0);
+}
+// minutes → "4h30" / "6h" / "" when zero
+function minToDuree(min: number): string {
+  if (!min) return "";
+  const h = Math.floor(min / 60), mm = min % 60;
+  return mm ? `${h}h${String(mm).padStart(2, "0")}` : `${h}h`;
+}
+// UE group key from a module code: "UEF111" → "UEF11" (falls back to type_ue)
+function ueGroupOf(m: ModuleEntry): string {
+  const code = (m.code || "").toUpperCase();
+  const match = code.match(/^([A-Z]{2,4}\d{2})\d$/);
+  return match ? match[1] : (m.type_ue || "UE");
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+}
+
+// Open a print-ready window with the official canevas table for a scope.
+function printCanevas(mods: ModuleEntry[], title: string, subtitle: string) {
+  if (mods.length === 0) return;
+  const ueMap = new Map<string, ModuleEntry[]>();
+  for (const m of mods) { const g = ueGroupOf(m); (ueMap.get(g) ?? ueMap.set(g, []).get(g)!).push(m); }
+  const ueGroups = [...ueMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+  const tot = mods.reduce((a, m) => ({
+    vhs: a.vhs + (m.vhs ?? 0),
+    c: a.c + (m.has_cours ? dureeToMin(m.duree_cours) : 0),
+    td: a.td + (m.has_td ? dureeToMin(m.duree_td) : 0),
+    tp: a.tp + (m.has_tp ? dureeToMin(m.duree_tp) : 0),
+    coeff: a.coeff + (m.coefficient ?? 0),
+    credits: a.credits + (m.credits ?? 0),
+  }), { vhs: 0, c: 0, td: 0, tp: 0, coeff: 0, credits: 0 });
+
+  const body = ueGroups.map(([ue, list]) => {
+    const agg = list.reduce((a, m) => ({
+      c: a.c + (m.has_cours ? dureeToMin(m.duree_cours) : 0),
+      td: a.td + (m.has_td ? dureeToMin(m.duree_td) : 0),
+      tp: a.tp + (m.has_tp ? dureeToMin(m.duree_tp) : 0),
+      coeff: a.coeff + (m.coefficient ?? 0),
+      credits: a.credits + (m.credits ?? 0),
+    }), { c: 0, td: 0, tp: 0, coeff: 0, credits: 0 });
+    const ueRow = `<tr class="ue"><td class="l">${ue} (O/P)</td><td></td><td>${minToDuree(agg.c) || "—"}</td><td>${minToDuree(agg.td) || "—"}</td><td>${minToDuree(agg.tp) || "—"}</td><td>—</td><td>${agg.coeff}</td><td>${agg.credits}</td><td></td><td></td></tr>`;
+    const modRows = list.map(m => {
+      const cont = (m.pct_td ?? 0) + (m.pct_tp ?? 0);
+      return `<tr><td class="l"><b>${escapeHtml(m.code)}</b> : ${escapeHtml(m.intitule)}</td><td>${m.vhs ? m.vhs + "h" : "—"}</td><td>${m.has_cours ? (minToDuree(dureeToMin(m.duree_cours)) || "—") : "—"}</td><td>${m.has_td ? (minToDuree(dureeToMin(m.duree_td)) || "—") : "—"}</td><td>${m.has_tp ? (minToDuree(dureeToMin(m.duree_tp)) || "—") : "—"}</td><td>—</td><td>${m.coefficient ?? "—"}</td><td>${m.credits}</td><td>${cont > 0 ? cont + "%" : "—"}</td><td>${m.pct_examen != null ? m.pct_examen + "%" : "—"}</td></tr>`;
+    }).join("");
+    return ueRow + modRows;
+  }).join("");
+
+  const totalRow = `<tr class="total"><td class="l">Total Semestre</td><td>${tot.vhs}h</td><td>${minToDuree(tot.c) || "—"}</td><td>${minToDuree(tot.td) || "—"}</td><td>${minToDuree(tot.tp) || "—"}</td><td>—</td><td>${tot.coeff}</td><td>${tot.credits}</td><td></td><td></td></tr>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>${escapeHtml(title)}</title>
+  <style>
+    *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;margin:24px;color:#111}
+    h1{font-size:16px;text-align:center;margin:0 0 4px}
+    p.sub{font-size:12px;text-align:center;color:#444;margin:0 0 16px}
+    table{width:100%;border-collapse:collapse;font-size:11px}
+    th,td{border:1px solid #333;padding:4px 6px;text-align:center}
+    td.l{text-align:left}
+    thead th{background:#f0f0f0;font-weight:bold}
+    tr.ue td{background:#e9e9e9;font-weight:bold}
+    tr.total td{background:#f4eefc;font-weight:bold}
+    @media print{@page{size:A4 landscape;margin:12mm} button{display:none}}
+    button{margin:14px auto 0;display:block;padding:8px 16px;font-size:13px;cursor:pointer}
+  </style></head><body>
+    <h1>${escapeHtml(title)}</h1>
+    <p class="sub">${escapeHtml(subtitle)}</p>
+    <table>
+      <thead>
+        <tr>
+          <th rowspan="2">Unité d'Enseignement</th><th rowspan="2">VHS<br/>14 sem</th>
+          <th colspan="4">V.H hebdomadaire</th>
+          <th rowspan="2">Coeff</th><th rowspan="2">Crédits</th>
+          <th colspan="2">Mode d'évaluation</th>
+        </tr>
+        <tr><th>C</th><th>TD</th><th>TP</th><th>Autres</th><th>Continu</th><th>Examen</th></tr>
+      </thead>
+      <tbody>${body}${totalRow}</tbody>
+    </table>
+    <button onclick="window.print()">Imprimer</button>
+    <script>window.onload=function(){window.print()}</script>
+  </body></html>`;
+
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+}
 
 export default function SuperAgentModules() {
   // SA's university from profile
   const saProfile    = getUser()?.profile as Record<string, string> | undefined;
   const saUniversite = saProfile?.universite ?? "";
 
-  const [faculte, setFaculte]         = useState("");
+  // A Doyen has a fixed faculté (not changeable); a Director may pick any.
+  const isDoyenAccount = getSuperAgentAccountType() === "doyen";
+  const doyenFaculte   = getSuperAgentFaculte();
+
+  const [faculte, setFaculte]         = useState(isDoyenAccount ? doyenFaculte : "");
   const [departement, setDepartement] = useState("");
   const [niveau, setNiveau]           = useState("L3");
   const [specialite, setSpecialite]   = useState("");
@@ -80,14 +189,14 @@ export default function SuperAgentModules() {
     nature: string; vhs: number; has_cours: boolean; duree_cours: string;
     has_td: boolean; duree_td: string; has_tp: boolean; duree_tp: string;
     pct_examen: number; pct_td: number; pct_tp: number; _editId?: number;
+    ue_order?: number | null; is_new_ue?: boolean;
   };
 
   async function handleSaveModule(mod: SavedMod) {
     if (mod._editId) {
-      // Edit mode
+      // Edit mode — code is never changed (generated, immutable)
       await api.updateModule(mod._editId, {
         intitule:    mod.nom,
-        code:        mod.code,
         credits:     mod.credits,
         type_ue:     mod.ue,
         nature:      mod.nature,
@@ -104,15 +213,16 @@ export default function SuperAgentModules() {
         pct_tp:      mod.pct_tp,
       });
     } else {
-      // Create mode
+      // Create mode — the code is generated server-side from the UE selection
       await api.storeModule({
-        code:        mod.code || `${departement.slice(0, 3).toUpperCase()}${Date.now().toString().slice(-4)}`,
         intitule:    mod.nom,
         credits:     mod.credits,
         filiere:     departement,
         niveau,
         semestre,
         type_ue:     mod.ue,
+        ue_order:    mod.ue_order ?? null,
+        is_new_ue:   mod.is_new_ue ?? true,
         nature:      mod.nature,
         coefficient: mod.coefficient,
         vhs:         mod.vhs,
@@ -182,14 +292,22 @@ export default function SuperAgentModules() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Faculté *</label>
-                  <Select value={faculte} onValueChange={handleFaculteChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder={saUniversite ? "Sélectionner une faculté" : "Université non définie"} />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-60">
-                      {facultes.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  {isDoyenAccount ? (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/30 text-sm h-10">
+                      <Building2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      <span className="flex-1 truncate">{doyenFaculte || "Faculté non définie"}</span>
+                      <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">non modifiable</span>
+                    </div>
+                  ) : (
+                    <Select value={faculte} onValueChange={handleFaculteChange}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={saUniversite ? "Sélectionner une faculté" : "Université non définie"} />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {facultes.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Département *</label>
@@ -275,6 +393,19 @@ export default function SuperAgentModules() {
                 </Badge>
                 <span className="text-muted-foreground">{modules.length} module{modules.length !== 1 ? "s" : ""}</span>
                 <span className="text-muted-foreground">{totalCredits} crédit{totalCredits !== 1 ? "s" : ""} au total</span>
+                {modules.length > 0 && (
+                  <Button
+                    size="sm" variant="outline"
+                    className="ml-auto gap-1.5 text-xs"
+                    onClick={() => printCanevas(
+                      modules,
+                      `Canevas pédagogique — ${departement} ${niveau}`,
+                      `${faculte ? faculte + " · " : ""}${departement} — ${niveau} — ${semestre}`,
+                    )}
+                  >
+                    <Printer className="w-3.5 h-3.5" />Imprimer le canevas
+                  </Button>
+                )}
               </div>
               {modules.length === 0 ? (
                 <Card className="p-10 text-center">
@@ -285,28 +416,11 @@ export default function SuperAgentModules() {
                   </Button>
                 </Card>
               ) : (
-                <div className="space-y-2">
-                  {modules.map(mod => (
-                    <Card key={mod.id} className="p-3 flex items-center gap-3 hover:shadow-sm transition-shadow">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">{mod.intitule}</p>
-                        <div className="flex gap-2 mt-1">
-                          <Badge variant="outline" className="text-xs px-1.5 py-0">{mod.code}</Badge>
-                          <Badge variant="outline" className="text-xs px-1.5 py-0">{mod.credits} cr.</Badge>
-                          {mod.type_ue && <Badge variant="outline" className="text-xs px-1.5 py-0 text-purple-600">{mod.type_ue}</Badge>}
-                        </div>
-                      </div>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-blue-500 hover:bg-blue-50"
-                        title="Modifier ce module" onClick={() => openEdit(mod)}>
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50"
-                        onClick={() => setConfirmDel({ mod })}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </Card>
-                  ))}
-                </div>
+                <CanevasTables
+                  modules={modules}
+                  onEdit={openEdit}
+                  onDelete={(mod) => setConfirmDel({ mod })}
+                />
               )}
             </motion.div>
           )}
@@ -349,6 +463,7 @@ export default function SuperAgentModules() {
       <AjoutModule
         open={showModal}
         contextLabel={`${faculte} · ${departement}${specialite ? " · " + specialite : ""} — ${niveau} ${semestre}`}
+        filiere={departement}
         initialNiveau={niveau}
         initialSemestre={semestre}
         editModule={editingModule}
@@ -378,5 +493,194 @@ export default function SuperAgentModules() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ─── Canevas pédagogique table ──────────────────────────────────────────────────
+// Renders modules grouped per (filière · niveau · semestre), and within each block
+// grouped by Unité d'Enseignement, following the official LMD course-structure sheet.
+function CanevasTables({
+  modules, onEdit, onDelete,
+}: {
+  modules: ModuleEntry[];
+  onEdit: (m: ModuleEntry) => void;
+  onDelete: (m: ModuleEntry) => void;
+}) {
+  // Group into semester blocks
+  const blocks = new Map<string, ModuleEntry[]>();
+  for (const m of modules) {
+    const key = `${m.filiere}|||${m.niveau}|||${m.semestre}`;
+    (blocks.get(key) ?? blocks.set(key, []).get(key)!).push(m);
+  }
+
+  return (
+    <div className="space-y-7">
+      {[...blocks.entries()].map(([key, mods]) => {
+        const [filiere, niveau, semestre] = key.split("|||");
+
+        // Group modules by UE
+        const ueMap = new Map<string, ModuleEntry[]>();
+        for (const m of mods) {
+          const g = ueGroupOf(m);
+          (ueMap.get(g) ?? ueMap.set(g, []).get(g)!).push(m);
+        }
+        const ueGroups = [...ueMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+        // Semester totals
+        const tot = mods.reduce(
+          (a, m) => ({
+            vhs: a.vhs + (m.vhs ?? 0),
+            c:   a.c   + (m.has_cours ? dureeToMin(m.duree_cours) : 0),
+            td:  a.td  + (m.has_td    ? dureeToMin(m.duree_td)    : 0),
+            tp:  a.tp  + (m.has_tp    ? dureeToMin(m.duree_tp)    : 0),
+            coeff:   a.coeff   + (m.coefficient ?? 0),
+            credits: a.credits + (m.credits ?? 0),
+          }),
+          { vhs: 0, c: 0, td: 0, tp: 0, coeff: 0, credits: 0 },
+        );
+
+        return (
+          <div key={key}>
+            <div className="flex items-center gap-2 mb-2">
+              <GraduationCap className="w-4 h-4 text-purple-600" />
+              <span className="text-sm font-semibold">{filiere}</span>
+              <span className="text-xs text-muted-foreground">— {niveau} · {semestre}</span>
+            </div>
+
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-muted/60 text-muted-foreground">
+                    <th rowSpan={2} className="border border-border px-2 py-1.5 text-left font-semibold min-w-[220px]">
+                      Unité d'Enseignement
+                    </th>
+                    <th rowSpan={2} className="border border-border px-2 py-1.5 font-semibold">
+                      VHS<br /><span className="font-normal text-[10px]">14 sem</span>
+                    </th>
+                    <th colSpan={4} className="border border-border px-2 py-1 font-semibold">V.H hebdomadaire</th>
+                    <th rowSpan={2} className="border border-border px-2 py-1.5 font-semibold">Coeff</th>
+                    <th rowSpan={2} className="border border-border px-2 py-1.5 font-semibold">Crédits</th>
+                    <th colSpan={2} className="border border-border px-2 py-1 font-semibold">Mode d'évaluation</th>
+                    <th rowSpan={2} className="border border-border px-2 py-1.5 font-semibold w-16"></th>
+                  </tr>
+                  <tr className="bg-muted/60 text-muted-foreground">
+                    <th className="border border-border px-2 py-1 font-semibold">C</th>
+                    <th className="border border-border px-2 py-1 font-semibold">TD</th>
+                    <th className="border border-border px-2 py-1 font-semibold">TP</th>
+                    <th className="border border-border px-2 py-1 font-semibold">Autres</th>
+                    <th className="border border-border px-2 py-1 font-semibold">Continu</th>
+                    <th className="border border-border px-2 py-1 font-semibold">Examen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ueGroups.map(([ue, list]) => {
+                    // UE-level aggregates
+                    const agg = list.reduce(
+                      (a, m) => ({
+                        c:  a.c  + (m.has_cours ? dureeToMin(m.duree_cours) : 0),
+                        td: a.td + (m.has_td    ? dureeToMin(m.duree_td)    : 0),
+                        tp: a.tp + (m.has_tp    ? dureeToMin(m.duree_tp)    : 0),
+                        coeff:   a.coeff   + (m.coefficient ?? 0),
+                        credits: a.credits + (m.credits ?? 0),
+                      }),
+                      { c: 0, td: 0, tp: 0, coeff: 0, credits: 0 },
+                    );
+                    return (
+                      <FragmentRows
+                        key={ue}
+                        ue={ue}
+                        list={list}
+                        agg={agg}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                      />
+                    );
+                  })}
+
+                  {/* Total semestre */}
+                  <tr className="bg-purple-50 font-bold text-purple-800">
+                    <td className="border border-border px-2 py-1.5 text-right">Total Semestre</td>
+                    <td className="border border-border px-2 py-1.5 text-center">{tot.vhs}h</td>
+                    <td className="border border-border px-2 py-1.5 text-center">{minToDuree(tot.c) || "—"}</td>
+                    <td className="border border-border px-2 py-1.5 text-center">{minToDuree(tot.td) || "—"}</td>
+                    <td className="border border-border px-2 py-1.5 text-center">{minToDuree(tot.tp) || "—"}</td>
+                    <td className="border border-border px-2 py-1.5 text-center">—</td>
+                    <td className="border border-border px-2 py-1.5 text-center">{tot.coeff}</td>
+                    <td className="border border-border px-2 py-1.5 text-center">{tot.credits}</td>
+                    <td className="border border-border px-2 py-1.5" colSpan={3}></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// One UE group: a shaded header row + its module rows
+function FragmentRows({
+  ue, list, agg, onEdit, onDelete,
+}: {
+  ue: string;
+  list: ModuleEntry[];
+  agg: { c: number; td: number; tp: number; coeff: number; credits: number };
+  onEdit: (m: ModuleEntry) => void;
+  onDelete: (m: ModuleEntry) => void;
+}) {
+  return (
+    <>
+      {/* UE header row */}
+      <tr className="bg-muted/40 font-semibold">
+        <td className="border border-border px-2 py-1.5 text-purple-700">{ue} (O/P)</td>
+        <td className="border border-border px-2 py-1.5"></td>
+        <td className="border border-border px-2 py-1.5 text-center">{minToDuree(agg.c) || "—"}</td>
+        <td className="border border-border px-2 py-1.5 text-center">{minToDuree(agg.td) || "—"}</td>
+        <td className="border border-border px-2 py-1.5 text-center">{minToDuree(agg.tp) || "—"}</td>
+        <td className="border border-border px-2 py-1.5 text-center">—</td>
+        <td className="border border-border px-2 py-1.5 text-center">{agg.coeff}</td>
+        <td className="border border-border px-2 py-1.5 text-center">{agg.credits}</td>
+        <td className="border border-border px-2 py-1.5" colSpan={3}></td>
+      </tr>
+
+      {/* Module rows */}
+      {list.map((m) => {
+        const continu = (m.pct_td ?? 0) + (m.pct_tp ?? 0);
+        return (
+          <tr key={m.id} className="hover:bg-muted/20 group">
+            <td className="border border-border px-2 py-1.5">
+              <span className="font-medium">{m.code}</span>
+              <span className="text-muted-foreground"> : {m.intitule}</span>
+            </td>
+            <td className="border border-border px-2 py-1.5 text-center">{m.vhs ? `${m.vhs}h` : "—"}</td>
+            <td className="border border-border px-2 py-1.5 text-center">{m.has_cours ? (minToDuree(dureeToMin(m.duree_cours)) || "—") : "—"}</td>
+            <td className="border border-border px-2 py-1.5 text-center">{m.has_td ? (minToDuree(dureeToMin(m.duree_td)) || "—") : "—"}</td>
+            <td className="border border-border px-2 py-1.5 text-center">{m.has_tp ? (minToDuree(dureeToMin(m.duree_tp)) || "—") : "—"}</td>
+            <td className="border border-border px-2 py-1.5 text-center">—</td>
+            <td className="border border-border px-2 py-1.5 text-center">{m.coefficient ?? "—"}</td>
+            <td className="border border-border px-2 py-1.5 text-center">{m.credits}</td>
+            <td className="border border-border px-2 py-1.5 text-center">{continu > 0 ? `${continu}%` : "—"}</td>
+            <td className="border border-border px-2 py-1.5 text-center">{m.pct_examen != null ? `${m.pct_examen}%` : "—"}</td>
+            <td className="border border-border px-1 py-1 text-center whitespace-nowrap">
+              <button
+                title="Modifier ce module"
+                onClick={() => onEdit(m)}
+                className="inline-flex h-6 w-6 items-center justify-center rounded text-blue-500 hover:bg-blue-50"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                title="Supprimer ce module"
+                onClick={() => onDelete(m)}
+                className="inline-flex h-6 w-6 items-center justify-center rounded text-red-400 hover:bg-red-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </td>
+          </tr>
+        );
+      })}
+    </>
   );
 }

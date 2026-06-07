@@ -40,6 +40,7 @@ import LoginSuperAgent from "@/pages/LoginSuperAgent";
 import SuperAgentDashboard from "@/pages/super-agent/Dashboard";
 import SuperAgentComptes from "@/pages/super-agent/Comptes";
 import SuperAgentModules from "@/pages/super-agent/Modules";
+import SuperAgentStatistiques from "@/pages/super-agent/Statistiques";
 import CreateSuperAgent from "@/pages/admin/CreateSuperAgent";
 
 import NotFound from "@/pages/not-found";
@@ -139,6 +140,9 @@ function Router() {
       </Route>
       <Route path="/super-agent/modules">
         <SuperAgentGuard component={SuperAgentModules} />
+      </Route>
+      <Route path="/super-agent/statistiques">
+        <SuperAgentGuard component={SuperAgentStatistiques} />
       </Route>
 
       {/* Owner-only page — no auth guard, access by URL knowledge */}

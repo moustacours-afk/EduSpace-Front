@@ -84,6 +84,14 @@ class AuthController extends Controller
             }
         }
 
+        // Block suspended super-agents (doyens disabled by the director)
+        if ($user->role === 'super_agent') {
+            $saProfile = $user->superAgent;
+            if ($saProfile && ($saProfile->statut ?? 'actif') === 'suspendu') {
+                return response()->json(['message' => 'Votre compte a été suspendu. Contactez l\'administration.'], 403);
+            }
+        }
+
         $profile = match ($user->role) {
             'etudiant'    => $user->etudiant,
             'enseignant'  => $user->enseignant,
