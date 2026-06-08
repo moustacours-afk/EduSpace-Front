@@ -140,7 +140,7 @@ export const ETABLISSEMENTS_PAR_WILAYA: Record<string, string[]> = {
 };
 
 const FACULTES_COMMUNES = [
-  "Faculté des Mathématiques et Informatique",
+  "Faculté des Sciences Exactes et Appliquées",
   "Faculté des Sciences",
   "Faculté des Sciences de l'Ingénieur",
   "Faculté de Technologie",
@@ -262,7 +262,7 @@ export const DEPARTEMENTS_PAR_FACULTE: Record<string, string[]> = {
 
 const SPECIALITES_PAR_DEPT_NIVEAU: Record<string, Partial<Record<string, string[]>>> = {
   "Informatique": {
-    L3: ["Systèmes Informatiques", "Génie Logiciel", "Bases de Données et Systèmes d'Information"],
+    L3: ["Systèmes Informatiques", "Ingénierie des Systèmes d'Information et du Logiciel"],
     M1: ["Apprentissage Automatique et IA", "Réseaux et Cybersécurité", "Génie Logiciel Avancé", "Systèmes Distribués"],
     M2: ["Apprentissage Automatique et IA", "Réseaux et Cybersécurité", "Génie Logiciel Avancé", "Systèmes Distribués"],
     ING1: ["Génie des Systèmes Informatiques"],

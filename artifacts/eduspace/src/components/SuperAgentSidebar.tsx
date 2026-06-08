@@ -33,7 +33,7 @@ export function SuperAgentSidebar() {
 
   return (
     <aside
-      className={`${collapsed ? "w-16" : "w-64"} min-h-screen flex flex-col flex-shrink-0 transition-all duration-200 bg-sidebar text-sidebar-foreground`}
+      className={`${collapsed ? "w-16" : "w-64"} sticky top-0 h-screen flex flex-col flex-shrink-0 transition-all duration-200 bg-sidebar text-sidebar-foreground`}
     >
       <div className={`p-4 border-b border-sidebar-border flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
         <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : ""}`}>
@@ -68,23 +68,21 @@ export function SuperAgentSidebar() {
             </Link>
           );
         })}
-
-        {/* Déconnexion — kept right under the menu so it is always easy to reach */}
-        <div className="pt-1 mt-1 border-t border-sidebar-border/60">
-          <Link href="/login/super-agent">
-            <a
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all text-red-300/80 hover:bg-red-500/10 hover:text-red-200 ${collapsed ? "justify-center" : ""}`}
-              onClick={() => { clearAuth(); }}
-              title="Déconnexion"
-            >
-              <LogOut className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span className="text-sm font-medium">Déconnexion</span>}
-            </a>
-          </Link>
-        </div>
       </nav>
 
-      <div className="p-2 border-t border-sidebar-border">
+      {/* Footer — pinned to the bottom of the (sticky) sidebar so Déconnexion
+          stays reachable no matter how far the page content scrolls. */}
+      <div className="p-2 border-t border-sidebar-border space-y-1">
+        <Link href="/login/super-agent">
+          <a
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all text-red-300/80 hover:bg-red-500/10 hover:text-red-200 ${collapsed ? "justify-center" : ""}`}
+            onClick={() => { clearAuth(); }}
+            title="Déconnexion"
+          >
+            <LogOut className="w-4 h-4 flex-shrink-0" />
+            {!collapsed && <span className="text-sm font-medium">Déconnexion</span>}
+          </a>
+        </Link>
         <button
           onClick={toggle}
           title={collapsed ? "Déployer" : "Réduire"}

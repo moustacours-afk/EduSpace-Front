@@ -180,5 +180,7 @@ export const superAgent = {
   moduleUeOptions: (params: string) => get<UeOptions>(`/super-agent/modules/ue-options?${params}`),
   storeModule: (body: unknown) => post<unknown>("/super-agent/modules", body),
   updateModule: (id: number, body: unknown) => patch<void>(`/super-agent/modules/${id}`, body),
+  moveModule: (id: number, body: { type_ue: string; ue_order?: number; is_new_ue?: boolean; position: number }) =>
+    post<{ ok: boolean; code: string }>(`/super-agent/modules/${id}/move`, body),
   deleteModule: (id: number) => del<void>(`/super-agent/modules/${id}`),
 };

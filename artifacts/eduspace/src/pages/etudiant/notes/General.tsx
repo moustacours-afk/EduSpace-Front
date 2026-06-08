@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { motion } from "framer-motion";
 import { StudentSidebar } from "@/components/StudentSidebar";
 import { Card } from "@/components/ui/card";
@@ -13,6 +13,13 @@ const situationConfig = {
   rattrapage: { label: "Rattrapage", color: "bg-amber-100 text-amber-800 border-amber-200" },
 };
 
+const niveauLabels: Record<string, string> = {
+  L1: "Licence 1ère Année", L2: "Licence 2ème Année", L3: "Licence 3ème Année",
+  M1: "Master 1ère Année",  M2: "Master 2ème Année",
+  ING1: "Ingéniorat 1ère Année", ING2: "Ingéniorat 2ème Année",
+  ING3: "Ingéniorat 3ème Année", ING4: "Ingéniorat 4ème Année", ING5: "Ingéniorat 5ème Année",
+};
+
 function mention(moy: number) {
   if (moy >= 16) return "Très bien";
   if (moy >= 14) return "Bien";
@@ -21,9 +28,18 @@ function mention(moy: number) {
   return null;
 }
 
+/** "UEF" → "U.E.F" */
+function ueLabel(typeUe: string) {
+  return typeUe ? typeUe.split("").join(".") : "U.E";
+}
+
 interface NoteRow {
   id: number;
   module: string;
+  code: string | null;
+  typeUe: string | null;
+  credits: number | null;
+  coefficient: number | null;
   semestre: string;
   exam: number | null;
   controle: number | null;
@@ -33,54 +49,123 @@ interface NoteRow {
   situation: "admis" | "ajourne" | "rattrapage";
 }
 
-function SemestreTable({ label, data }: { label: string; data: NoteRow[] }) {
-  const moy = data.length ? (data.reduce((a, n) => a + n.moyenne, 0) / data.length) : 0;
+interface UeGroup {
+  key: string;
+  code: string;
+  typeUe: string;
+  rows: NoteRow[];
+  totalCredits: number;
+  acquiredCredits: number;
+  moyenne: number;
+  acquise: boolean;
+}
+
+/** Group modules of a semester by their teaching unit (UE), derived from the
+ *  module code "{type}{semestre}{ueOrder}{courseOrder}" — e.g. UEF111 & UEF112
+ *  belong to the same unit "UEF11". A unit is "acquise" (and releases ALL its
+ *  credits, even for individually-failing modules) when its weighted average
+ *  reaches 10/20 — the LMD compensation mechanism (Article 70 of Arrêté 11.65). */
+function groupByUe(rows: NoteRow[]): UeGroup[] {
+  const groups: UeGroup[] = [];
+  const byKey = new Map<string, UeGroup>();
+
+  for (const r of rows) {
+    const key = r.code && r.code.length > 1 ? r.code.slice(0, -1) : (r.typeUe ?? r.module);
+    let g = byKey.get(key);
+    if (!g) {
+      g = { key, code: key, typeUe: r.typeUe ?? "", rows: [], totalCredits: 0, acquiredCredits: 0, moyenne: 0, acquise: false };
+      byKey.set(key, g);
+      groups.push(g);
+    }
+    g.rows.push(r);
+  }
+
+  for (const g of groups) {
+    const coefSum = g.rows.reduce((a, r) => a + (r.coefficient ?? 1), 0);
+    g.moyenne = coefSum ? g.rows.reduce((a, r) => a + r.moyenne * (r.coefficient ?? 1), 0) / coefSum : 0;
+    g.totalCredits = g.rows.reduce((a, r) => a + (r.credits ?? 0), 0);
+    g.acquise = g.moyenne >= 10;
+    g.acquiredCredits = g.acquise
+      ? g.totalCredits
+      : g.rows.reduce((a, r) => a + (r.creditAcquis ?? 0), 0);
+  }
+
+  return groups;
+}
+
+function Pill({ children, ok }: { children: React.ReactNode; ok: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center px-4 py-1.5 rounded-full border text-sm font-bold ${
+        ok ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-600 border-red-200"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SemestreTable({ niveau, label, data }: { niveau: string; label: string; data: NoteRow[] }) {
+  const coefSum = data.reduce((a, n) => a + (n.coefficient ?? 1), 0);
+  const moy = coefSum ? data.reduce((a, n) => a + n.moyenne * (n.coefficient ?? 1), 0) / coefSum : 0;
+  const totalCredits = data.reduce((a, n) => a + (n.credits ?? 0), 0);
+  const groups = groupByUe(data);
 
   return (
-    <div className="mb-6">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-base">{label}</h3>
-        <span className="text-sm text-muted-foreground">
-          Moyenne semestre : <span className={`font-bold ${moy >= 10 ? "text-green-600" : "text-red-500"}`}>{moy.toFixed(2)}</span>
-        </span>
+    <Card className="mb-6 overflow-hidden rounded-2xl border border-border">
+      <div className="p-5 border-b border-border bg-muted/20 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="font-bold text-lg">{niveauLabels[niveau] ?? niveau} — {label}</h3>
+        <div className="flex flex-wrap items-center gap-3">
+          <Pill ok={moy >= 10}>Moyenne {label} : {moy.toFixed(2)}</Pill>
+          <Pill ok>Crédits : {totalCredits}</Pill>
+        </div>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-border">
+
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/30 border-b border-border">
             <tr>
               <th className="text-left px-5 py-3 font-semibold text-muted-foreground">Module</th>
-              <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Examen</th>
-              <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Contrôle</th>
-              <th className="text-center px-4 py-3 font-semibold text-muted-foreground">TP</th>
-              <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Moyenne</th>
               <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Crédits</th>
+              <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Coef</th>
+              <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Moyenne</th>
             </tr>
           </thead>
           <tbody>
-            {data.map((n) => (
-              <tr key={n.id} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
-                <td className="px-5 py-3 font-medium">{n.module}</td>
-                <td className="text-center px-4 py-3">{n.exam ?? "—"}</td>
-                <td className="text-center px-4 py-3">{n.controle ?? "—"}</td>
-                <td className="text-center px-4 py-3">{n.tp ?? "—"}</td>
-                <td className="text-center px-4 py-3">
-                  <span className={`font-bold ${n.moyenne >= 10 ? "text-green-600" : "text-red-500"}`}>
-                    {n.moyenne.toFixed(2)}
-                  </span>
-                </td>
-                <td className="text-center px-4 py-3 font-medium">{n.creditAcquis}</td>
-              </tr>
+            {groups.map((g) => (
+              <Fragment key={g.key}>
+                {g.rows.map((n) => (
+                  <tr key={n.id} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
+                    <td className="px-5 py-3 font-medium">{n.module}</td>
+                    <td className="text-center px-4 py-3">{n.creditAcquis}</td>
+                    <td className="text-center px-4 py-3 text-muted-foreground">{n.coefficient ?? "—"}</td>
+                    <td className="text-center px-4 py-3">
+                      <span className={`font-bold ${n.moyenne >= 10 ? "text-green-600" : "text-red-500"}`}>
+                        {n.moyenne.toFixed(2)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                <tr className={g.acquise ? "bg-green-50/70" : "bg-red-50/70"}>
+                  <td className="px-5 py-2.5 font-semibold text-xs tracking-wide">
+                    ({ueLabel(g.typeUe)}) {g.code}
+                  </td>
+                  <td className="text-center px-4 py-2.5 font-semibold">
+                    {g.acquiredCredits}/{g.totalCredits}
+                  </td>
+                  <td />
+                  <td className="text-center px-4 py-2.5">
+                    <span className={`font-bold ${g.acquise ? "text-green-600" : "text-red-500"}`}>
+                      {g.moyenne.toFixed(2)}
+                    </span>
+                  </td>
+                </tr>
+              </Fragment>
             ))}
           </tbody>
         </table>
       </div>
-      <div className="mt-3 px-5 py-3 bg-muted/30 rounded-xl border border-border/50 flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">Moyenne {label}</span>
-        <span className={`font-bold text-base ${moy >= 10 ? "text-green-600" : "text-red-500"}`}>
-          {moy.toFixed(2)} / 20
-        </span>
-      </div>
-    </div>
+    </Card>
   );
 }
 
@@ -158,7 +243,7 @@ export default function EtudiantGeneral() {
               </div>
 
               {semestres.map((s) => (
-                <SemestreTable key={s} label={s} data={bySemestre[s]} />
+                <SemestreTable key={s} niveau={niveau} label={s} data={bySemestre[s]} />
               ))}
             </>
           )}

@@ -12,6 +12,7 @@ use App\Models\SoumissionNote;
 use App\Models\SuperAgent;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SuperAgentController extends Controller
 {
@@ -382,6 +383,7 @@ class SuperAgentController extends Controller
             'semestre' => 'required|string',
             'type_ue'  => 'required|string',
             'ue_order' => 'nullable|integer|min:1',
+            'code'     => 'nullable|string|max:20',
         ]);
 
         // is_new_ue defaults to true → a brand-new Teaching Unit.
@@ -395,7 +397,20 @@ class SuperAgentController extends Controller
             'pct_examen', 'pct_td', 'pct_tp',
         ]);
 
-        // The code is ALWAYS generated server-side — never accepted from the client.
+        // A code may be supplied explicitly (the admin can override the suggestion);
+        // otherwise it is generated server-side from the UE selection.
+        $manualCode = trim((string) $request->input('code', ''));
+        if ($manualCode !== '') {
+            $code = strtoupper($manualCode);
+            $clash = Module::where('filiere', $request->filiere)
+                ->where('niveau', $request->niveau)->where('code', $code)->exists();
+            if ($clash) {
+                return response()->json(['message' => "Le code « {$code} » existe déjà pour ce niveau."], 422);
+            }
+            $module = Module::create(array_merge($fields, ['code' => $code]));
+            return response()->json($module, 201);
+        }
+
         for ($attempt = 0; $attempt < 6; $attempt++) {
             $code = $this->generateModuleCode(
                 $request->filiere, $request->niveau, $request->semestre, $request->type_ue, $ueOrder
@@ -414,13 +429,29 @@ class SuperAgentController extends Controller
     public function updateModule(Request $request, int $id)
     {
         $module = Module::findOrFail($id);
-        // 'code' is intentionally excluded — it is generated, never edited by hand.
-        $module->update($request->only([
+
+        $fields = $request->only([
             'intitule', 'credits', 'enseignant_id',
             'type_ue', 'nature', 'coefficient', 'vhs',
             'has_cours', 'duree_cours', 'has_td', 'duree_td', 'has_tp', 'duree_tp',
             'pct_examen', 'pct_td', 'pct_tp',
-        ]));
+        ]);
+
+        // The code is editable: changing it reassigns the module to the Teaching
+        // Unit (UE) encoded in the code. Keep it unique within (filière, niveau).
+        $newCode = trim((string) $request->input('code', ''));
+        if ($newCode !== '') {
+            $code  = strtoupper($newCode);
+            $clash = Module::where('filiere', $module->filiere)
+                ->where('niveau', $module->niveau)->where('code', $code)
+                ->where('id', '!=', $module->id)->exists();
+            if ($clash) {
+                return response()->json(['message' => "Le code « {$code} » existe déjà pour ce niveau."], 422);
+            }
+            $fields['code'] = $code;
+        }
+
+        $module->update($fields);
         return response()->json($module);
     }
 
@@ -428,6 +459,110 @@ class SuperAgentController extends Controller
     {
         Module::findOrFail($id)->delete();
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Move a module to a new slot — either another position within its current
+     * UE, or into a different (existing or brand-new) UE — and renumber every
+     * sibling whose course-order shifts as a result, so the LMD codes
+     * (TYPE + semester digit + UE order + course order) stay contiguous.
+     */
+    public function moveModule(Request $request, int $id)
+    {
+        $request->validate([
+            'type_ue'   => 'required|string|max:6',
+            'ue_order'  => 'nullable|integer|min:1',
+            'is_new_ue' => 'sometimes|boolean',
+            'position'  => 'required|integer|min:1',
+        ]);
+
+        $module   = Module::findOrFail($id);
+        $semDigit = $this->semesterDigit($module->semestre);
+
+        $parse = function (string $code) use ($semDigit): ?array {
+            if (! preg_match('/^([A-Z]{2,4})(\d)(\d)(\d)$/', strtoupper($code), $mm)) return null;
+            if ((int) $mm[2] !== $semDigit) return null;
+            return ['type' => $mm[1], 'ue_order' => (int) $mm[3], 'course_order' => (int) $mm[4]];
+        };
+
+        $srcInfo = $parse($module->code);
+        if (! $srcInfo) {
+            return response()->json([
+                'message' => "Le code actuel « {$module->code} » ne suit pas le format LMD attendu — déplacement automatique impossible.",
+            ], 422);
+        }
+
+        $isNewUe    = $request->boolean('is_new_ue', false);
+        $targetType = strtoupper($request->string('type_ue'));
+
+        return DB::transaction(function () use ($module, $semDigit, $parse, $srcInfo, $isNewUe, $targetType, $request) {
+            $scope = Module::where('filiere', $module->filiere)
+                ->where('niveau', $module->niveau)
+                ->where('semestre', $module->semestre)
+                ->lockForUpdate()->get();
+
+            // Group siblings by "{type}{ue_order}", each sorted by course order.
+            $groups = [];
+            foreach ($scope as $m) {
+                $info = $parse($m->code);
+                if (! $info) continue;
+                $groups[$info['type'] . $info['ue_order']][] = ['module' => $m, 'order' => $info['course_order']];
+            }
+            foreach ($groups as &$g) usort($g, fn ($a, $b) => $a['order'] <=> $b['order']);
+            unset($g);
+
+            $srcKey = $srcInfo['type'] . $srcInfo['ue_order'];
+
+            if ($isNewUe) {
+                $maxOrder = 0;
+                foreach (array_keys($groups) as $key) {
+                    if (str_starts_with($key, $targetType) && preg_match('/(\d)$/', $key, $om)) {
+                        $maxOrder = max($maxOrder, (int) $om[1]);
+                    }
+                }
+                $targetUeOrder = $maxOrder + 1;
+            } else {
+                $targetUeOrder = (int) $request->input('ue_order');
+            }
+            $targetKey = $targetType . $targetUeOrder;
+
+            // Pull the module out of its source group.
+            $srcList = array_values(array_filter($groups[$srcKey] ?? [], fn ($e) => $e['module']->id !== $module->id));
+            $sameUe  = $targetKey === $srcKey;
+            $targetList = $sameUe ? $srcList : ($groups[$targetKey] ?? []);
+
+            $position = max(1, min((int) $request->input('position'), count($targetList) + 1));
+            array_splice($targetList, $position - 1, 0, [['module' => $module, 'order' => null]]);
+
+            $plan = []; // module id => ['code' => ..., 'type_ue' => ...]
+            $targetBase = $targetType . $semDigit;
+            foreach ($targetList as $i => $entry) {
+                $plan[$entry['module']->id] = [
+                    'code'    => $targetBase . $targetUeOrder . ($i + 1),
+                    'type_ue' => $targetType,
+                ];
+            }
+            if (! $sameUe) {
+                $srcBase = $srcInfo['type'] . $semDigit;
+                foreach ($srcList as $i => $entry) {
+                    $plan[$entry['module']->id] = [
+                        'code'    => $srcBase . $srcInfo['ue_order'] . ($i + 1),
+                        'type_ue' => $entry['module']->type_ue,
+                    ];
+                }
+            }
+
+            // Two-phase write: stage unique placeholder codes first so the
+            // (filière, niveau, code) unique constraint never trips mid-shuffle.
+            foreach (array_keys($plan) as $modId) {
+                Module::where('id', $modId)->update(['code' => "~mv{$modId}~"]);
+            }
+            foreach ($plan as $modId => $vals) {
+                Module::where('id', $modId)->update($vals);
+            }
+
+            return response()->json(['ok' => true, 'code' => $plan[$module->id]['code']]);
+        });
     }
 
     // ─── Overview stats ───────────────────────────────────────────────────────

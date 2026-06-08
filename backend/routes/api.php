@@ -166,6 +166,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/modules/ue-options', [SuperAgentController::class, 'moduleUeOptions']);
         Route::post('/modules', [SuperAgentController::class, 'storeModule']);
         Route::patch('/modules/{id}', [SuperAgentController::class, 'updateModule']);
+        Route::post('/modules/{id}/move', [SuperAgentController::class, 'moveModule']);
         Route::delete('/modules/{id}', [SuperAgentController::class, 'destroyModule']);
     });
 });

@@ -4,9 +4,10 @@ import { SuperAgentSidebar } from "@/components/SuperAgentSidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BookOpen, Plus, Trash2, GraduationCap, ChevronRight, Building2, Edit2, Printer } from "lucide-react";
+import { BookOpen, Plus, Trash2, GraduationCap, ChevronRight, Building2, Edit2, Printer, Search, X, ArrowRightLeft } from "lucide-react";
 import AjoutModule, { type EditModuleData } from "./AjoutModule";
 import {
   getFacultes, getDepartements, getSpecialites,
@@ -47,6 +48,20 @@ function ueGroupOf(m: ModuleEntry): string {
   const code = (m.code || "").toUpperCase();
   const match = code.match(/^([A-Z]{2,4}\d{2})\d$/);
   return match ? match[1] : (m.type_ue || "UE");
+}
+
+// Next free code inside a UE group, e.g. group "UEF11" + 2 existing courses → "UEF113"
+function nextCodeInGroup(groupKey: string, list: ModuleEntry[]): { type_ue: string; code: string } {
+  const mm = groupKey.match(/^([A-Z]{2,4})(\d)(\d)$/);
+  if (!mm) return { type_ue: list[0]?.type_ue || "UEF", code: "" };
+  const [, type] = mm;
+  let maxOrder = 0;
+  const re = new RegExp(`^${groupKey}(\\d)$`);
+  for (const m of list) {
+    const cm = (m.code || "").toUpperCase().match(re);
+    if (cm) maxOrder = Math.max(maxOrder, parseInt(cm[1], 10));
+  }
+  return { type_ue: type, code: `${groupKey}${maxOrder + 1}` };
 }
 
 function escapeHtml(s: string): string {
@@ -143,8 +158,11 @@ export default function SuperAgentModules() {
   const [showModal, setShowModal]     = useState(false);
   const [editingModule, setEditingModule] = useState<EditModuleData | undefined>(undefined);
   const [confirmDel, setConfirmDel]   = useState<{ mod: ModuleEntry } | null>(null);
+  const [moveTarget, setMoveTarget]   = useState<{ mod: ModuleEntry } | null>(null);
+  const [quickAddUe, setQuickAddUe]   = useState<{ type_ue: string; code: string; label: string } | null>(null);
   const [modules, setModules]         = useState<ModuleEntry[]>([]);
   const [allModules, setAllModules]   = useState<ModuleEntry[]>([]);
+  const [moduleSearch, setModuleSearch] = useState("");
 
   // Faculties for the SA's university, plus the SA's own faculty from their profile
   const facultes    = [...new Set([
@@ -194,9 +212,11 @@ export default function SuperAgentModules() {
 
   async function handleSaveModule(mod: SavedMod) {
     if (mod._editId) {
-      // Edit mode — code is never changed (generated, immutable)
+      // Edit mode — the code is editable; changing it moves the module to the
+      // Teaching Unit encoded in the new code.
       await api.updateModule(mod._editId, {
         intitule:    mod.nom,
+        code:        mod.code,
         credits:     mod.credits,
         type_ue:     mod.ue,
         nature:      mod.nature,
@@ -213,9 +233,11 @@ export default function SuperAgentModules() {
         pct_tp:      mod.pct_tp,
       });
     } else {
-      // Create mode — the code is generated server-side from the UE selection
+      // Create mode — the code is suggested from the UE selection but may have
+      // been edited by the admin; send it so the server uses the chosen value.
       await api.storeModule({
         intitule:    mod.nom,
+        code:        mod.code,
         credits:     mod.credits,
         filiere:     departement,
         niveau,
@@ -247,6 +269,13 @@ export default function SuperAgentModules() {
     setShowModal(true);
   }
 
+  function openQuickAdd(groupKey: string, list: ModuleEntry[]) {
+    const { type_ue, code } = nextCodeInGroup(groupKey, list);
+    setQuickAddUe({ type_ue, code, label: groupKey });
+    setEditingModule(undefined);
+    setShowModal(true);
+  }
+
   async function handleRemove(mod: ModuleEntry) {
     await api.deleteModule(mod.id);
     refreshModules();
@@ -255,6 +284,14 @@ export default function SuperAgentModules() {
   }
 
   const totalCredits = modules.reduce((a, m) => a + m.credits, 0);
+
+  // Search across all created modules (name, code, filière, niveau, semestre)
+  const q = moduleSearch.trim().toLowerCase();
+  const filteredAllModules = q
+    ? allModules.filter(m =>
+        [m.intitule, m.code, m.filiere, m.niveau, m.semestre]
+          .some(v => (v ?? "").toString().toLowerCase().includes(q)))
+    : allModules;
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -420,6 +457,8 @@ export default function SuperAgentModules() {
                   modules={modules}
                   onEdit={openEdit}
                   onDelete={(mod) => setConfirmDel({ mod })}
+                  onMove={(mod) => setMoveTarget({ mod })}
+                  onQuickAdd={openQuickAdd}
                 />
               )}
             </motion.div>
@@ -429,12 +468,40 @@ export default function SuperAgentModules() {
           {allModules.length > 0 && (
             <motion.div variants={item}>
               <div className="mt-4">
-                <h2 className="text-base font-semibold mb-3 flex items-center gap-2 text-muted-foreground">
-                  <BookOpen className="w-4 h-4" />Tous mes modules créés
-                  <Badge variant="outline" className="ml-1">{allModules.length}</Badge>
-                </h2>
+                <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                  <h2 className="text-base font-semibold flex items-center gap-2 text-muted-foreground">
+                    <BookOpen className="w-4 h-4" />Tous mes modules créés
+                    <Badge variant="outline" className="ml-1">
+                      {q ? `${filteredAllModules.length}/${allModules.length}` : allModules.length}
+                    </Badge>
+                  </h2>
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      value={moduleSearch}
+                      onChange={e => setModuleSearch(e.target.value)}
+                      placeholder="Rechercher un module (nom, code, filière…)"
+                      className="pl-8 pr-8 h-9 text-sm"
+                    />
+                    {moduleSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setModuleSearch("")}
+                        title="Effacer"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {filteredAllModules.length === 0 ? (
+                  <Card className="p-6 text-center text-sm text-muted-foreground">
+                    Aucun module ne correspond à « {moduleSearch} ».
+                  </Card>
+                ) : (
                 <div className="space-y-1.5">
-                  {allModules.map(mod => (
+                  {filteredAllModules.map(mod => (
                     <Card key={mod.id} className="px-4 py-2.5 flex items-center gap-3">
                       <div className="flex-1 min-w-0">
                         <span className="font-medium text-sm">{mod.intitule}</span>
@@ -453,6 +520,7 @@ export default function SuperAgentModules() {
                     </Card>
                   ))}
                 </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -467,9 +535,21 @@ export default function SuperAgentModules() {
         initialNiveau={niveau}
         initialSemestre={semestre}
         editModule={editingModule}
-        onClose={() => { setShowModal(false); setEditingModule(undefined); }}
+        presetUe={quickAddUe ?? undefined}
+        onClose={() => { setShowModal(false); setEditingModule(undefined); setQuickAddUe(null); }}
         onSave={handleSaveModule}
       />
+
+      <AnimatePresence>
+        {moveTarget && (
+          <MoveModuleDialog
+            mod={moveTarget.mod}
+            scopeModules={modules}
+            onClose={() => setMoveTarget(null)}
+            onMoved={() => { refreshModules(); refreshAllModules(); }}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {confirmDel && (
@@ -500,11 +580,13 @@ export default function SuperAgentModules() {
 // Renders modules grouped per (filière · niveau · semestre), and within each block
 // grouped by Unité d'Enseignement, following the official LMD course-structure sheet.
 function CanevasTables({
-  modules, onEdit, onDelete,
+  modules, onEdit, onDelete, onMove, onQuickAdd,
 }: {
   modules: ModuleEntry[];
   onEdit: (m: ModuleEntry) => void;
   onDelete: (m: ModuleEntry) => void;
+  onMove: (m: ModuleEntry) => void;
+  onQuickAdd: (groupKey: string, list: ModuleEntry[]) => void;
 }) {
   // Group into semester blocks
   const blocks = new Map<string, ModuleEntry[]>();
@@ -593,6 +675,8 @@ function CanevasTables({
                         agg={agg}
                         onEdit={onEdit}
                         onDelete={onDelete}
+                        onMove={onMove}
+                        onQuickAdd={onQuickAdd}
                       />
                     );
                   })}
@@ -621,19 +705,33 @@ function CanevasTables({
 
 // One UE group: a shaded header row + its module rows
 function FragmentRows({
-  ue, list, agg, onEdit, onDelete,
+  ue, list, agg, onEdit, onDelete, onMove, onQuickAdd,
 }: {
   ue: string;
   list: ModuleEntry[];
   agg: { c: number; td: number; tp: number; coeff: number; credits: number };
   onEdit: (m: ModuleEntry) => void;
   onDelete: (m: ModuleEntry) => void;
+  onMove: (m: ModuleEntry) => void;
+  onQuickAdd: (groupKey: string, list: ModuleEntry[]) => void;
 }) {
   return (
     <>
       {/* UE header row */}
       <tr className="bg-muted/40 font-semibold">
-        <td className="border border-border px-2 py-1.5 text-purple-700">{ue} (O/P)</td>
+        <td className="border border-border px-2 py-1.5 text-purple-700">
+          <span className="inline-flex items-center gap-1.5">
+            {ue} (O/P)
+            <button
+              type="button"
+              title={`Ajouter un module dans ${ue}`}
+              onClick={() => onQuickAdd(ue, list)}
+              className="inline-flex h-5 w-5 items-center justify-center rounded text-purple-600 hover:bg-purple-100 font-normal"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </span>
+        </td>
         <td className="border border-border px-2 py-1.5"></td>
         <td className="border border-border px-2 py-1.5 text-center">{minToDuree(agg.c) || "—"}</td>
         <td className="border border-border px-2 py-1.5 text-center">{minToDuree(agg.td) || "—"}</td>
@@ -671,6 +769,13 @@ function FragmentRows({
                 <Edit2 className="w-3.5 h-3.5" />
               </button>
               <button
+                title="Déplacer ce module (changer son unité ou sa position)"
+                onClick={() => onMove(m)}
+                className="inline-flex h-6 w-6 items-center justify-center rounded text-purple-500 hover:bg-purple-50"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
                 title="Supprimer ce module"
                 onClick={() => onDelete(m)}
                 className="inline-flex h-6 w-6 items-center justify-center rounded text-red-400 hover:bg-red-50"
@@ -682,5 +787,145 @@ function FragmentRows({
         );
       })}
     </>
+  );
+}
+
+// ─── Move-module dialog ─────────────────────────────────────────────────────────
+// Lets the admin pick a destination UE (existing or brand-new) and a position
+// within it; the backend renumbers every affected module's LMD code accordingly.
+const UE_TYPES = ["UEF", "UEM", "UED", "UET"];
+
+function MoveModuleDialog({
+  mod, scopeModules, onClose, onMoved,
+}: {
+  mod: ModuleEntry;
+  scopeModules: ModuleEntry[];
+  onClose: () => void;
+  onMoved: () => void;
+}) {
+  const currentGroup = ueGroupOf(mod);
+
+  const groupsRaw = new Map<string, ModuleEntry[]>();
+  for (const m of scopeModules) {
+    const g = ueGroupOf(m);
+    (groupsRaw.get(g) ?? groupsRaw.set(g, []).get(g)!).push(m);
+  }
+  const groups = [...groupsRaw.entries()]
+    .map(([key, list]) => [key, [...list].sort((a, b) => a.code.localeCompare(b.code))] as const)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  const groupMap = new Map(groups);
+
+  const [targetGroup, setTargetGroup] = useState(currentGroup);
+  const [newType, setNewType] = useState("UEF");
+  const [position, setPosition] = useState(() => {
+    const list = groupMap.get(currentGroup) ?? [];
+    const idx = list.findIndex(m => m.id === mod.id);
+    return idx >= 0 ? idx + 1 : 1;
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const isNew = targetGroup === "__new__";
+  const targetMembers = isNew ? [] : (groupMap.get(targetGroup) ?? []).filter(m => m.id !== mod.id);
+  const maxPosition = targetMembers.length + 1;
+
+  useEffect(() => {
+    setPosition(p => Math.min(Math.max(1, p), maxPosition));
+  }, [targetGroup, maxPosition]);
+
+  async function confirm() {
+    setSaving(true);
+    setError("");
+    try {
+      let payload: { type_ue: string; ue_order?: number; is_new_ue?: boolean; position: number };
+      if (isNew) {
+        payload = { type_ue: newType, is_new_ue: true, position: 1 };
+      } else {
+        const mm = targetGroup.match(/^([A-Z]{2,4})\d(\d)$/);
+        if (!mm) throw new Error("Code d'unité invalide.");
+        payload = { type_ue: mm[1], ue_order: parseInt(mm[2], 10), is_new_ue: false, position };
+      }
+      await api.moveModule(mod.id, payload);
+      onMoved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Échec du déplacement.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
+        <Card className="p-6 max-w-md w-full space-y-4">
+          <div>
+            <h3 className="font-bold text-base mb-1 flex items-center gap-2">
+              <ArrowRightLeft className="w-4 h-4 text-purple-600" />Déplacer ce module
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-mono font-medium">{mod.code}</span> — {mod.intitule}
+              <br />Actuellement dans <span className="font-medium">{currentGroup}</span>.
+            </p>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground block mb-1">Unité de destination</label>
+            <Select value={targetGroup} onValueChange={setTargetGroup}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {groups.map(([key, list]) => (
+                  <SelectItem key={key} value={key}>
+                    {key} ({list.length} module{list.length !== 1 ? "s" : ""}{key === currentGroup ? " — actuelle" : ""})
+                  </SelectItem>
+                ))}
+                <SelectItem value="__new__">➕ Nouvelle unité</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {isNew ? (
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Type de la nouvelle unité</label>
+              <Select value={newType} onValueChange={setNewType}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {UE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Le module deviendra le premier cours de cette nouvelle unité ; son code est généré automatiquement.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">
+                Position dans {targetGroup} ({maxPosition} place{maxPosition !== 1 ? "s" : ""} possible{maxPosition !== 1 ? "s" : ""})
+              </label>
+              <Select value={String(position)} onValueChange={(v) => setPosition(parseInt(v, 10))}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: maxPosition }, (_, i) => i + 1).map(p => (
+                    <SelectItem key={p} value={String(p)}>{p === 1 ? "1ʳᵉ position" : `${p}ᵉ position`}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Les codes des modules de cette unité — et de l'unité d'origine si elle change — seront renumérotés automatiquement.
+              </p>
+            </div>
+          )}
+
+          {error && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={onClose} disabled={saving}>Annuler</Button>
+            <Button className="flex-1 bg-purple-600 hover:bg-purple-700" onClick={confirm} disabled={saving}>
+              {saving ? "Déplacement…" : "Déplacer"}
+            </Button>
+          </div>
+        </Card>
+      </motion.div>
+    </div>
   );
 }

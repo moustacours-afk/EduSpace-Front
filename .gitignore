@@ -60,3 +60,6 @@ attached_assets/
 
 # Zip archives
 *.zip
+
+# Local-only defense/presentation guide (not pushed to GitHub)
+Guide-Soutenance-EduSpace/
