@@ -24,7 +24,7 @@ interface AgentStudent {
   id: string; matricule: string; nom: string; prenom: string;
   filiere: string; niveau: string; groupe: string; section: string;
   dateNaissance: string; wilaya: string; email: string;
-  statutCompte: CompteStatut; statutReinscription: string;
+  statutCompte: CompteStatut;
 }
 
 interface AgentTeacher {
@@ -418,7 +418,6 @@ export default function AgentComptes() {
         wilaya:             String(s.wilaya ?? ""),
         email:              String((s as Record<string, unknown>).email ?? ""),
         statutCompte:       ((s.statut_compte ?? "actif") as CompteStatut),
-        statutReinscription: String(s.statut_reinscription ?? "en_attente"),
       }));
       setStudents(mapped);
       setStudentPasswordStore(prev => {
@@ -664,7 +663,7 @@ export default function AgentComptes() {
         dateNaissance: newStudent.dateNaissance || "",
         wilaya: newStudent.wilayaNaissance || "Oran",
         email: String(created.email ?? (newStudent.matricule + "@eduspace.local")),
-        statutCompte: "actif", statutReinscription: "en_attente",
+        statutCompte: "actif",
       };
       setShowAddStudent(false);
       setNewStudent({ nom: "", prenom: "", dateNaissance: "", wilayaNaissance: "Oran", matricule: "", niveau: "L3" });

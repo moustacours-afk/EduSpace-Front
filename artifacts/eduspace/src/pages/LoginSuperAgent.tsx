@@ -74,11 +74,6 @@ export default function LoginSuperAgent() {
             </div>
           </div>
 
-          {/* Demo credentials hint */}
-          <div className="bg-muted border border-border rounded-lg px-3 py-2 mb-5 text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">Compte démo :</span> matricule = <span className="font-mono">superagent@univ-oran1.dz</span> — mot de passe: <span className="font-mono">password</span>
-          </div>
-
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField control={form.control} name="email" render={({ field }) => (

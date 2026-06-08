@@ -294,7 +294,6 @@ export type AgentStudent = {
   dateNaissance: string; wilaya: string; filiere: string; niveau: string; groupe: string;
   email: string; statutCompte: CompteStatut;
   statutReinscription: ReinsStatut; statutPaiement: PayStatut;
-  montantPaye: number; methodePayment: string; referencePayment: string; datePayment: string;
   documents: { type: string; soumis: boolean; verifie: boolean }[];
   auditTrail: { date: string; action: string; agent: string }[];
 };
@@ -320,10 +319,6 @@ function buildAgentStudent(i: number): AgentStudent {
     statutCompte: i < 25 ? "actif" : i < 28 ? "suspendu" : "archive",
     statutReinscription: r,
     statutPaiement: p,
-    montantPaye: p === "paye" ? 2500 : 0,
-    methodePayment: i % 2 === 0 ? "CCP" : "Edahabia",
-    referencePayment: p === "paye" ? `REF${2025}${String(i).padStart(4,"0")}` : "",
-    datePayment: p === "paye" ? `2025-09-${String((i % 28) + 1).padStart(2,"0")}` : "",
     documents: docTypes.map((type, di) => ({
       type,
       soumis: r !== "incomplet" || di < 4,

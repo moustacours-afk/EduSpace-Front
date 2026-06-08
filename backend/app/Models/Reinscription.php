@@ -8,8 +8,7 @@ class Reinscription extends Model
 {
     protected $fillable = [
         'etudiant_id', 'annee_universitaire', 'statut', 'statut_paiement',
-        'montant', 'methode_payment', 'reference_payment', 'date_payment',
-        'documents', 'audit_trail', 'traite_par', 'traite_le',
+        'montant', 'documents', 'audit_trail', 'traite_par', 'traite_le',
     ];
 
     protected function casts(): array

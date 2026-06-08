@@ -75,11 +75,6 @@ export default function LoginEtudiant() {
             </div>
           </div>
 
-          {/* Demo credentials hint */}
-          <div className="bg-muted border border-border rounded-lg px-3 py-2 mb-5 text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">Compte démo :</span> matricule = <span className="font-mono">222237400711</span> — mot de passe: <span className="font-mono">password</span>
-          </div>
-
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField

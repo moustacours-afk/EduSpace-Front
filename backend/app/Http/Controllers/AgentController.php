@@ -72,7 +72,6 @@ class AgentController extends Controller
             'email'               => $s->user?->email ?? '',
             'initial_password'    => $s->user?->initial_password ?? '',
             'statut_compte'       => $s->statut_compte,
-            'statut_reinscription' => $s->statut_reinscription,
         ]));
     }
 
@@ -165,7 +164,7 @@ class AgentController extends Controller
         $etudiant = Etudiant::findOrFail($id);
         $etudiant->update($request->only([
             'nom', 'prenom', 'filiere', 'niveau', 'groupe', 'section',
-            'statut_compte', 'statut_reinscription', 'date_naissance', 'wilaya',
+            'statut_compte', 'date_naissance', 'wilaya',
         ]));
         return response()->json($etudiant);
     }

@@ -267,9 +267,7 @@ class EduSpaceSeeder extends Seeder
                 'filiere' => $s[5] ?? 'Informatique', 'niveau' => $s[3], 'groupe' => $s[4],
                 'section' => 'Section 1', 'departement' => $this->DEPT, 'universite' => $this->UNIV,
                 'annee_universitaire' => $this->ANNEE, 'statut_compte' => 'actif',
-                'statut_reinscription' => 'valide', 'statut_paiement' => 'paye', 'montant_paye' => 2500,
-                'methode_payment' => 'CCP', 'reference_payment' => 'REF'.$s[0],
-                'date_payment' => '2025-09-20',
+                'statut_paiement' => 'paye',
             ]);
         };
 
@@ -544,8 +542,6 @@ class EduSpaceSeeder extends Seeder
             Reinscription::create([
                 'etudiant_id' => $stu->id, 'annee_universitaire' => $this->ANNEE, 'statut' => $st,
                 'statut_paiement' => $paye ? 'paye' : 'non_paye', 'montant' => $paye ? 2500 : 0,
-                'methode_payment' => $paye ? 'CCP' : null, 'reference_payment' => $paye ? 'REF'.$mat : null,
-                'date_payment' => $paye ? '2025-09-22' : null,
                 'documents' => array_map(fn ($t, $k) => [
                     'type' => $t, 'soumis' => $st !== 'incomplet' || $k < 3, 'verifie' => $st === 'valide',
                 ], $docTypes, array_keys($docTypes)),
@@ -899,10 +895,7 @@ class EduSpaceSeeder extends Seeder
                         'filiere' => $deptName, 'niveau' => $niveau, 'groupe' => $group, 'section' => $section,
                         'departement' => 'Département de '.$deptName, 'universite' => $this->UNIV,
                         'annee_universitaire' => $this->ANNEE, 'statut_compte' => 'actif',
-                        'statut_reinscription' => ['valide','valide','valide','en_attente','incomplet'][$k % 5],
-                        'statut_paiement' => $paye ? 'paye' : 'non_paye', 'montant_paye' => $paye ? 2500 : 0,
-                        'methode_payment' => $paye ? 'CCP' : null, 'reference_payment' => $paye ? 'REF'.$mat : null,
-                        'date_payment' => $paye ? '2025-09-'.str_pad((string)mt_rand(10, 28), 2, '0', STR_PAD_LEFT) : null,
+                        'statut_paiement' => $paye ? 'paye' : 'non_paye',
                     ]);
                 }
 
@@ -973,8 +966,6 @@ class EduSpaceSeeder extends Seeder
                     Reinscription::create([
                         'etudiant_id' => $stu->id, 'annee_universitaire' => $this->ANNEE, 'statut' => $st,
                         'statut_paiement' => $paye ? 'paye' : 'non_paye', 'montant' => $paye ? 2500 : 0,
-                        'methode_payment' => $paye ? 'CCP' : null, 'reference_payment' => $paye ? 'REF'.$stu->matricule : null,
-                        'date_payment' => $paye ? '2025-09-22' : null,
                         'documents' => [
                             ['type' => 'CNI', 'soumis' => true, 'verifie' => $paye],
                             ['type' => 'Bac original', 'soumis' => $st !== 'incomplet', 'verifie' => $paye],

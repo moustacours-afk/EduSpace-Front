@@ -3,12 +3,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
-import { Building2, ArrowLeft, Lock, IdCard, X, Info } from "lucide-react";
+import { motion } from "framer-motion";
+import { Building2, ArrowLeft, Lock, IdCard } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { loginWithMatricule } from "@/lib/api";
 import { setAuth } from "@/lib/auth";
 
@@ -23,7 +22,6 @@ export default function LoginAgent() {
   const [, setLocation] = useLocation();
   const [loginError, setLoginError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showForgot, setShowForgot] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -77,11 +75,6 @@ export default function LoginAgent() {
             </div>
           </div>
 
-          {/* Demo credentials hint */}
-          <div className="bg-muted border border-border rounded-lg px-3 py-2 mb-5 text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">Compte démo :</span> nom d'utilisateur = <span className="font-mono">n.ferhat@univ-oran1.dz</span> — mot de passe: <span className="font-mono">password</span>
-          </div>
-
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField
@@ -105,16 +98,7 @@ export default function LoginAgent() {
                 name="motDePasse"
                 render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center justify-between">
-                      <FormLabel className="text-foreground font-medium">Mot de passe</FormLabel>
-                      <button
-                        type="button"
-                        onClick={() => setShowForgot(true)}
-                        className="text-xs text-brand hover:text-brand/80 underline"
-                      >
-                        Mot de passe oublié ?
-                      </button>
-                    </div>
+                    <FormLabel className="text-foreground font-medium">Mot de passe</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -147,37 +131,6 @@ export default function LoginAgent() {
           </p>
         </div>
       </motion.div>
-
-      <AnimatePresence>
-        {showForgot && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
-              <Card className="p-6 max-w-sm w-full">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Info className="w-5 h-5 text-brand" />
-                    <h3 className="font-bold text-base">Réinitialisation du mot de passe</h3>
-                  </div>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowForgot(false)}>
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Pour réinitialiser votre mot de passe, veuillez contacter le service informatique de l'université :
-                </p>
-                <div className="bg-muted border border-border rounded-lg p-3 space-y-1 text-sm">
-                  <p><span className="font-medium">Email :</span> support-si@univ-oran1.dz</p>
-                  <p><span className="font-medium">Téléphone :</span> +213 21 XX XX XX</p>
-                  <p><span className="font-medium">Bureau :</span> Bâtiment Administration — Rdc</p>
-                </div>
-                <Button className="w-full mt-4" onClick={() => setShowForgot(false)}>
-                  Fermer
-                </Button>
-              </Card>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

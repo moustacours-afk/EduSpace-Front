@@ -145,7 +145,6 @@ class EtudiantController extends Controller
             'universite' => $etudiant->universite,
             'anneeUniversitaire' => $etudiant->annee_universitaire,
             'statutCompte' => $etudiant->statut_compte,
-            'statutReinscription' => $etudiant->statut_reinscription,
             'statutPaiement' => $etudiant->statut_paiement,
         ]);
     }
