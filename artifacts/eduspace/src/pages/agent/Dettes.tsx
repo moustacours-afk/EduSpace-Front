@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { motion } from "framer-motion";
 import { AgentSidebar } from "@/components/AgentSidebar";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,399 +7,176 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ClipboardEdit, Filter, RefreshCw, Search, X,
-  ChevronRight, AlertTriangle, CheckCircle, Save, BookOpen, Lock,
+  ClipboardEdit, Filter, RefreshCw, Search, Save,
+  AlertTriangle, CheckCircle, BookOpen, GraduationCap,
 } from "lucide-react";
-import { groupesParNiveau } from "@/data/mockData";
-import { getSectionsForNiveau } from "@/lib/orgStore";
 import { agent as api } from "@/lib/api";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
 const item      = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0 } };
 
-const NIVEAUX = ["L1", "L2", "L3", "M1", "M2", "ING1", "ING2", "ING3", "ING4", "ING5"];
-
-type Student = {
-  id: number; matricule: string; nom: string; prenom: string;
-  niveau: string; section: string; groupe: string;
+type DebtRow = {
+  id: number; moduleId: number; module: string; code: string | null;
+  semestre: string | null; credits: number | null; coefficient: number | null;
+  academicYear: string; originalGrade: number | null; retakeGrade: number | null;
+  status: boolean; cleared: boolean;
 };
 
-type NoteRow = {
-  id: number; moduleId: number; module: string; code: string;
-  typeUe: string; credits: number; coefficient: number; hasTp: boolean;
-  semestre: string;
-  exam: number | null; controle: number | null; tp: number | null;
-  moyenne: number | null; creditAcquis: number; situation: string; statut: string;
+type DebtStudent = {
+  student: {
+    id: number; matricule: string; nom: string; prenom: string;
+    niveau: string; section: string; groupe: string;
+  };
+  debts: DebtRow[];
+  activeCount: number;
+  clearedCount: number;
 };
 
-function semNumToYear(sem: string): number {
-  const num = parseInt(sem.replace(/\D/g, ""), 10);
-  return isNaN(num) ? 0 : Math.ceil(num / 2);
+function uniq(values: (string | null | undefined)[]): string[] {
+  return [...new Set(values.filter((v): v is string => !!v))].sort();
 }
 
-function yearLabel(y: number): string {
-  const labels = ["1ère", "2ème", "3ème", "4ème", "5ème"];
-  return (labels[y - 1] ?? `${y}ème`) + " Année";
-}
+// ── A single debt row with its retake-grade input ───────────────────────────────
+function DebtLine({ debt, studentId, onSaved }: {
+  debt: DebtRow;
+  studentId: number;
+  onSaved: (studentId: number, updated: DebtRow) => void;
+}) {
+  const [value, setValue]   = useState(debt.retakeGrade != null ? String(debt.retakeGrade) : "");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg]       = useState<"ok" | "err" | null>(null);
 
-function weightedMoy(rows: NoteRow[]): number | null {
-  const valid = rows.filter(n => n.moyenne !== null);
-  const totalCr = valid.reduce((s, n) => s + (n.credits || 0), 0);
-  if (!valid.length || totalCr === 0) return null;
-  return Math.round(valid.reduce((s, n) => s + ((n.moyenne ?? 0) * (n.credits || 0)), 0) / totalCr * 100) / 100;
-}
+  const parsed   = parseFloat(value);
+  const valid    = !isNaN(parsed) && parsed >= 0 && parsed <= 20;
+  const dirty    = value !== (debt.retakeGrade != null ? String(debt.retakeGrade) : "");
+  const previewCleared = valid && parsed >= 10;
 
-function situationBadge(situation: string) {
-  if (situation === "admis")      return <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">Admis</Badge>;
-  if (situation === "rattrapage") return <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">Rattrapage</Badge>;
-  return <Badge className="bg-red-100 text-red-700 border-red-200 text-[10px]">Ajourné</Badge>;
-}
-
-// ── Relevé modal — full relevé, admis locked, dettes editable (exam only) ──
-function ReleveModal({ student, onClose }: { student: Student; onClose: () => void }) {
-  const [notes, setNotes]     = useState<NoteRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editId, setEditId]   = useState<number | null>(null);
-  const [editExam, setEditExam] = useState("");
-  const [saving, setSaving]   = useState(false);
-  const [saveMsg, setSaveMsg] = useState<{ id: number; ok: boolean } | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
+  async function save() {
+    if (!valid) return;
+    setSaving(true); setMsg(null);
     try {
-      const data = await api.studentNotes(student.id) as NoteRow[];
-      setNotes(data);
-    } catch { /* keep empty */ }
-    finally { setLoading(false); }
-  }, [student.id]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const dettes    = notes.filter(n => n.situation !== "admis");
-  const semestres = [...new Set(notes.map(n => n.semestre))].sort();
-  const noteYears = [...new Set(semestres.map(semNumToYear))].sort();
-
-  // Weighted UE moyenne for a given (semestre, ue) pair — uses ALL modules (not just dettes)
-  function ueWeightedMoy(sem: string, ue: string): number | null {
-    const pool = notes.filter(n => n.semestre === sem && (n.typeUe || "UE") === ue && n.moyenne !== null);
-    const totalCr = pool.reduce((s, n) => s + (n.credits || 0), 0);
-    if (totalCr === 0) return null;
-    return Math.round(pool.reduce((s, n) => s + ((n.moyenne ?? 0) * (n.credits || 0)), 0) / totalCr * 100) / 100;
-  }
-
-  // Preview moyenne when only exam changes (CC & TP stay as-is)
-  function liveCalcExam(n: NoteRow): number | null {
-    const exam = parseFloat(editExam);
-    if (isNaN(exam) || exam < 0 || exam > 20) return null;
-    return n.hasTp
-      ? Math.round((exam * 0.6 + (n.controle ?? 0) * 0.2 + (n.tp ?? 0) * 0.2) * 100) / 100
-      : Math.round((exam * 0.6 + (n.controle ?? 0) * 0.4) * 100) / 100;
-  }
-
-  function startEdit(n: NoteRow) {
-    setEditId(n.id);
-    setEditExam(String(n.exam ?? ""));
-    setSaveMsg(null);
-  }
-
-  async function saveNote(n: NoteRow) {
-    const exam = parseFloat(editExam);
-    if (isNaN(exam) || exam < 0 || exam > 20) return;
-    setSaving(true);
-    try {
-      const res = await api.updateNote(n.id, { note_exam: exam }) as { moyenne: number; situation: string; creditAcquis: number };
-      setNotes(prev => prev.map(r =>
-        r.id === n.id ? { ...r, exam, moyenne: res.moyenne, situation: res.situation, creditAcquis: res.creditAcquis } : r
-      ));
-      setSaveMsg({ id: n.id, ok: true });
-      setEditId(null);
-    } catch { setSaveMsg({ id: n.id, ok: false }); }
+      const res = await api.updateDebt(debt.id, { retake_grade: parsed });
+      onSaved(studentId, { ...debt, retakeGrade: res.retakeGrade, status: res.status, cleared: res.cleared });
+      setMsg("ok");
+    } catch { setMsg("err"); }
     finally { setSaving(false); }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-end overflow-hidden">
-      <motion.div
-        initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
-        transition={{ type: "spring", damping: 28, stiffness: 260 }}
-        className="w-full max-w-2xl h-full bg-background shadow-2xl flex flex-col overflow-hidden"
-      >
-        {/* Header */}
-        <div className="px-6 py-4 border-b flex items-center justify-between gap-3 flex-shrink-0">
-          <div>
-            <h2 className="font-bold text-base">{student.prenom} {student.nom}</h2>
-            <p className="text-xs text-muted-foreground">{student.matricule} · {student.niveau} · {student.section}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {dettes.length > 0
-              ? <Badge className="bg-red-100 text-red-700 border-red-200">{dettes.length} dette(s)</Badge>
-              : <Badge className="bg-green-100 text-green-700 border-green-200">Aucune dette</Badge>
-            }
-            <button onClick={onClose} className="p-1.5 rounded hover:bg-muted transition-colors">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+    <tr className="border-b border-border/50 last:border-0 hover:bg-muted/10 transition-colors">
+      <td className="px-4 py-3">
+        <p className="font-medium text-sm">{debt.module}</p>
+        <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{debt.code ?? "—"}</p>
+      </td>
+      <td className="px-3 py-3 text-center text-xs text-muted-foreground whitespace-nowrap">
+        {debt.semestre ?? "—"}
+        <span className="block text-[10px]">{debt.academicYear}</span>
+      </td>
+      <td className="px-3 py-3 text-center text-xs text-muted-foreground">{debt.credits ?? "—"}</td>
+      <td className="px-3 py-3 text-center">
+        <span className="font-semibold text-red-600 text-sm">
+          {debt.originalGrade != null ? debt.originalGrade.toFixed(2) : "—"}
+        </span>
+      </td>
+      <td className="px-3 py-3">
+        <div className="flex items-center gap-2 justify-center">
+          <Input
+            type="number" min={0} max={20} step={0.25}
+            value={value}
+            onChange={e => { setValue(e.target.value); setMsg(null); }}
+            placeholder="—"
+            className={`h-8 w-20 text-sm text-center ${value && !valid ? "border-red-400" : ""}`}
+          />
+          <Button size="sm" className="h-8 gap-1.5 text-xs" disabled={!valid || !dirty || saving} onClick={save}>
+            <Save className="w-3 h-3" />{saving ? "…" : "Enr."}
+          </Button>
         </div>
-
-        <div className="px-6 py-2 border-b bg-muted/30 flex-shrink-0">
-          <p className="text-[10px] text-muted-foreground">
-            Relevé complet — modules admis verrouillés (grisés), dettes modifiables (cliquez). UE compensées (moy. UE ≥ 10) verrouillées.
+        {value && !valid && (
+          <p className="text-[10px] text-red-500 text-center mt-1">Note entre 0 et 20.</p>
+        )}
+        {msg === "ok" && (
+          <p className="text-[10px] text-green-600 text-center mt-1 flex items-center gap-1 justify-center">
+            <CheckCircle className="w-3 h-3" />Enregistré.
           </p>
-        </div>
-
-        {/* Notes list grouped by semestre → UE */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          {loading ? (
-            <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">Chargement…</div>
-          ) : notes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
-              <BookOpen className="w-8 h-8" />
-              <p className="text-sm">Aucune note disponible.</p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {noteYears.map(year => {
-                const s1Key = `S${(year - 1) * 2 + 1}`;
-                const s2Key = `S${year * 2}`;
-                const yearSems = semestres.filter(s => s === s1Key || s === s2Key);
-                const yearNotes = notes.filter(n => yearSems.includes(n.semestre));
-                const yearMoy = weightedMoy(yearNotes);
-                const yearDettes = yearNotes.filter(n => n.situation !== "admis").length;
-                return (
-                  <div key={year}>
-                    {/* ── Year header ── */}
-                    <div className="flex items-center gap-3 bg-muted/40 border border-border rounded-lg px-4 py-2.5 mb-4">
-                      <span className="font-bold text-sm">{yearLabel(year)}</span>
-                      <span className="text-xs text-muted-foreground">({yearSems.join(" + ")})</span>
-                      <div className="flex-1" />
-                      {yearMoy !== null && (
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${yearMoy >= 10 ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-600 border-red-200"}`}>
-                          Moy. annuelle : {yearMoy}/20
-                        </span>
-                      )}
-                      {yearDettes > 0
-                        ? <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-600 border-red-200">{yearDettes} dette(s)</Badge>
-                        : <Badge className="text-[10px] px-1.5 py-0 bg-green-100 text-green-700 border-green-200">Année validée</Badge>
-                      }
-                    </div>
-
-                    <div className="space-y-6 ml-1">
-                      {yearSems.map(sem => {
-                        const semNotes = notes.filter(n => n.semestre === sem);
-                        const semMoy   = weightedMoy(semNotes);
-                        const ueKeys   = [...new Set(semNotes.map(n => n.typeUe || "UE"))];
-                        const semDettes = semNotes.filter(n => n.situation !== "admis").length;
-                        return (
-                          <div key={sem}>
-                            {/* Semestre header */}
-                            <div className="flex items-center gap-2 mb-3 border-b pb-1">
-                              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{sem}</p>
-                              {semMoy !== null && (
-                                <span className={`text-xs font-semibold ${semMoy >= 10 ? "text-green-600" : "text-red-500"}`}>
-                                  Moy : {semMoy}/20
-                                </span>
-                              )}
-                              {semDettes > 0
-                                ? <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-600 border-red-200">{semDettes} dette(s)</Badge>
-                                : <Badge className="text-[10px] px-1.5 py-0 bg-green-100 text-green-700 border-green-200">Validé</Badge>
-                              }
-                            </div>
-
-                            <div className="space-y-4">
-                              {ueKeys.map(ue => {
-                                const ueNotes  = semNotes.filter(n => (n.typeUe || "UE") === ue);
-                                const ueDettes = ueNotes.filter(n => n.situation !== "admis");
-                                const ueMoy    = ueWeightedMoy(sem, ue);
-                                const isUeLocked = ueDettes.length > 0 && ueMoy !== null && ueMoy >= 10;
-
-                        return (
-                          <div key={ue}>
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-[10px] font-bold uppercase text-muted-foreground bg-muted px-2 py-0.5 rounded">{ue}</span>
-                              {isUeLocked && (
-                                <Badge className="text-[10px] px-1.5 py-0 bg-green-100 text-green-700 border-green-200 flex items-center gap-1">
-                                  <Lock className="w-2.5 h-2.5" />Compensée — moy. {ueMoy}/20
-                                </Badge>
-                              )}
-                              {!isUeLocked && ueDettes.length > 0 && (
-                                <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-600 border-red-200">{ueDettes.length} dette(s)</Badge>
-                              )}
-                            </div>
-
-                            <div className="space-y-2 ml-2">
-                              {ueNotes.map(n => {
-                                const isAdmis   = n.situation === "admis";
-                                const isDette   = !isAdmis;
-                                const locked    = isAdmis || isUeLocked;
-                                const isEditing = editId === n.id;
-                                const liveMoy   = isEditing ? liveCalcExam(n) : null;
-                                const liveSit   = liveMoy !== null
-                                  ? (liveMoy >= 10 ? "Admis" : liveMoy >= 8 ? "Rattrapage" : "Ajourné") : null;
-
-                                return (
-                                  <Card
-                                    key={n.id}
-                                    className={`p-3 border transition-colors ${
-                                      locked && !isEditing
-                                        ? "opacity-60 bg-muted/10"
-                                        : isEditing
-                                          ? "border-primary/40 bg-primary/5"
-                                          : isDette
-                                            ? "hover:border-red-300 cursor-pointer"
-                                            : ""
-                                    }`}
-                                    onClick={() => { if (!isEditing && !locked) startEdit(n); }}
-                                  >
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="font-semibold text-sm truncate">{n.module}</span>
-                                          <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{n.code}</span>
-                                        </div>
-                                        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-                                          <span>{n.credits} crédits</span>
-                                          <span>Coeff. {n.coefficient}</span>
-                                          <span className={`font-mono font-semibold ${isAdmis ? "text-green-700" : "text-red-600"}`}>
-                                            Moy : {n.moyenne ?? "—"}/20
-                                          </span>
-                                          <span className="font-mono">Exam : {n.exam ?? "—"}</span>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2 flex-shrink-0">
-                                        {situationBadge(n.situation)}
-                                        {isUeLocked && isDette && <Lock className="w-3.5 h-3.5 text-muted-foreground" />}
-                                        {!locked && !isEditing && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
-                                      </div>
-                                    </div>
-
-                                    {/* Exam-only edit form */}
-                                    <AnimatePresence>
-                                      {isEditing && (
-                                        <motion.div
-                                          initial={{ opacity: 0, height: 0 }}
-                                          animate={{ opacity: 1, height: "auto" }}
-                                          exit={{ opacity: 0, height: 0 }}
-                                          transition={{ duration: 0.2 }}
-                                          className="mt-3 overflow-hidden"
-                                          onClick={e => e.stopPropagation()}
-                                        >
-                                          <div className="max-w-[200px]">
-                                            <label className="text-[10px] text-muted-foreground block mb-1">Note d'examen /20</label>
-                                            <Input
-                                              type="number" min={0} max={20} step={0.25}
-                                              value={editExam}
-                                              onChange={e => setEditExam(e.target.value)}
-                                              className="h-8 text-sm"
-                                              autoFocus
-                                            />
-                                          </div>
-
-                                          {liveMoy !== null && (
-                                            <div className="mt-2 rounded-lg px-3 py-2 text-xs flex items-center gap-2 bg-muted/40 border border-border">
-                                              <BookOpen className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
-                                              Nouvelle moyenne : <strong>{liveMoy}/20</strong> → {liveSit}
-                                            </div>
-                                          )}
-
-                                          {saveMsg?.id === n.id && (
-                                            <div className={`mt-2 text-xs flex items-center gap-1 ${saveMsg.ok ? "text-green-600" : "text-red-600"}`}>
-                                              {saveMsg.ok
-                                                ? <><CheckCircle className="w-3.5 h-3.5" /> Note mise à jour.</>
-                                                : <><AlertTriangle className="w-3.5 h-3.5" /> Erreur lors de la sauvegarde.</>
-                                              }
-                                            </div>
-                                          )}
-
-                                          <div className="flex gap-2 mt-3">
-                                            <Button size="sm" className="h-7 text-xs gap-1.5 flex-1"
-                                              disabled={saving || liveMoy === null}
-                                              onClick={() => saveNote(n)}>
-                                              <Save className="w-3 h-3" />{saving ? "Enregistrement…" : "Enregistrer"}
-                                            </Button>
-                                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditId(null)}>
-                                              Annuler
-                                            </Button>
-                                          </div>
-                                        </motion.div>
-                                      )}
-                                    </AnimatePresence>
-                                  </Card>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="px-6 py-4 border-t flex-shrink-0">
-          <Button variant="outline" className="w-full" onClick={onClose}>Fermer</Button>
-        </div>
-      </motion.div>
-    </div>
+        )}
+        {msg === "err" && (
+          <p className="text-[10px] text-red-500 text-center mt-1 flex items-center gap-1 justify-center">
+            <AlertTriangle className="w-3 h-3" />Erreur.
+          </p>
+        )}
+      </td>
+      <td className="px-4 py-3 text-center">
+        {debt.cleared ? (
+          <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] whitespace-nowrap">Soldée</Badge>
+        ) : previewCleared && dirty ? (
+          <Badge className="bg-emerald-50 text-emerald-600 border-emerald-200 text-[10px] whitespace-nowrap">→ Soldée</Badge>
+        ) : (
+          <Badge className="bg-red-100 text-red-700 border-red-200 text-[10px] whitespace-nowrap">Active</Badge>
+        )}
+      </td>
+    </tr>
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Main page ───────────────────────────────────────────────────────────────────
 export default function AgentDettes() {
-  const [filterNiveau,  setFilterNiveau]  = useState("L3");
+  const [groups, setGroups]   = useState<DebtStudent[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const [filterNiveau,  setFilterNiveau]  = useState("Tous");
   const [filterSection, setFilterSection] = useState("Tous");
   const [filterGroupe,  setFilterGroupe]  = useState("Tous");
   const [search, setSearch]               = useState("");
 
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading]   = useState(false);
-  const [selected, setSelected] = useState<Student | null>(null);
-
-  const orgSections    = getSectionsForNiveau(filterNiveau);
-  const sectionOptions = ["Tous", ...(orgSections.length > 0 ? orgSections.map(s => s.nom) : ["Section 1", "Section 2"])];
-  const groupeOptions  = ["Tous", ...(groupesParNiveau[filterNiveau] ?? ["Groupe 1"])];
-
-  const fetchStudents = useCallback(async () => {
+  const fetchDebts = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.students() as Record<string, unknown>[];
-      const mapped: Student[] = data
-        .filter(s => s.niveau === filterNiveau)
-        .filter(s => filterSection === "Tous" || s.section === filterSection)
-        .filter(s => filterGroupe  === "Tous" || s.groupe  === filterGroupe)
-        .map(s => ({
-          id:        Number(s.id),
-          matricule: String(s.matricule ?? ""),
-          nom:       String(s.nom ?? ""),
-          prenom:    String(s.prenom ?? ""),
-          niveau:    String(s.niveau ?? ""),
-          section:   String(s.section ?? ""),
-          groupe:    String(s.groupe ?? ""),
-        }));
-      setStudents(mapped);
-    } catch { setStudents([]); }
+      const data = await api.debts() as DebtStudent[];
+      setGroups(data);
+    } catch { setGroups([]); }
     finally { setLoading(false); }
-  }, [filterNiveau, filterSection, filterGroupe]);
+  }, []);
 
-  useEffect(() => { fetchStudents(); }, [fetchStudents]);
+  useEffect(() => { fetchDebts(); }, [fetchDebts]);
+
+  // Filter options derived from the actual debt-carrying students.
+  const niveauOptions  = useMemo(() => ["Tous", ...uniq(groups.map(g => g.student.niveau))], [groups]);
+  const sectionOptions = useMemo(() => ["Tous", ...uniq(
+    groups.filter(g => filterNiveau === "Tous" || g.student.niveau === filterNiveau).map(g => g.student.section)
+  )], [groups, filterNiveau]);
+  const groupeOptions  = useMemo(() => ["Tous", ...uniq(
+    groups.filter(g => filterNiveau === "Tous" || g.student.niveau === filterNiveau).map(g => g.student.groupe)
+  )], [groups, filterNiveau]);
+
+  const displayed = useMemo(() => groups.filter(g => {
+    const s = g.student;
+    if (filterNiveau  !== "Tous" && s.niveau  !== filterNiveau)  return false;
+    if (filterSection !== "Tous" && s.section !== filterSection) return false;
+    if (filterGroupe  !== "Tous" && s.groupe  !== filterGroupe)  return false;
+    if (search && !`${s.nom} ${s.prenom} ${s.matricule}`.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  }), [groups, filterNiveau, filterSection, filterGroupe, search]);
+
+  const totalActive = displayed.reduce((sum, g) => sum + g.activeCount, 0);
+
+  function handleSaved(studentId: number, updated: DebtRow) {
+    setGroups(prev => prev.map(g => {
+      if (g.student.id !== studentId) return g;
+      const debts = g.debts.map(d => d.id === updated.id ? updated : d);
+      return {
+        ...g,
+        debts,
+        activeCount:  debts.filter(d => d.status).length,
+        clearedCount: debts.filter(d => !d.status).length,
+      };
+    }));
+  }
 
   function handleNiveauChange(v: string) {
     setFilterNiveau(v);
     setFilterSection("Tous");
     setFilterGroupe("Tous");
   }
-
-  const displayed = search
-    ? students.filter(s =>
-        `${s.nom} ${s.prenom} ${s.matricule}`.toLowerCase().includes(search.toLowerCase())
-      )
-    : students;
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -416,14 +193,33 @@ export default function AgentDettes() {
                   Gestion des dettes
                 </h1>
                 <p className="text-muted-foreground mt-1 text-sm">
-                  Sélectionnez un étudiant pour consulter et modifier ses notes de dettes.
+                  Étudiants ayant des modules en dette (échec non compensé d'une année antérieure).
+                  Saisissez la note de rattrapage&nbsp;: la dette se solde automatiquement à partir de 10/20.
                 </p>
               </div>
-              <Button variant="outline" size="sm" className="gap-2" onClick={fetchStudents} disabled={loading}>
+              <Button variant="outline" size="sm" className="gap-2" onClick={fetchDebts} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
                 Actualiser
               </Button>
             </div>
+          </motion.div>
+
+          {/* Summary */}
+          <motion.div variants={item} className="grid grid-cols-2 gap-3 max-w-md">
+            <Card className="p-4">
+              <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center mb-2">
+                <GraduationCap className="w-4 h-4 text-blue-600" />
+              </div>
+              <p className="text-xl font-bold">{displayed.length}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Étudiant(s) en dette</p>
+            </Card>
+            <Card className="p-4">
+              <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center mb-2">
+                <AlertTriangle className="w-4 h-4 text-red-600" />
+              </div>
+              <p className="text-xl font-bold">{totalActive}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Dette(s) active(s)</p>
+            </Card>
           </motion.div>
 
           {/* Filters */}
@@ -437,8 +233,8 @@ export default function AgentDettes() {
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Niveau</label>
                   <Select value={filterNiveau} onValueChange={handleNiveauChange}>
-                    <SelectTrigger className="w-24 h-9 text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>{NIVEAUX.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+                    <SelectTrigger className="w-28 h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>{niveauOptions.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
@@ -468,61 +264,72 @@ export default function AgentDettes() {
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                {loading
-                  ? "Chargement…"
-                  : `${displayed.length} étudiant(s) — cliquez sur un étudiant pour voir et modifier ses dettes.`
-                }
-              </p>
             </Card>
           </motion.div>
 
-          {/* Student list */}
-          <motion.div variants={item}>
+          {/* Student debt list */}
+          <motion.div variants={item} className="space-y-4">
             {loading ? (
-              <div className="flex justify-center py-16 text-muted-foreground text-sm">
-                Chargement des étudiants…
-              </div>
+              <div className="flex justify-center py-16 text-muted-foreground text-sm">Chargement des dettes…</div>
             ) : displayed.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 gap-2 text-muted-foreground">
-                <Search className="w-8 h-8" />
-                <p className="text-sm">Aucun étudiant trouvé avec ces filtres.</p>
+                <CheckCircle className="w-8 h-8 text-green-500" />
+                <p className="text-sm">Aucun étudiant en dette avec ces filtres.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {displayed.map(s => (
-                  <Card
-                    key={s.id}
-                    className="p-4 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-colors group"
-                    onClick={() => setSelected(s)}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate">{s.prenom} {s.nom}</p>
-                        <p className="text-xs text-muted-foreground font-mono mt-0.5">{s.matricule}</p>
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          <Badge className="text-[10px] px-1.5 py-0 bg-muted/50 text-muted-foreground border-0">{s.niveau}</Badge>
-                          {s.section && <Badge className="text-[10px] px-1.5 py-0 bg-muted/50 text-muted-foreground border-0">{s.section}</Badge>}
-                          {s.groupe  && <Badge className="text-[10px] px-1.5 py-0 bg-muted/50 text-muted-foreground border-0">{s.groupe}</Badge>}
-                        </div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0 mt-1" />
+              displayed.map(g => (
+                <Card key={g.student.id} className="overflow-hidden">
+                  {/* Student header */}
+                  <div className="px-5 py-3.5 border-b bg-muted/20 flex items-center justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm">{g.student.prenom} {g.student.nom}</p>
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                        {g.student.matricule}
+                        <span className="ml-2 font-sans">{g.student.niveau}{g.student.section ? ` · ${g.student.section}` : ""}{g.student.groupe ? ` · ${g.student.groupe}` : ""}</span>
+                      </p>
                     </div>
-                  </Card>
-                ))}
-              </div>
+                    <div className="flex items-center gap-2">
+                      {g.activeCount > 0
+                        ? <Badge className="bg-red-100 text-red-700 border-red-200 text-[11px]">{g.activeCount} dette(s) active(s)</Badge>
+                        : <Badge className="bg-green-100 text-green-700 border-green-200 text-[11px]">Toutes soldées</Badge>}
+                      {g.clearedCount > 0 && (
+                        <Badge className="bg-muted text-muted-foreground border-border text-[11px]">{g.clearedCount} soldée(s)</Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Debt table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30 border-b border-border">
+                        <tr>
+                          <th className="text-left  px-4 py-2.5 font-semibold text-muted-foreground text-xs">Module</th>
+                          <th className="text-center px-3 py-2.5 font-semibold text-muted-foreground text-xs">Semestre</th>
+                          <th className="text-center px-3 py-2.5 font-semibold text-muted-foreground text-xs">Crédits</th>
+                          <th className="text-center px-3 py-2.5 font-semibold text-muted-foreground text-xs">Note initiale</th>
+                          <th className="text-center px-3 py-2.5 font-semibold text-muted-foreground text-xs">Note rattrapage /20</th>
+                          <th className="text-center px-4 py-2.5 font-semibold text-muted-foreground text-xs">État</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.debts.map(d => (
+                          <DebtLine key={d.id} debt={d} studentId={g.student.id} onSaved={handleSaved} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              ))
             )}
+          </motion.div>
+
+          <motion.div variants={item} className="flex items-center gap-2 text-xs text-muted-foreground">
+            <BookOpen className="w-3.5 h-3.5" />
+            Les modules compensés au sein d'une unité d'enseignement (moy. UE ≥ 10) ne sont pas comptés comme dettes.
           </motion.div>
 
         </motion.div>
       </main>
-
-      {/* Relevé panel */}
-      <AnimatePresence>
-        {selected && (
-          <ReleveModal student={selected} onClose={() => setSelected(null)} />
-        )}
-      </AnimatePresence>
     </div>
   );
 }

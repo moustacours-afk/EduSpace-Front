@@ -152,6 +152,10 @@ export const agent = {
   studentNotes: (id: number) => get<unknown[]>(`/agent/students/${id}/notes`),
   updateNote: (noteId: number, body: { note_exam?: number; note_controle?: number; note_tp?: number }) =>
     patch<{ moyenne: number; situation: string; creditAcquis: number }>(`/agent/notes/${noteId}`, body),
+  // Dettes — dedicated debts table
+  debts: (params?: string) => get<unknown[]>(`/agent/debts${params ? "?" + params : ""}`),
+  updateDebt: (id: number, body: { retake_grade: number }) =>
+    patch<{ id: number; retakeGrade: number; status: boolean; cleared: boolean }>(`/agent/debts/${id}`, body),
 };
 
 // ── Super Agent ───────────────────────────────────────────────────────

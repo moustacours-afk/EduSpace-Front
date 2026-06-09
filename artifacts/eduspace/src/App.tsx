@@ -27,7 +27,6 @@ import EnseignantNotifications from "@/pages/enseignant/Notifications";
 import AgentDashboard from "@/pages/agent/Dashboard";
 import AgentComptes from "@/pages/agent/Comptes";
 import AgentEmploiDuTemps from "@/pages/agent/EmploiDuTemps";
-import AgentValidationNotes from "@/pages/agent/ValidationNotes";
 import AgentDeliberations from "@/pages/agent/Deliberations";
 import AgentCalendrier from "@/pages/agent/Calendrier";
 import AgentNotifications from "@/pages/agent/Notifications";
@@ -106,9 +105,6 @@ function Router() {
       </Route>
       <Route path="/agent/emploi-du-temps">
         <AgentGuard component={AgentEmploiDuTemps} />
-      </Route>
-      <Route path="/agent/notes">
-        <AgentGuard component={AgentValidationNotes} />
       </Route>
       <Route path="/agent/deliberations">
         <AgentGuard component={AgentDeliberations} />

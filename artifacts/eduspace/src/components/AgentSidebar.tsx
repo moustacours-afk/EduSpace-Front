@@ -4,7 +4,7 @@ import { clearAuth, getAgentFiliere } from "@/lib/auth";
 import { agent as api } from "@/lib/api";
 import { syncOrgFromStudents } from "@/lib/orgStore";
 import {
-  LayoutDashboard, Users, CalendarDays, CheckSquare, LogOut,
+  LayoutDashboard, Users, CalendarDays, LogOut,
   GraduationCap, Bell, BookOpen, Calendar, Megaphone,
   ChevronLeft, ChevronRight, ListChecks, Layers, FileSpreadsheet, ShieldCheck, ClipboardEdit,
 } from "lucide-react";
@@ -33,7 +33,6 @@ const navSections = [
     label: "Pédagogie",
     items: [
       { href: "/agent/emploi-du-temps", icon: CalendarDays, label: "Emplois du temps" },
-      { href: "/agent/notes", icon: CheckSquare, label: "Notes & Validation" },
       { href: "/agent/dettes", icon: ClipboardEdit, label: "Gestion des dettes" },
       { href: "/agent/deliberations", icon: ListChecks, label: "Délibérations" },
       { href: "/agent/feuilles", icon: FileSpreadsheet, label: "Feuilles" },

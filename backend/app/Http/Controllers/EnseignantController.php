@@ -220,12 +220,13 @@ class EnseignantController extends Controller
                     $note->moyenne   = round($moy, 2);
                     $note->situation = $moy >= 10 ? 'admis' : ($moy >= 8 ? 'rattrapage' : 'ajourne');
                 }
-                $note->statut = 'soumis';
+                // No agent validation gate: saved grades are published immediately.
+                $note->statut = 'publie';
                 $note->save();
             }
 
             $sub->update([
-                'statut'         => 'soumis',
+                'statut'         => 'publie',
                 'notes_soumises' => true,
                 'date_depot'     => now()->toDateString(),
                 'nb_etudiants'   => count($request->students),
@@ -326,10 +327,11 @@ class EnseignantController extends Controller
                     $note->moyenne = round($moy, 2);
                     $note->situation = $moy >= 10 ? 'admis' : ($moy >= 8 ? 'rattrapage' : 'ajourne');
                 }
-                $note->statut = 'soumis';
+                // No agent validation gate: saved grades are published immediately.
+                $note->statut = 'publie';
                 $note->save();
             }
-            $sub->update(['statut' => 'soumis', 'notes_soumises' => true, 'date_depot' => now()->toDateString()]);
+            $sub->update(['statut' => 'publie', 'notes_soumises' => true, 'date_depot' => now()->toDateString()]);
         });
 
         return response()->json(['message' => 'Notes soumises avec succès.']);

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AgentController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\DebtController;
 use App\Http\Controllers\EnseignantController;
 use App\Http\Controllers\EtudiantController;
 use App\Http\Controllers\RecourController;
@@ -136,6 +137,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // Student notes (agent edit for dettes)
         Route::get('/students/{id}/notes', [AgentController::class, 'studentNotes']);
         Route::patch('/notes/{noteId}', [AgentController::class, 'updateNote']);
+
+        // Dettes — dedicated debts table
+        Route::get('/debts', [DebtController::class, 'index']);
+        Route::patch('/debts/{id}', [DebtController::class, 'update']);
 
         // Enseignant permissions
         Route::get('/permissions', [AgentController::class, 'permissions']);

@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { useLocation } from "wouter";
 import { AgentSidebar } from "@/components/AgentSidebar";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
-  GraduationCap, Users, CheckSquare, AlertTriangle,
-  Clock, CheckCircle, XCircle, Zap, CalendarDays, FileText,
-  School,
+  GraduationCap, Users, School, ArrowRight,
+  ClipboardEdit, ShieldCheck, CalendarDays, Layers,
 } from "lucide-react";
 import { agent as api } from "@/lib/api";
 import { getUser } from "@/lib/auth";
@@ -14,91 +13,51 @@ import { getUser } from "@/lib/auth";
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const item = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } };
 
-interface Stats {
-  totalStudents: number;
-  totalTeachers: number;
-  gradeStats: { en_attente: number; soumis: number; valide: number; publie: number };
-  pendingRecours: number;
-}
+interface Stats { totalStudents: number; totalTeachers: number }
 
 export default function AgentDashboard() {
+  const [, setLocation] = useLocation();
   const user = getUser();
   const profile = (user?.profile ?? {}) as Record<string, string>;
 
-  const [stats, setStats] = useState<Stats>({
-    totalStudents: 0, totalTeachers: 0,
-    gradeStats: { en_attente: 0, soumis: 0, valide: 0, publie: 0 },
-    pendingRecours: 0,
-  });
-  const [bulkValidated, setBulkValidated] = useState(false);
-  const [bulkPublished, setBulkPublished] = useState(false);
-  const [showValidateModal, setShowValidateModal] = useState(false);
-  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [stats, setStats] = useState<Stats>({ totalStudents: 0, totalTeachers: 0 });
 
   useEffect(() => {
     api.stats()
       .then((d) => {
-        const s = d as unknown as Stats;
-        setStats(s);
-        // If counts are zero, compute from direct lists as fallback
-        if (!s.totalStudents || !s.totalTeachers) {
+        const s = d as Record<string, number>;
+        const totalStudents = s.totalStudents ?? s.totalEtudiants ?? 0;
+        const totalTeachers = s.totalTeachers ?? s.totalEnseignants ?? 0;
+        if (totalStudents || totalTeachers) {
+          setStats({ totalStudents, totalTeachers });
+        } else {
+          // Fallback: count from the (department-scoped) lists directly.
           Promise.all([api.students(), api.teachers()])
-            .then(([stList, tList]) => {
-              setStats(prev => ({
-                ...prev,
-                totalStudents: s.totalStudents || (stList as unknown[]).length,
-                totalTeachers: s.totalTeachers || (tList as unknown[]).length,
-              }));
-            })
+            .then(([st, te]) => setStats({ totalStudents: (st as unknown[]).length, totalTeachers: (te as unknown[]).length }))
             .catch(() => {});
         }
       })
       .catch(() => {
-        // Stats endpoint failed — count from lists directly
         Promise.all([api.students(), api.teachers()])
-          .then(([stList, tList]) => {
-            setStats(prev => ({
-              ...prev,
-              totalStudents: (stList as unknown[]).length,
-              totalTeachers: (tList as unknown[]).length,
-            }));
-          })
+          .then(([st, te]) => setStats({ totalStudents: (st as unknown[]).length, totalTeachers: (te as unknown[]).length }))
           .catch(() => {});
       });
   }, []);
 
-  const gradesSoumis  = stats.gradeStats?.soumis ?? 0;
-  const gradesValides = stats.gradeStats?.valide ?? 0;
-  const gradesPublies = stats.gradeStats?.publie ?? 0;
-
-  const alerts = [
-    ...(gradesSoumis > 0 ? [`${gradesSoumis} module(s) avec notes soumises en attente de validation`] : []),
-    ...(stats.pendingRecours > 0 ? [`${stats.pendingRecours} recours accepté(s) en attente de validation agent`] : []),
+  const shortcuts = [
+    { label: "Comptes étudiants",      sub: "Créer et gérer les étudiants",   icon: GraduationCap, color: "text-blue-600 bg-blue-50",     href: "/agent/comptes/etudiants" },
+    { label: "Comptes enseignants",    sub: "Créer et gérer les enseignants", icon: Users,          color: "text-indigo-600 bg-indigo-50", href: "/agent/comptes/enseignants" },
+    { label: "Gestion des dettes",     sub: "Notes de rattrapage",            icon: ClipboardEdit,  color: "text-red-600 bg-red-50",       href: "/agent/dettes" },
+    { label: "Permissions enseignants",sub: "Droits de saisie des notes",     icon: ShieldCheck,    color: "text-emerald-600 bg-emerald-50", href: "/agent/permissions" },
+    { label: "Emplois du temps",       sub: "Séances et salles",              icon: CalendarDays,   color: "text-amber-600 bg-amber-50",   href: "/agent/emploi-du-temps" },
+    { label: "Organisation",           sub: "Sections et groupes",            icon: Layers,         color: "text-purple-600 bg-purple-50", href: "/agent/organisation-etudiants" },
   ];
-
-  async function handleBulkValidate() {
-    const submissions = await api.gradeSubmissions() as Array<{ id: number; statut: string }>;
-    const toValidate = submissions.filter((s) => s.statut === "soumis");
-    await Promise.all(toValidate.map((s) => api.validateGrade(s.id)));
-    setBulkValidated(true);
-    setShowValidateModal(false);
-    api.stats().then((d) => setStats(d as unknown as Stats)).catch(() => {});
-  }
-
-  async function handleBulkPublish() {
-    const submissions = await api.gradeSubmissions() as Array<{ id: number; statut: string }>;
-    const toPublish = submissions.filter((s) => s.statut === "valide");
-    await Promise.all(toPublish.map((s) => api.publishGrade(s.id)));
-    setBulkPublished(true);
-    setShowPublishModal(false);
-    api.stats().then((d) => setStats(d as unknown as Stats)).catch(() => {});
-  }
 
   return (
     <div className="flex min-h-screen bg-background">
       <AgentSidebar />
       <main className="flex-1 p-7 overflow-auto">
-        <motion.div variants={container} initial="hidden" animate="show" className="max-w-6xl mx-auto space-y-6">
+        <motion.div variants={container} initial="hidden" animate="show" className="max-w-5xl mx-auto space-y-6">
 
           <motion.div variants={item}>
             <Card className="p-5">
@@ -123,7 +82,7 @@ export default function AgentDashboard() {
           </motion.div>
 
           <motion.div variants={item}>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Comptes</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Comptes du département</p>
             <div className="grid grid-cols-2 gap-3">
               {[
                 { label: "Total étudiants",   value: stats.totalStudents,  icon: GraduationCap, color: "text-blue-600",   bg: "bg-blue-50" },
@@ -141,113 +100,29 @@ export default function AgentDashboard() {
           </motion.div>
 
           <motion.div variants={item}>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Notes & Publication</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { label: "Soumis (à valider)",    value: gradesSoumis,  icon: Clock,        color: "text-amber-600", bg: "bg-amber-50" },
-                { label: "Validés (à publier)",   value: gradesValides, icon: CheckSquare,  color: "text-blue-600",  bg: "bg-blue-50" },
-                { label: "Publiés officiellement",value: gradesPublies, icon: CheckCircle,  color: "text-green-600", bg: "bg-green-50" },
-                { label: "En attente (non soumis)",value: stats.gradeStats?.en_attente ?? 0, icon: XCircle, color: "text-gray-500", bg: "bg-gray-50" },
-              ].map((s) => (
-                <Card key={s.label} className="p-4">
-                  <div className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center mb-2`}>
-                    <s.icon className={`w-4 h-4 ${s.color}`} />
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Raccourcis</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {shortcuts.map((s) => (
+                <Card
+                  key={s.href}
+                  className="p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all group"
+                  onClick={() => setLocation(s.href)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-3 ${s.color}`}>
+                      <s.icon className="w-4 h-4" />
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
                   </div>
-                  <p className="text-xl font-bold">{s.value}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{s.label}</p>
+                  <p className="font-semibold text-sm">{s.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{s.sub}</p>
                 </Card>
               ))}
             </div>
           </motion.div>
 
-          <motion.div variants={item} className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <Card className="p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                <h3 className="font-semibold text-sm">Alertes & Avertissements</h3>
-              </div>
-              {alerts.length === 0 ? (
-                <div className="flex items-center gap-2 text-sm text-green-600 py-2">
-                  <CheckCircle className="w-4 h-4" />
-                  Aucune alerte active — tout est en ordre.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {alerts.map((alert, i) => (
-                    <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-amber-50 border border-amber-100 text-sm text-amber-800">
-                      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-amber-500" />
-                      {alert}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-
-            <Card className="p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Zap className="w-4 h-4 text-primary" />
-                <h3 className="font-semibold text-sm">Actions rapides</h3>
-              </div>
-              <div className="space-y-3">
-                {!bulkValidated ? (
-                  <Button className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-sm" onClick={() => setShowValidateModal(true)} disabled={gradesSoumis === 0}>
-                    <CheckSquare className="w-4 h-4" />
-                    Valider toutes les notes soumises ({gradesSoumis})
-                  </Button>
-                ) : (
-                  <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                    <CheckCircle className="w-4 h-4" />Notes validées avec succès.
-                  </div>
-                )}
-                {!bulkPublished ? (
-                  <Button className="w-full gap-2 bg-green-600 hover:bg-green-700 text-sm" onClick={() => setShowPublishModal(true)} disabled={gradesValides === 0 && !bulkValidated}>
-                    <CalendarDays className="w-4 h-4" />
-                    Publier toutes les notes validées ({bulkValidated ? gradesSoumis : gradesValides})
-                  </Button>
-                ) : (
-                  <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 p-3 rounded-lg border border-green-100">
-                    <CheckCircle className="w-4 h-4" />Notes publiées — visibles par les étudiants.
-                  </div>
-                )}
-                <Button variant="outline" className="w-full gap-2 text-sm">
-                  <FileText className="w-4 h-4" />Exporter rapport global PDF
-                </Button>
-              </div>
-            </Card>
-          </motion.div>
-
         </motion.div>
       </main>
-
-      {showValidateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
-            <Card className="p-6 max-w-sm w-full">
-              <h3 className="font-bold text-base mb-2">Confirmer la validation en masse</h3>
-              <p className="text-sm text-muted-foreground mb-4">Voulez-vous valider les notes de <strong>{gradesSoumis} module(s)</strong> soumis ?</p>
-              <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => setShowValidateModal(false)}>Annuler</Button>
-                <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={handleBulkValidate}>Confirmer</Button>
-              </div>
-            </Card>
-          </motion.div>
-        </div>
-      )}
-
-      {showPublishModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
-            <Card className="p-6 max-w-sm w-full">
-              <h3 className="font-bold text-base mb-2">Confirmer la publication officielle</h3>
-              <p className="text-sm text-muted-foreground mb-4">Les notes validées seront <strong>visibles par tous les étudiants</strong>.</p>
-              <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => setShowPublishModal(false)}>Annuler</Button>
-                <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={handleBulkPublish}>Publier</Button>
-              </div>
-            </Card>
-          </motion.div>
-        </div>
-      )}
     </div>
   );
 }

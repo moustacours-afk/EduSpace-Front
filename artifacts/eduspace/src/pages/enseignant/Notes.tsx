@@ -310,7 +310,7 @@ export default function EnseignantNotes() {
           {/* Header */}
           <motion.div variants={item}>
             <h1 className="text-2xl font-bold">Saisie des notes</h1>
-            <p className="text-muted-foreground mt-1">Remplissez les notes par module et groupe, puis soumettez pour validation.</p>
+            <p className="text-muted-foreground mt-1">Remplissez les notes par module et groupe, puis enregistrez&nbsp;: elles sont publiées immédiatement pour les étudiants.</p>
           </motion.div>
 
           {/* Tabs */}
@@ -736,7 +736,7 @@ export default function EnseignantNotes() {
                           className="gap-2"
                         >
                           {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                          {submitting ? "Envoi en cours…" : "Soumettre pour validation"}
+                          {submitting ? "Enregistrement…" : "Enregistrer et publier"}
                         </Button>
                       </div>
                     </div>
@@ -752,15 +752,15 @@ export default function EnseignantNotes() {
               <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
                 <Card className="p-8 text-center border-green-200 bg-green-50">
                   <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
-                  <p className="font-semibold text-green-800 text-lg">Notes soumises pour validation</p>
+                  <p className="font-semibold text-green-800 text-lg">Notes publiées</p>
                   <p className="text-green-600 text-sm mt-2">
                     {selectedModule?.intitule} —{" "}
                     {tab === "examen"
                       ? `${niveau} — tous les groupes (${session})`
                       : `${selectedGroupe} — ${niveau} ${semestre}`
-                    } ont été envoyées à l'agent pédagogique.
+                    } sont désormais visibles par les étudiants.
                   </p>
-                  <Badge className="mt-4 bg-amber-100 text-amber-800 border-amber-200">En attente de validation</Badge>
+                  <Badge className="mt-4 bg-green-100 text-green-800 border-green-200">Publiées — visibles par les étudiants</Badge>
                   <div className="mt-4 flex gap-3 justify-center">
                     {tab === "cc" && (
                       <Button variant="outline" size="sm" onClick={() => { setSubmitted(false); setSelectedGroupe(""); setGrades({}); }}>
