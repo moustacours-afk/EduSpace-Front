@@ -586,7 +586,10 @@ export default function AgentComptes() {
     });
   }
   function addModuleRow() {
-    setEditModules(prev => [...prev, { id: `em${Date.now()}`, module: "", niveau: "", types: [], sections: [], tdGroups: [], tpGroups: [], responsable: false }]);
+    setEditModules(prev => {
+      if (prev.length >= 4) return prev;
+      return [...prev, { id: `em${Date.now()}`, module: "", niveau: "", types: [], sections: [], tdGroups: [], tpGroups: [], responsable: false }];
+    });
   }
   function removeModuleRow(id: string) {
     setEditModules(prev => prev.filter(r => r.id !== id));
@@ -1436,9 +1439,15 @@ export default function AgentComptes() {
                       </div>
                     ))}
 
-                    <Button variant="outline" size="sm" className="gap-1.5 text-xs w-full" onClick={addModuleRow}>
-                      <Plus className="w-3.5 h-3.5" />Ajouter un module
-                    </Button>
+                    {editModules.length < 4 ? (
+                      <Button variant="outline" size="sm" className="gap-1.5 text-xs w-full" onClick={addModuleRow}>
+                        <Plus className="w-3.5 h-3.5" />Ajouter un module
+                      </Button>
+                    ) : (
+                      <p className="text-xs text-muted-foreground text-center py-1">
+                        Maximum 4 modules par enseignant atteint.
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex gap-3 mt-6">
