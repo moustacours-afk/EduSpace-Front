@@ -569,12 +569,28 @@ class SuperAgentController extends Controller
 
     public function stats(Request $request)
     {
+        $sa = $this->sa($request);
+
+        if ($this->isDoyen($sa)) {
+            // Scope to the departments that belong to this faculty
+            $depts = \App\Models\Agent::where('faculte', $sa->faculte)
+                ->whereNotNull('departement')->pluck('departement')->unique()->filter()->values()->toArray();
+            $totalStudents   = Etudiant::whereIn('filiere', $depts)->count();
+            $totalTeachers   = Enseignant::whereIn('departement', $depts)->count();
+        } else {
+            // Director: full university counts
+            $totalStudents   = Etudiant::count();
+            $totalTeachers   = Enseignant::count();
+        }
+
         return response()->json([
-            'totalEtudiants' => Etudiant::count(),
-            'totalEnseignants' => Enseignant::count(),
-            'totalAgents' => Agent::count(),
-            'totalModules' => Module::count(),
-            'deliberations' => Deliberation::count(),
+            'totalStudents'    => $totalStudents,
+            'totalTeachers'    => $totalTeachers,
+            'totalEtudiants'   => $totalStudents,
+            'totalEnseignants' => $totalTeachers,
+            'totalAgents'      => Agent::count(),
+            'totalModules'     => Module::count(),
+            'deliberations'    => Deliberation::count(),
             'gradeSubmissions' => SoumissionNote::count(),
         ]);
     }

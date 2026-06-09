@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { SuperAgentSidebar } from "@/components/SuperAgentSidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, BookOpen, ShieldCheck, Landmark, ArrowRight, Building2, CheckCircle, XCircle, BarChart3 } from "lucide-react";
+import { Users, BookOpen, ShieldCheck, Landmark, ArrowRight, Building2, CheckCircle, XCircle, BarChart3, GraduationCap, UserCheck } from "lucide-react";
 import { superAgent as api } from "@/lib/api";
 import { NIVEAUX_LIST, getDepartements } from "@/lib/superAgentStore";
 import { getSuperAgentAccountType, getSuperAgentFaculte, getSuperAgentUniversite } from "@/lib/auth";
@@ -26,11 +26,18 @@ export default function SuperAgentDashboard() {
   const [agents, setAgents]   = useState<AgentRecord[]>([]);
   const [doyens, setDoyens]   = useState<DoyenRecord[]>([]);
   const [modules, setModules] = useState<ModuleRecord[]>([]);
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [totalTeachers, setTotalTeachers] = useState(0);
 
   useEffect(() => {
     api.agents().then(d => setAgents(d as AgentRecord[])).catch(() => {});
     api.modules().then(d => setModules(d as ModuleRecord[])).catch(() => {});
     if (isDirector) api.doyens().then(d => setDoyens(d as DoyenRecord[])).catch(() => {});
+    api.stats().then(d => {
+      const s = d as Record<string, number>;
+      setTotalStudents(s.totalStudents ?? s.totalEtudiants ?? 0);
+      setTotalTeachers(s.totalTeachers ?? s.totalEnseignants ?? 0);
+    }).catch(() => {});
   }, [isDirector]);
 
   // Doyen: scope modules to the faculty's départements (modules carry no faculté).
@@ -42,7 +49,10 @@ export default function SuperAgentDashboard() {
     return acc;
   }, {});
 
+  const scopeLabel = isDirector ? "université" : "faculté";
   const statCards = [
+    { label: `Étudiants (${scopeLabel})`, value: totalStudents, sub: isDirector ? "tous départements" : "tous départements de la faculté", icon: GraduationCap, color: "bg-blue-50 text-blue-700", href: null },
+    { label: `Enseignants (${scopeLabel})`, value: totalTeachers, sub: isDirector ? "tous départements" : "tous départements de la faculté", icon: UserCheck, color: "bg-indigo-50 text-indigo-700", href: null },
     { label: isDirector ? "Agents (université)" : "Agents (faculté)", value: agents.length, sub: "comptes pédagogiques", icon: Users, color: "bg-purple-50 text-purple-700", href: "/super-agent/comptes" },
     { label: "Modules", value: scopedModules.length, sub: "toutes spécialités", icon: BookOpen, color: "bg-blue-50 text-blue-700", href: "/super-agent/modules" },
     ...(isDirector ? [{ label: "Doyens", value: doyens.length, sub: "comptes de faculté", icon: Landmark, color: "bg-emerald-50 text-emerald-700", href: "/super-agent/comptes" }] : []),
@@ -65,9 +75,13 @@ export default function SuperAgentDashboard() {
             </p>
           </motion.div>
 
-          <motion.div variants={item} className={`grid gap-4 ${isDirector ? "grid-cols-3 max-w-xl" : "grid-cols-2 max-w-sm"}`}>
+          <motion.div variants={item} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-3xl">
             {statCards.map(s => (
-              <Card key={s.label} className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => setLocation(s.href)}>
+              <Card
+                key={s.label}
+                className={`p-4 transition-shadow ${s.href ? "hover:shadow-md cursor-pointer" : ""}`}
+                onClick={() => s.href && setLocation(s.href)}
+              >
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${s.color}`}><s.icon className="w-5 h-5" /></div>
                 <p className="text-2xl font-bold">{s.value}</p>
                 <p className="text-sm font-medium mt-0.5">{s.label}</p>

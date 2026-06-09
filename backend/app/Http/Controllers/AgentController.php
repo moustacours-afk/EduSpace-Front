@@ -800,13 +800,27 @@ class AgentController extends Controller
 
     public function stats(Request $request)
     {
+        $dept = $this->agentDept($request);
+
+        $studQ = Etudiant::query();
+        $teachQ = Enseignant::query();
+        if ($dept) {
+            $studQ->where('filiere', $dept);
+            $teachQ->where('departement', 'like', "%$dept%");
+        }
+
+        $totalStudents   = $studQ->count();
+        $totalTeachers   = $teachQ->count();
+
         return response()->json([
-            'totalEtudiants' => Etudiant::count(),
-            'totalEnseignants' => Enseignant::count(),
-            'notesSoumises' => SoumissionNote::where('statut', 'soumis')->count(),
-            'notesValidees' => SoumissionNote::whereIn('statut', ['valide', 'publie'])->count(),
+            'totalStudents'    => $totalStudents,
+            'totalTeachers'    => $totalTeachers,
+            'totalEtudiants'   => $totalStudents,
+            'totalEnseignants' => $totalTeachers,
+            'notesSoumises'    => SoumissionNote::where('statut', 'soumis')->count(),
+            'notesValidees'    => SoumissionNote::whereIn('statut', ['valide', 'publie'])->count(),
             'recoursEnAttente' => \App\Models\Recour::where('statut', 'en_attente')->count(),
-            'recoursAcceptes' => \App\Models\Recour::where('statut', 'accepte')->count(),
+            'recoursAcceptes'  => \App\Models\Recour::where('statut', 'accepte')->count(),
         ]);
     }
 }
