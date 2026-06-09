@@ -52,7 +52,7 @@ interface AgentRecord {
 interface DoyenRecord {
   id: number; nom: string; prenom: string; email: string; faculte: string; statut: string;
 }
-type Created = { username: string; password: string; name: string };
+type Created = { username: string; password: string; name: string; usernameLabel?: string };
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -82,7 +82,7 @@ function CredsModal({ info, onClose }: { info: Created | null; onClose: () => vo
               </p>
               <div className="space-y-3">
                 <div className="bg-muted/20 border border-border rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground mb-1.5">Nom d'utilisateur</p>
+                  <p className="text-xs text-muted-foreground mb-1.5">{info.usernameLabel ?? "Nom d'utilisateur"}</p>
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-semibold text-sm">{info.username}</span>
                     <CopyButton text={info.username} />
@@ -494,11 +494,13 @@ function DirectorComptes() {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   // Edit doyen
-  const [showEdit, setShowEdit] = useState(false);
-  const [editing, setEditing]   = useState<DoyenRecord | null>(null);
-  const [editForm, setEditForm] = useState({ nom: "", prenom: "", faculte: "", email: "", newPassword: "" });
-  const [editError, setEditError] = useState("");
-  const [editSaving, setEditSaving] = useState(false);
+  const [showEdit, setShowEdit]           = useState(false);
+  const [editing, setEditing]             = useState<DoyenRecord | null>(null);
+  const [editForm, setEditForm]           = useState({ nom: "", prenom: "", faculte: "", email: "", newPassword: "" });
+  const [editError, setEditError]         = useState("");
+  const [editSaving, setEditSaving]       = useState(false);
+  const [editShowStoredPwd, setEditShowStoredPwd] = useState(false);
+  const [editShowNewPwd, setEditShowNewPwd]       = useState(false);
 
   // Agents overview filters
   const [filterFaculte, setFilterFaculte] = useState("all");
@@ -544,9 +546,10 @@ function DirectorComptes() {
     setSaving(true); setSaveError("");
     try {
       await api.storeDoyen({ nom: form.nom, prenom: form.prenom, username, password: generatedPwd, faculte: form.faculte });
+      localStorage.setItem(`doyenPwd_${username}`, generatedPwd);
       refresh();
       setShowModal(false);
-      setCreatedInfo({ username, password: generatedPwd, name: `${form.prenom} ${form.nom}` });
+      setCreatedInfo({ username, password: generatedPwd, name: `${form.prenom} ${form.nom}`, usernameLabel: "Email" });
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Erreur lors de la création.");
     } finally { setSaving(false); }
@@ -555,7 +558,7 @@ function DirectorComptes() {
   function openEdit(d: DoyenRecord) {
     setEditing(d);
     setEditForm({ nom: d.nom, prenom: d.prenom, faculte: d.faculte ?? "", email: d.email ?? "", newPassword: "" });
-    setEditError(""); setShowEdit(true);
+    setEditError(""); setEditShowStoredPwd(false); setEditShowNewPwd(false); setShowEdit(true);
   }
   async function saveEdit() {
     if (!editing) return;
@@ -563,7 +566,11 @@ function DirectorComptes() {
     setEditSaving(true); setEditError("");
     const updateBody: Record<string, unknown> = { nom: editForm.nom, prenom: editForm.prenom, faculte: editForm.faculte || undefined };
     if (editForm.email) updateBody.email = editForm.email;
-    if (editForm.newPassword) updateBody.password = editForm.newPassword;
+    if (editForm.newPassword) {
+      updateBody.password = editForm.newPassword;
+      const key = `doyenPwd_${(editForm.email || editing.email).split("@")[0]}`;
+      localStorage.setItem(key, editForm.newPassword);
+    }
     try {
       await api.updateDoyen(editing.id, updateBody);
       setDoyens(prev => prev.map(d => d.id === editing.id ? { ...d, nom: editForm.nom, prenom: editForm.prenom, faculte: editForm.faculte, email: editForm.email || d.email } : d));
@@ -789,9 +796,41 @@ function DirectorComptes() {
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Email</label>
                     <Input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} type="email" placeholder="doyen@univ.dz" className="text-sm" />
                   </div>
+                  {/* Current stored password */}
+                  {(() => {
+                    const key = `doyenPwd_${(editForm.email || editing?.email || "").split("@")[0]}`;
+                    const stored = localStorage.getItem(key);
+                    return stored ? (
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground block mb-1">
+                          <KeyRound className="inline w-3 h-3 mr-1" />Mot de passe actuel
+                        </label>
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-200 bg-violet-50">
+                          <span className="font-mono font-bold tracking-widest text-violet-800 flex-1 text-sm">
+                            {editShowStoredPwd ? stored : "••••••••"}
+                          </span>
+                          <button type="button" onClick={() => setEditShowStoredPwd(v => !v)} className="text-muted-foreground hover:text-foreground">
+                            {editShowStoredPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                          <CopyButton text={stored} />
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
                   <div>
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Nouveau mot de passe <span className="text-muted-foreground/60">(optionnel)</span></label>
-                    <Input value={editForm.newPassword} onChange={e => setEditForm(f => ({ ...f, newPassword: e.target.value }))} type="password" placeholder="Laisser vide pour conserver l'actuel" className="text-sm" />
+                    <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-1.5">
+                      <input
+                        type={editShowNewPwd ? "text" : "password"}
+                        value={editForm.newPassword}
+                        onChange={e => setEditForm(f => ({ ...f, newPassword: e.target.value }))}
+                        placeholder="Laisser vide pour conserver l'actuel"
+                        className="flex-1 text-sm bg-transparent outline-none"
+                      />
+                      <button type="button" onClick={() => setEditShowNewPwd(v => !v)} className="text-muted-foreground hover:text-foreground flex-shrink-0">
+                        {editShowNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                   {editError && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{editError}</div>}
                 </div>
