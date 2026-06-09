@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ClipboardEdit, Filter, RefreshCw, Search, X,
   ChevronRight, AlertTriangle, CheckCircle, Save, BookOpen,
+  ArrowLeft, Lock,
 } from "lucide-react";
 import { groupesParNiveau } from "@/data/mockData";
 import { getSectionsForNiveau } from "@/lib/orgStore";
@@ -32,29 +33,35 @@ type NoteRow = {
   moyenne: number | null; creditAcquis: number; situation: string; statut: string;
 };
 
-type EditState = { exam: string; controle: string; tp: string };
+function semToYear(sem: string): number {
+  const num = parseInt(sem.replace(/\D/g, ""), 10);
+  return isNaN(num) ? 0 : Math.ceil(num / 2);
+}
 
-function calcMoyenne(exam: number, controle: number, tp: number | null, hasTp: boolean): number {
-  if (hasTp && tp !== null) return Math.round((exam * 0.6 + controle * 0.2 + tp * 0.2) * 100) / 100;
-  return Math.round((exam * 0.6 + controle * 0.4) * 100) / 100;
+function yearLabel(y: number): string {
+  const labels = ["1ère", "2ème", "3ème", "4ème", "5ème"];
+  return (labels[y - 1] ?? `${y}ème`) + " Année";
+}
+
+function yearSemRange(y: number): string {
+  return `S${(y - 1) * 2 + 1} – S${y * 2}`;
 }
 
 function situationBadge(situation: string) {
-  if (situation === "admis")     return <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">Admis</Badge>;
+  if (situation === "admis")      return <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">Admis</Badge>;
   if (situation === "rattrapage") return <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">Rattrapage</Badge>;
   return <Badge className="bg-red-100 text-red-700 border-red-200 text-[10px]">Ajourné</Badge>;
 }
 
-// ── Relevé modal — shows ALL modules grouped by UE, editable for dettes ───────
-function ReleveModal({
-  student, onClose,
-}: { student: Student; onClose: () => void }) {
-  const [notes, setNotes]       = useState<NoteRow[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [editId, setEditId]     = useState<number | null>(null);
-  const [editVals, setEditVals] = useState<EditState>({ exam: "", controle: "", tp: "" });
-  const [saving, setSaving]     = useState(false);
-  const [saveMsg, setSaveMsg]   = useState<{ id: number; ok: boolean } | null>(null);
+// ── Relevé modal — two-step: year selection → dettes view ─────────────────
+function ReleveModal({ student, onClose }: { student: Student; onClose: () => void }) {
+  const [notes, setNotes]               = useState<NoteRow[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [editId, setEditId]             = useState<number | null>(null);
+  const [editExam, setEditExam]         = useState("");
+  const [saving, setSaving]             = useState(false);
+  const [saveMsg, setSaveMsg]           = useState<{ id: number; ok: boolean } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,38 +74,54 @@ function ReleveModal({
 
   useEffect(() => { load(); }, [load]);
 
+  // All dette notes (situation !== "admis" = moyenne < 10)
+  const allDettes = notes.filter(n => n.situation !== "admis");
+
+  // Years that have at least one dette
+  const detteYears = [...new Set(allDettes.map(n => semToYear(n.semestre)))].sort();
+
+  // Notes & dettes for the selected year
+  const yearNotes  = selectedYear !== null ? notes.filter(n => semToYear(n.semestre) === selectedYear) : [];
+  const yearDettes = yearNotes.filter(n => n.situation !== "admis");
+  const ueKeys     = [...new Set(yearDettes.map(n => n.typeUe || "UE"))];
+
+  // Weighted UE moyenne (uses ALL modules in UE, not just dettes)
+  function ueWeightedMoy(ue: string): number | null {
+    const ueAll  = yearNotes.filter(n => (n.typeUe || "UE") === ue && n.moyenne !== null);
+    const totalCr = ueAll.reduce((s, n) => s + (n.credits || 0), 0);
+    if (totalCr === 0) return null;
+    const weighted = ueAll.reduce((s, n) => s + ((n.moyenne ?? 0) * (n.credits || 0)), 0);
+    return Math.round((weighted / totalCr) * 100) / 100;
+  }
+
+  // Preview moyenne when only exam changes (CC & TP stay as-is)
+  function liveCalcExam(n: NoteRow): number | null {
+    const exam = parseFloat(editExam);
+    if (isNaN(exam) || exam < 0 || exam > 20) return null;
+    const cc = n.controle ?? 0;
+    const tp = n.tp ?? 0;
+    return n.hasTp
+      ? Math.round((exam * 0.6 + cc * 0.2 + tp * 0.2) * 100) / 100
+      : Math.round((exam * 0.6 + cc * 0.4) * 100) / 100;
+  }
+
   function startEdit(n: NoteRow) {
-    if (n.situation === "admis") return;
     setEditId(n.id);
-    setEditVals({ exam: String(n.exam ?? ""), controle: String(n.controle ?? ""), tp: String(n.tp ?? "") });
+    setEditExam(String(n.exam ?? ""));
     setSaveMsg(null);
   }
 
   function cancelEdit() { setEditId(null); }
 
-  function liveCalc(vals: EditState, hasTp: boolean): { moy: number | null; valid: boolean } {
-    const exam = parseFloat(vals.exam), controle = parseFloat(vals.controle), tp = parseFloat(vals.tp);
-    if (isNaN(exam) || isNaN(controle)) return { moy: null, valid: false };
-    if (hasTp && isNaN(tp)) return { moy: null, valid: false };
-    return { moy: calcMoyenne(exam, controle, hasTp ? tp : null, hasTp), valid: true };
-  }
-
   async function saveNote(n: NoteRow) {
-    const { moy, valid } = liveCalc(editVals, n.hasTp);
-    if (!valid || moy === null) return;
-    if (moy >= 10) { setSaveMsg({ id: n.id, ok: false }); return; }
+    const exam = parseFloat(editExam);
+    if (isNaN(exam) || exam < 0 || exam > 20) return;
     setSaving(true);
     try {
-      const body: { note_exam: number; note_controle: number; note_tp?: number } = {
-        note_exam: parseFloat(editVals.exam),
-        note_controle: parseFloat(editVals.controle),
-      };
-      if (n.hasTp) body.note_tp = parseFloat(editVals.tp);
-      const res = await api.updateNote(n.id, body);
+      const res = await api.updateNote(n.id, { note_exam: exam }) as { moyenne: number; situation: string; creditAcquis: number };
       setNotes(prev => prev.map(r =>
         r.id === n.id
-          ? { ...r, exam: body.note_exam, controle: body.note_controle, tp: body.note_tp ?? r.tp,
-              moyenne: res.moyenne, situation: res.situation, creditAcquis: res.creditAcquis }
+          ? { ...r, exam, moyenne: res.moyenne, situation: res.situation, creditAcquis: res.creditAcquis }
           : r
       ));
       setSaveMsg({ id: n.id, ok: true });
@@ -107,10 +130,79 @@ function ReleveModal({
     finally { setSaving(false); }
   }
 
-  const dettes = notes.filter(n => n.situation !== "admis");
-  // Group all notes by semestre → typeUe
-  const semestres = [...new Set(notes.map(n => n.semestre))].sort();
+  // ── STEP 1 — Year selection ───────────────────────────────────────────────
+  if (selectedYear === null) {
+    return (
+      <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-end overflow-hidden">
+        <motion.div
+          initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+          transition={{ type: "spring", damping: 28, stiffness: 260 }}
+          className="w-full max-w-lg h-full bg-background shadow-2xl flex flex-col overflow-hidden"
+        >
+          <div className="px-6 py-4 border-b flex items-center justify-between gap-3 flex-shrink-0">
+            <div>
+              <h2 className="font-bold text-base">{student.prenom} {student.nom}</h2>
+              <p className="text-xs text-muted-foreground">{student.matricule} · {student.niveau} · {student.section}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {allDettes.length > 0
+                ? <Badge className="bg-red-100 text-red-700 border-red-200">{allDettes.length} dette(s)</Badge>
+                : <Badge className="bg-green-100 text-green-700 border-green-200">Aucune dette</Badge>
+              }
+              <button onClick={onClose} className="p-1.5 rounded hover:bg-muted transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
 
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            {loading ? (
+              <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">Chargement…</div>
+            ) : allDettes.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
+                <CheckCircle className="w-8 h-8 text-green-500" />
+                <p className="text-sm font-medium">Aucune dette</p>
+                <p className="text-xs text-center">Cet étudiant n'a aucun module avec moyenne &lt; 10.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground mb-4">
+                  Sélectionnez une année pour voir et modifier les dettes.
+                </p>
+                {detteYears.map(y => {
+                  const yDettes = allDettes.filter(n => semToYear(n.semestre) === y);
+                  return (
+                    <Card
+                      key={y}
+                      className="p-4 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-colors group"
+                      onClick={() => setSelectedYear(y)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold">{yearLabel(y)}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{yearSemRange(y)}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-red-100 text-red-700 border-red-200">{yDettes.length} dette(s)</Badge>
+                          <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="px-6 py-4 border-t flex-shrink-0">
+            <Button variant="outline" className="w-full" onClick={onClose}>Fermer</Button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // ── STEP 2 — Dettes for selected year ────────────────────────────────────
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-end overflow-hidden">
       <motion.div
@@ -120,17 +212,22 @@ function ReleveModal({
       >
         {/* Header */}
         <div className="px-6 py-4 border-b flex items-center justify-between gap-3 flex-shrink-0">
-          <div>
-            <h2 className="font-bold text-base">{student.prenom} {student.nom}</h2>
-            <p className="text-xs text-muted-foreground">
-              {student.matricule} · {student.niveau} · {student.section} · {student.groupe}
-            </p>
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => { setSelectedYear(null); setEditId(null); setSaveMsg(null); }}
+              className="p-1.5 rounded hover:bg-muted transition-colors flex-shrink-0"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div className="min-w-0">
+              <h2 className="font-bold text-base truncate">
+                {student.prenom} {student.nom} — {yearLabel(selectedYear)}
+              </h2>
+              <p className="text-xs text-muted-foreground">{student.matricule} · {yearSemRange(selectedYear)}</p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            {dettes.length > 0
-              ? <Badge className="bg-red-100 text-red-700 border-red-200">{dettes.length} dette(s)</Badge>
-              : <Badge className="bg-green-100 text-green-700 border-green-200">Aucune dette</Badge>
-            }
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Badge className="bg-red-100 text-red-700 border-red-200">{yearDettes.length} dette(s)</Badge>
             <button onClick={onClose} className="p-1.5 rounded hover:bg-muted transition-colors">
               <X className="w-4 h-4" />
             </button>
@@ -139,137 +236,154 @@ function ReleveModal({
 
         <div className="px-6 py-2 border-b bg-muted/30 flex-shrink-0">
           <p className="text-[10px] text-muted-foreground">
-            Relevé complet — modules admis (lecture seule) et dettes (modifiables). Cliquez sur un module en dette pour éditer les notes.
+            Modules avec moyenne &lt; 10 — cliquez pour modifier la note d'examen.
+            Les UE compensées (moyenne UE ≥ 10) sont verrouillées.
           </p>
         </div>
 
-        {/* Content */}
+        {/* Dettes list */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {loading ? (
-            <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">Chargement…</div>
-          ) : notes.length === 0 ? (
+          {yearDettes.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
-              <BookOpen className="w-8 h-8" />
-              <p className="text-sm">Aucune note disponible.</p>
+              <CheckCircle className="w-8 h-8 text-green-500" />
+              <p className="text-sm">Aucune dette pour cette année.</p>
             </div>
           ) : (
-            <div className="space-y-8">
-              {semestres.map(sem => {
-                const semNotes = notes.filter(n => n.semestre === sem);
-                const ueGroups = [...new Set(semNotes.map(n => n.typeUe || "UE"))];
+            <div className="space-y-6">
+              {ueKeys.map(ue => {
+                const ueDetteNotes = yearDettes.filter(n => (n.typeUe || "UE") === ue);
+                const ueMoy = ueWeightedMoy(ue);
+                const isUeLocked = ueMoy !== null && ueMoy >= 10;
+
                 return (
-                  <div key={sem}>
-                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 border-b pb-1">{sem}</p>
-                    <div className="space-y-4">
-                      {ueGroups.map(ue => {
-                        const ueNotes = semNotes.filter(n => (n.typeUe || "UE") === ue);
-                        const ueDettes = ueNotes.filter(n => n.situation !== "admis");
+                  <div key={ue}>
+                    {/* UE header */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold uppercase text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                        {ue}
+                      </span>
+                      {isUeLocked ? (
+                        <Badge className="text-[10px] px-1.5 py-0 bg-green-100 text-green-700 border-green-200 flex items-center gap-1">
+                          <Lock className="w-2.5 h-2.5" />
+                          Compensée — moy. UE {ueMoy}/20
+                        </Badge>
+                      ) : (
+                        <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-600 border-red-200">
+                          {ueDetteNotes.length} dette(s)
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="space-y-2 ml-2">
+                      {ueDetteNotes.map(n => {
+                        const isEditing = editId === n.id;
+                        const liveMoy   = isEditing ? liveCalcExam(n) : null;
+                        const liveSit   = liveMoy !== null
+                          ? (liveMoy >= 10 ? "Admis" : liveMoy >= 8 ? "Rattrapage" : "Ajourné")
+                          : null;
+
                         return (
-                          <div key={ue}>
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-[10px] font-bold uppercase text-muted-foreground bg-muted px-2 py-0.5 rounded">{ue}</span>
-                              {ueDettes.length > 0 && <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-600 border-red-200">{ueDettes.length} dette(s)</Badge>}
+                          <Card
+                            key={n.id}
+                            className={`p-3 border transition-colors ${
+                              isUeLocked
+                                ? "opacity-60 cursor-not-allowed bg-muted/20"
+                                : isEditing
+                                  ? "border-primary/40 bg-primary/5"
+                                  : "hover:border-red-300 cursor-pointer"
+                            }`}
+                            onClick={() => { if (!isEditing && !isUeLocked) startEdit(n); }}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-semibold text-sm truncate">{n.module}</span>
+                                  <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                    {n.code}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                                  <span>{n.credits} crédits</span>
+                                  <span>Coeff. {n.coefficient}</span>
+                                  <span className="font-mono font-semibold text-foreground">
+                                    Moy : {n.moyenne ?? "—"}/20
+                                  </span>
+                                  <span className="font-mono">Exam : {n.exam ?? "—"}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {situationBadge(n.situation)}
+                                {isUeLocked
+                                  ? <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                                  : !isEditing
+                                    ? <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                                    : null
+                                }
+                              </div>
                             </div>
-                            <div className="space-y-2 ml-2">
-                              {ueNotes.map(n => {
-                                const isEditing = editId === n.id;
-                                const isDette = n.situation !== "admis";
-                                const { moy: liveMoy } = isEditing ? liveCalc(editVals, n.hasTp) : { moy: null };
-                                const liveSit = liveMoy !== null ? (liveMoy >= 10 ? "admis" : liveMoy >= 8 ? "rattrapage" : "ajourne") : null;
-                                const blockedByMoy = liveMoy !== null && liveMoy >= 10;
 
-                                return (
-                                  <Card key={n.id}
-                                    className={`p-3 border transition-colors ${
-                                      isEditing ? "border-primary/40 bg-primary/5"
-                                        : isDette ? "hover:border-red-300 cursor-pointer"
-                                        : "opacity-70"
-                                    }`}
-                                    onClick={() => { if (!isEditing && isDette) startEdit(n); }}
-                                  >
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="font-semibold text-sm truncate">{n.module}</span>
-                                          <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{n.code}</span>
-                                        </div>
-                                        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                                          <span>{n.credits} crédits</span>
-                                          <span>Coeff. {n.coefficient}</span>
-                                          {!isEditing && <span className="font-mono font-semibold text-foreground">Moy : {n.moyenne ?? "—"}</span>}
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2 flex-shrink-0">
-                                        {situationBadge(n.situation)}
-                                        {isDette && !isEditing && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
-                                      </div>
+                            {/* Exam-only edit form */}
+                            <AnimatePresence>
+                              {isEditing && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: "auto" }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="mt-3 overflow-hidden"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  <div className="max-w-[200px]">
+                                    <label className="text-[10px] text-muted-foreground block mb-1">
+                                      Note d'examen /20
+                                    </label>
+                                    <Input
+                                      type="number" min={0} max={20} step={0.25}
+                                      value={editExam}
+                                      onChange={e => setEditExam(e.target.value)}
+                                      className="h-8 text-sm"
+                                      autoFocus
+                                    />
+                                  </div>
+
+                                  {liveMoy !== null && (
+                                    <div className="mt-2 rounded-lg px-3 py-2 text-xs flex items-center gap-2 bg-muted/40 border border-border">
+                                      <BookOpen className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
+                                      <span>
+                                        Nouvelle moyenne : <strong>{liveMoy}/20</strong> → {liveSit}
+                                      </span>
                                     </div>
+                                  )}
 
-                                    {/* Edit form — only for dettes */}
-                                    <AnimatePresence>
-                                      {isEditing && (
-                                        <motion.div
-                                          initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
-                                          exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}
-                                          className="mt-3 overflow-hidden"
-                                          onClick={e => e.stopPropagation()}
-                                        >
-                                          <div className={`grid gap-3 ${n.hasTp ? "grid-cols-3" : "grid-cols-2"}`}>
-                                            <div>
-                                              <label className="text-[10px] text-muted-foreground block mb-1">Examen /20</label>
-                                              <Input type="number" min={0} max={20} step={0.25} value={editVals.exam}
-                                                onChange={e => setEditVals(v => ({ ...v, exam: e.target.value }))} className="h-8 text-sm" />
-                                            </div>
-                                            <div>
-                                              <label className="text-[10px] text-muted-foreground block mb-1">Contrôle /20</label>
-                                              <Input type="number" min={0} max={20} step={0.25} value={editVals.controle}
-                                                onChange={e => setEditVals(v => ({ ...v, controle: e.target.value }))} className="h-8 text-sm" />
-                                            </div>
-                                            {n.hasTp && (
-                                              <div>
-                                                <label className="text-[10px] text-muted-foreground block mb-1">TP /20</label>
-                                                <Input type="number" min={0} max={20} step={0.25} value={editVals.tp}
-                                                  onChange={e => setEditVals(v => ({ ...v, tp: e.target.value }))} className="h-8 text-sm" />
-                                              </div>
-                                            )}
-                                          </div>
+                                  {saveMsg?.id === n.id && (
+                                    <div className={`mt-2 text-xs flex items-center gap-1 ${saveMsg.ok ? "text-green-600" : "text-red-600"}`}>
+                                      {saveMsg.ok
+                                        ? <><CheckCircle className="w-3.5 h-3.5" /> Note mise à jour.</>
+                                        : <><AlertTriangle className="w-3.5 h-3.5" /> Erreur lors de la sauvegarde.</>
+                                      }
+                                    </div>
+                                  )}
 
-                                          {liveMoy !== null && (
-                                            <div className={`mt-2 rounded-lg px-3 py-2 text-xs flex items-center gap-2 ${
-                                              blockedByMoy ? "bg-green-50 border border-green-200 text-green-700" : "bg-muted/40 border border-border text-foreground"
-                                            }`}>
-                                              {blockedByMoy
-                                                ? <><CheckCircle className="w-3.5 h-3.5 flex-shrink-0" /> Moyenne {liveMoy}/20 — UE ≥ 10, ce module ne peut pas être enregistré comme dette.</>
-                                                : <><BookOpen className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" /> Moyenne calculée : <strong>{liveMoy}/20</strong> — {liveSit === "rattrapage" ? "Rattrapage" : "Ajourné"}</>
-                                              }
-                                            </div>
-                                          )}
-
-                                          {saveMsg?.id === n.id && (
-                                            <div className={`mt-2 text-xs flex items-center gap-1 ${saveMsg.ok ? "text-green-600" : "text-red-600"}`}>
-                                              {saveMsg.ok
-                                                ? <><CheckCircle className="w-3.5 h-3.5" />Note mise à jour.</>
-                                                : <><AlertTriangle className="w-3.5 h-3.5" />{blockedByMoy ? "Moyenne ≥ 10 : ce module ne peut pas être une dette." : "Erreur lors de la sauvegarde."}</>
-                                              }
-                                            </div>
-                                          )}
-
-                                          <div className="flex gap-2 mt-3">
-                                            <Button size="sm" className="h-7 text-xs gap-1.5 flex-1"
-                                              disabled={saving || blockedByMoy || liveMoy === null}
-                                              onClick={() => saveNote(n)}>
-                                              <Save className="w-3 h-3" />{saving ? "Enregistrement…" : "Enregistrer"}
-                                            </Button>
-                                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={cancelEdit}>Annuler</Button>
-                                          </div>
-                                        </motion.div>
-                                      )}
-                                    </AnimatePresence>
-                                  </Card>
-                                );
-                              })}
-                            </div>
-                          </div>
+                                  <div className="flex gap-2 mt-3">
+                                    <Button
+                                      size="sm" className="h-7 text-xs gap-1.5 flex-1"
+                                      disabled={saving || liveMoy === null}
+                                      onClick={() => saveNote(n)}
+                                    >
+                                      <Save className="w-3 h-3" />
+                                      {saving ? "Enregistrement…" : "Enregistrer"}
+                                    </Button>
+                                    <Button
+                                      size="sm" variant="outline" className="h-7 text-xs"
+                                      onClick={cancelEdit}
+                                    >
+                                      Annuler
+                                    </Button>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </Card>
                         );
                       })}
                     </div>
@@ -299,7 +413,7 @@ export default function AgentDettes() {
   const [loading, setLoading]   = useState(false);
   const [selected, setSelected] = useState<Student | null>(null);
 
-  const orgSections   = getSectionsForNiveau(filterNiveau);
+  const orgSections    = getSectionsForNiveau(filterNiveau);
   const sectionOptions = ["Tous", ...(orgSections.length > 0 ? orgSections.map(s => s.nom) : ["Section 1", "Section 2"])];
   const groupeOptions  = ["Tous", ...(groupesParNiveau[filterNiveau] ?? ["Groupe 1"])];
 
@@ -312,7 +426,7 @@ export default function AgentDettes() {
         .filter(s => filterSection === "Tous" || s.section === filterSection)
         .filter(s => filterGroupe  === "Tous" || s.groupe  === filterGroupe)
         .map(s => ({
-          id:       Number(s.id),
+          id:        Number(s.id),
           matricule: String(s.matricule ?? ""),
           nom:       String(s.nom ?? ""),
           prenom:    String(s.prenom ?? ""),
@@ -358,7 +472,8 @@ export default function AgentDettes() {
                 </p>
               </div>
               <Button variant="outline" size="sm" className="gap-2" onClick={fetchStudents} disabled={loading}>
-                <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />Actualiser
+                <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+                Actualiser
               </Button>
             </div>
           </motion.div>
@@ -406,7 +521,10 @@ export default function AgentDettes() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                {loading ? "Chargement…" : `${displayed.length} étudiant(s) — cliquez sur un étudiant pour voir et modifier ses dettes.`}
+                {loading
+                  ? "Chargement…"
+                  : `${displayed.length} étudiant(s) — cliquez sur un étudiant pour voir et modifier ses dettes.`
+                }
               </p>
             </Card>
           </motion.div>
@@ -414,7 +532,9 @@ export default function AgentDettes() {
           {/* Student list */}
           <motion.div variants={item}>
             {loading ? (
-              <div className="flex justify-center py-16 text-muted-foreground text-sm">Chargement des étudiants…</div>
+              <div className="flex justify-center py-16 text-muted-foreground text-sm">
+                Chargement des étudiants…
+              </div>
             ) : displayed.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 gap-2 text-muted-foreground">
                 <Search className="w-8 h-8" />
@@ -445,6 +565,7 @@ export default function AgentDettes() {
               </div>
             )}
           </motion.div>
+
         </motion.div>
       </main>
 
