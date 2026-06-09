@@ -286,12 +286,17 @@ export default function SuperAgentModules() {
   const totalCredits = modules.reduce((a, m) => a + m.credits, 0);
 
   // Search across all created modules (name, code, filière, niveau, semestre)
+  // For Doyen: only show modules belonging to their faculty's departments
   const q = moduleSearch.trim().toLowerCase();
+  const doyenDepts = isDoyenAccount ? getDepartements(doyenFaculte) : [];
+  const scopedAllModules = isDoyenAccount
+    ? allModules.filter(m => doyenDepts.includes(m.filiere))
+    : allModules;
   const filteredAllModules = q
-    ? allModules.filter(m =>
+    ? scopedAllModules.filter(m =>
         [m.intitule, m.code, m.filiere, m.niveau, m.semestre]
           .some(v => (v ?? "").toString().toLowerCase().includes(q)))
-    : allModules;
+    : scopedAllModules;
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -465,14 +470,14 @@ export default function SuperAgentModules() {
           )}
 
           {/* ALL MODULES section */}
-          {allModules.length > 0 && (
+          {scopedAllModules.length > 0 && (
             <motion.div variants={item}>
               <div className="mt-4">
                 <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
                   <h2 className="text-base font-semibold flex items-center gap-2 text-muted-foreground">
                     <BookOpen className="w-4 h-4" />Tous mes modules créés
                     <Badge variant="outline" className="ml-1">
-                      {q ? `${filteredAllModules.length}/${allModules.length}` : allModules.length}
+                      {q ? `${filteredAllModules.length}/${scopedAllModules.length}` : scopedAllModules.length}
                     </Badge>
                   </h2>
                   <div className="relative w-full sm:w-72">

@@ -149,6 +149,9 @@ export const agent = {
   permissions: () => get<unknown[]>("/agent/permissions"),
   updatePermission: (enseignantId: number, body: unknown) => post<void>(`/agent/permissions/${enseignantId}`, body),
   revokePermission: (enseignantId: number) => del<void>(`/agent/permissions/${enseignantId}`),
+  studentNotes: (id: number) => get<unknown[]>(`/agent/students/${id}/notes`),
+  updateNote: (noteId: number, body: { note_exam?: number; note_controle?: number; note_tp?: number }) =>
+    patch<{ moyenne: number; situation: string; creditAcquis: number }>(`/agent/notes/${noteId}`, body),
 };
 
 // ── Super Agent ───────────────────────────────────────────────────────

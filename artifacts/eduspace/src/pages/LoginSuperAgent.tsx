@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { ShieldCheck, ArrowLeft, Lock, IdCard } from "lucide-react";
+import { ShieldCheck, ArrowLeft, Lock, Mail } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { login } from "@/lib/api";
 import { setAuth } from "@/lib/auth";
 
 const schema = z.object({
-  email: z.string().min(1, "Matricule requis"),
+  email: z.string().min(1, "Email requis"),
   motDePasse: z.string().min(1, "Mot de passe requis"),
 });
 type FormValues = z.infer<typeof schema>;
@@ -78,11 +78,11 @@ export default function LoginSuperAgent() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField control={form.control} name="email" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-foreground font-medium">Matricule</FormLabel>
+                  <FormLabel className="text-foreground font-medium">Email</FormLabel>
                   <FormControl>
                     <div className="relative">
-                      <IdCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input {...field} type="text" className="pl-10" placeholder="ex: superadmin" autoComplete="username" />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input {...field} type="email" className="pl-10" placeholder="ex: directeur@univ.dz" autoComplete="username" />
                     </div>
                   </FormControl>
                   <FormMessage />

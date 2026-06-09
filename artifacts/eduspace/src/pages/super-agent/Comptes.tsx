@@ -179,6 +179,7 @@ function DoyenComptes() {
   const [editForm, setEditForm] = useState({ nom: "", prenom: "", departement: "" });
   const [editError, setEditError] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [viewCredsAgent, setViewCredsAgent] = useState<AgentRecord | null>(null);
 
   const refresh = useCallback(() => { api.agents().then(d => setAgents(d as AgentRecord[])).catch(() => {}); }, []);
   useEffect(() => { refresh(); }, [refresh]);
@@ -205,6 +206,7 @@ function DoyenComptes() {
         departement: form.departement || undefined,
         // faculté/université are forced server-side from the doyen's account
       });
+      localStorage.setItem(`agentPwd_${username}`, generatedPwd);
       refresh();
       setShowModal(false);
       setCreatedInfo({ username, password: generatedPwd, name: `${form.prenom} ${form.nom}` });
@@ -289,6 +291,9 @@ function DoyenComptes() {
                       <Badge className={agent.statut === "suspendu" ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-green-100 text-green-700 border-green-200"}>
                         {agent.statut === "suspendu" ? "Suspendu" : "Actif"}
                       </Badge>
+                      <Button size="sm" variant="outline" title="Identifiants" className="h-8 px-2 text-violet-600 border-violet-200 hover:bg-violet-50" onClick={() => setViewCredsAgent(agent)}>
+                        <Eye className="w-3.5 h-3.5" />
+                      </Button>
                       <Button size="sm" variant="outline" title="Modifier" className="h-8 px-2 text-blue-600 border-blue-200 hover:bg-blue-50" onClick={() => openEdit(agent)}>
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
@@ -418,6 +423,44 @@ function DoyenComptes() {
 
       <CredsModal info={createdInfo} onClose={() => setCreatedInfo(null)} />
       <ConfirmDelete open={confirmDelete !== null} title="Supprimer ce compte ?" onCancel={() => setConfirmDelete(null)} onConfirm={() => confirmDelete !== null && remove(confirmDelete)} />
+
+      {/* View agent credentials modal */}
+      <AnimatePresence>
+        {viewCredsAgent && (() => {
+          const agentUsername = viewCredsAgent.email.split("@")[0];
+          const storedPwd = localStorage.getItem(`agentPwd_${agentUsername}`) ?? "—";
+          return (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
+                <Card className="p-6 w-full max-w-sm">
+                  <div className="flex items-center gap-2 mb-4">
+                    <KeyRound className="w-5 h-5 text-violet-600" />
+                    <h3 className="font-bold text-base">Identifiants — {viewCredsAgent.prenom} {viewCredsAgent.nom}</h3>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="bg-muted/20 border border-border rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground mb-1.5">Nom d'utilisateur</p>
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-semibold text-sm">{agentUsername}</span>
+                        <CopyButton text={agentUsername} />
+                      </div>
+                    </div>
+                    <div className="bg-violet-50 border border-violet-200 rounded-lg p-3">
+                      <p className="text-xs text-violet-600 mb-1.5">Mot de passe initial</p>
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-xl tracking-widest text-violet-800">{storedPwd}</span>
+                        {storedPwd !== "—" && <CopyButton text={storedPwd} />}
+                      </div>
+                      {storedPwd === "—" && <p className="text-xs text-muted-foreground mt-1">Mot de passe non disponible (compte créé hors session).</p>}
+                    </div>
+                  </div>
+                  <Button className="w-full mt-5" onClick={() => setViewCredsAgent(null)}>Fermer</Button>
+                </Card>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
     </div>
   );
 }
@@ -453,7 +496,7 @@ function DirectorComptes() {
   // Edit doyen
   const [showEdit, setShowEdit] = useState(false);
   const [editing, setEditing]   = useState<DoyenRecord | null>(null);
-  const [editForm, setEditForm] = useState({ nom: "", prenom: "", faculte: "" });
+  const [editForm, setEditForm] = useState({ nom: "", prenom: "", faculte: "", email: "", newPassword: "" });
   const [editError, setEditError] = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
@@ -493,6 +536,9 @@ function DirectorComptes() {
     if (!form.nom.trim()) e.nom = "Nom requis";
     if (!form.prenom.trim()) e.prenom = "Prénom requis";
     if (!form.faculte) e.faculte = "Faculté requise";
+    else if (doyens.some(d => d.faculte === form.faculte)) {
+      e.faculte = "Un compte doyen existe déjà pour cette faculté.";
+    }
     setErrors(e);
     if (Object.keys(e).length) return;
     setSaving(true); setSaveError("");
@@ -508,16 +554,19 @@ function DirectorComptes() {
 
   function openEdit(d: DoyenRecord) {
     setEditing(d);
-    setEditForm({ nom: d.nom, prenom: d.prenom, faculte: d.faculte ?? "" });
+    setEditForm({ nom: d.nom, prenom: d.prenom, faculte: d.faculte ?? "", email: d.email ?? "", newPassword: "" });
     setEditError(""); setShowEdit(true);
   }
   async function saveEdit() {
     if (!editing) return;
     if (!editForm.nom.trim() || !editForm.prenom.trim()) { setEditError("Nom et prénom requis."); return; }
     setEditSaving(true); setEditError("");
+    const updateBody: Record<string, unknown> = { nom: editForm.nom, prenom: editForm.prenom, faculte: editForm.faculte || undefined };
+    if (editForm.email) updateBody.email = editForm.email;
+    if (editForm.newPassword) updateBody.password = editForm.newPassword;
     try {
-      await api.updateDoyen(editing.id, { nom: editForm.nom, prenom: editForm.prenom, faculte: editForm.faculte || undefined });
-      setDoyens(prev => prev.map(d => d.id === editing.id ? { ...d, ...editForm } : d));
+      await api.updateDoyen(editing.id, updateBody);
+      setDoyens(prev => prev.map(d => d.id === editing.id ? { ...d, nom: editForm.nom, prenom: editForm.prenom, faculte: editForm.faculte, email: editForm.email || d.email } : d));
       setShowEdit(false); setEditing(null);
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Erreur lors de la modification.");
@@ -735,6 +784,14 @@ function DirectorComptes() {
                       <SelectTrigger className="text-sm"><SelectValue placeholder="Choisir une faculté…" /></SelectTrigger>
                       <SelectContent className="max-h-60">{faculties.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent>
                     </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Email</label>
+                    <Input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} type="email" placeholder="doyen@univ.dz" className="text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Nouveau mot de passe <span className="text-muted-foreground/60">(optionnel)</span></label>
+                    <Input value={editForm.newPassword} onChange={e => setEditForm(f => ({ ...f, newPassword: e.target.value }))} type="password" placeholder="Laisser vide pour conserver l'actuel" className="text-sm" />
                   </div>
                   {editError && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{editError}</div>}
                 </div>

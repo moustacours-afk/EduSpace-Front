@@ -488,6 +488,7 @@ export default function AgentComptes() {
 
   const [showTeacherCredentials, setShowTeacherCredentials] = useState(false);
   const [teacherCredentialsFor, setTeacherCredentialsFor]   = useState<AgentTeacher | null>(null);
+  const [showAllTeacherModules, setShowAllTeacherModules]   = useState(false);
 
   const [createdInfo, setCreatedInfo]           = useState<CreatedInfo | null>(null);
   const [showCreatedModal, setShowCreatedModal] = useState(false);
@@ -984,7 +985,7 @@ export default function AgentComptes() {
                           <td className="px-4 py-3 text-center"><Badge className={`text-xs border ${statutCompteBadge[t.statutCompte]}`}>{t.statutCompte}</Badge></td>
                           <td className="px-4 py-3">
                             <div className="flex justify-center gap-1 items-center">
-                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Voir" onClick={() => setSelectedTeacher(t)}><Eye className="w-3.5 h-3.5" /></Button>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Voir" onClick={() => { setSelectedTeacher(t); setShowAllTeacherModules(false); }}><Eye className="w-3.5 h-3.5" /></Button>
                               <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Modifier" onClick={() => openEditTeacher(t)}><Edit className="w-3.5 h-3.5" /></Button>
                               <Button size="sm" variant="ghost" className={`h-7 w-7 p-0 ${t.statutCompte === "actif" ? "text-amber-600" : "text-blue-600"}`} onClick={() => toggleTeacherStatus(t.id)}>
                                 {t.statutCompte === "actif" ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
@@ -1141,12 +1142,18 @@ export default function AgentComptes() {
                     <div className="flex items-center gap-2 mb-3"><BookOpen className="w-4 h-4 text-primary" /><span className="font-semibold text-sm">Modules assignés</span></div>
                     {t.modulesAssignes.length === 0 ? <p className="text-sm text-muted-foreground italic">Aucun module.</p> : (
                       <div className="space-y-2">
-                        {t.modulesAssignes.map((mod, i) => (
+                        {(showAllTeacherModules ? t.modulesAssignes : t.modulesAssignes.slice(0, 4)).map((mod, i) => (
                           <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-border/60 text-sm">
                             <span className="font-medium">{mod}</span>
                             <Badge className="text-xs bg-indigo-50 text-indigo-700 border-indigo-200">Assigné</Badge>
                           </div>
                         ))}
+                        {t.modulesAssignes.length > 4 && (
+                          <button onClick={() => setShowAllTeacherModules(v => !v)}
+                            className="text-xs text-primary hover:underline mt-1">
+                            {showAllTeacherModules ? "Voir moins" : `Voir ${t.modulesAssignes.length - 4} module(s) de plus…`}
+                          </button>
+                        )}
                       </div>
                     )}
                     <Button size="sm" variant="outline" className="gap-1.5 text-xs mt-3" onClick={() => openEditTeacher(t)}><Edit className="w-3.5 h-3.5" />Modifier les enseignements</Button>

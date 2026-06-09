@@ -133,6 +133,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reinscriptions', [AgentController::class, 'reinscriptions']);
         Route::patch('/reinscriptions/{id}', [AgentController::class, 'updateReinscription']);
 
+        // Student notes (agent edit for dettes)
+        Route::get('/students/{id}/notes', [AgentController::class, 'studentNotes']);
+        Route::patch('/notes/{noteId}', [AgentController::class, 'updateNote']);
+
         // Enseignant permissions
         Route::get('/permissions', [AgentController::class, 'permissions']);
         Route::post('/permissions/{enseignantId}', [AgentController::class, 'updatePermission']);

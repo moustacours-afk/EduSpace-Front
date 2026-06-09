@@ -35,6 +35,7 @@ import AgentAnnonces from "@/pages/agent/Annonces";
 import AgentOrganisationEtudiants from "@/pages/agent/OrganisationEtudiants";
 import AgentFeuilles from "@/pages/agent/Sheets";
 import AgentPermissions from "@/pages/agent/Permissions";
+import AgentDettes from "@/pages/agent/Dettes";
 
 import LoginSuperAgent from "@/pages/LoginSuperAgent";
 import SuperAgentDashboard from "@/pages/super-agent/Dashboard";
@@ -129,6 +130,9 @@ function Router() {
       </Route>
       <Route path="/agent/permissions">
         <AgentGuard component={AgentPermissions} />
+      </Route>
+      <Route path="/agent/dettes">
+        <AgentGuard component={AgentDettes} />
       </Route>
 
       <Route path="/login/super-agent" component={LoginSuperAgent} />

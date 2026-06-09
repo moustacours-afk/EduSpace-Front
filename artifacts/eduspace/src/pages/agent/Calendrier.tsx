@@ -46,7 +46,7 @@ export default function AgentCalendrier() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newNote, setNewNote] = useState("");
-  const [newNoteType, setNewNoteType] = useState<EventType>("yellow");
+  const [newNoteType] = useState<EventType>("blue");
   const [newNoteDesc, setNewNoteDesc] = useState("");
 
   function prevMonth() {
@@ -105,7 +105,7 @@ export default function AgentCalendrier() {
       description: newNoteDesc.trim() || "Note personnelle",
     }));
     setEvents(prev => [...prev, ...newEvts]);
-    setNewNote(""); setNewNoteDesc(""); setNewNoteType("yellow");
+    setNewNote(""); setNewNoteDesc("");
     setShowAddModal(false);
   }
 
@@ -322,17 +322,6 @@ export default function AgentCalendrier() {
                   ? new Date(selectedList[0]+"T00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long"})
                   : `${selectedList.length} jours sélectionnés`}
               </p>
-              <div className="mb-3">
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Type</label>
-                <div className="flex gap-2 flex-wrap">
-                  {(Object.entries(typeConfig) as [EventType, typeof typeConfig.green][]).map(([type, cfg]) => (
-                    <button key={type} onClick={() => setNewNoteType(type)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-all ${newNoteType === type ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
-                      <div className={`w-2 h-2 rounded-full ${cfg.dot}`} />{cfg.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
               <Input placeholder="Titre de la note…" value={newNote} onChange={e => setNewNote(e.target.value)} className="mb-2" />
               <Input placeholder="Description (facultatif)…" value={newNoteDesc} onChange={e => setNewNoteDesc(e.target.value)} className="mb-3" />
               <div className="flex gap-2">

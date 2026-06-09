@@ -19,7 +19,7 @@ const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
 const NIVEAUX = ["L1", "L2", "L3", "M1", "M2", "ING1", "ING2", "ING3", "ING4", "ING5"];
 
-type StudentRow = { id: string; matricule: string; nom: string; prenom: string; niveau: string; groupe: string; statut?: string };
+type StudentRow = { id: string; matricule: string; nom: string; prenom: string; niveau: string; section: string; groupe: string; statut?: string };
 
 type DocCard = {
   id: string;
@@ -70,14 +70,6 @@ const DOC_SECTIONS: { label: string; icon: React.ElementType; docs: DocCard[] }[
     icon: CalendarDays,
     docs: [
       {
-        id: "emargement-examen",
-        titre: "Feuille de présence examen",
-        description: "Liste d'émargement spécifique à une séance d'examen (avec salle et module).",
-        icon: ClipboardList,
-        color: "bg-amber-50 text-amber-700 border-amber-200",
-        needsNiveau: true, needsSection: true, needsGroupe: true, needsSemestre: true,
-      },
-      {
         id: "liste-examen-salle",
         titre: "Liste des examens par salle",
         description: "Organisation des étudiants par salle d'examen. Chaque salle est remplie groupe par groupe.",
@@ -98,7 +90,6 @@ function buildDocHtml(
     "liste-section-groupe": "Liste Générale par Section et Groupe",
     "liste-emargement": "Feuille d'Émargement",
     "liste-etudiants-statut": "Liste des Étudiants — Admis / Ajournés / Dettes",
-    "emargement-examen": "Feuille de Présence — Examen",
     "liste-examen-salle": "Liste des Examens par Salle",
   };
 
@@ -114,7 +105,7 @@ function buildDocHtml(
 
   const extraStatutCol = docId === "liste-etudiants-statut";
   const lastColHeader =
-    docId === "liste-emargement" || docId === "emargement-examen"
+    docId === "liste-emargement"
       ? "Signature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
       : extraStatutCol
       ? "Statut (Admis / Ajourné / Dettes)"
@@ -177,23 +168,74 @@ function buildDocHtml(
     </body></html>`;
   }
 
-  // Standard single-page documents — populate with real students
-  const studentRows = students.length > 0
-    ? students.map((s, i) => `<tr>
+  // When both section & group are "Tous", sort by section then group and add separator rows
+  const showAllSections = opts.section === "Tous" || !opts.section;
+  const showAllGroupes  = opts.groupe === "Tous"   || !opts.groupe;
+
+  let studentRows = "";
+  if (students.length > 0) {
+    if (showAllSections || showAllGroupes) {
+      // Sort by section then groupe
+      const sorted = [...students].sort((a, b) => {
+        const sc = (a.section || "").localeCompare(b.section || "", "fr");
+        if (sc !== 0) return sc;
+        return (a.groupe || "").localeCompare(b.groupe || "", "fr");
+      });
+
+      let counter = 1;
+      let lastSection = "";
+      let lastGroupe  = "";
+
+      for (const s of sorted) {
+        const sec = s.section || "—";
+        const grp = s.groupe  || "—";
+
+        // Section separator row
+        if (showAllSections && sec !== lastSection) {
+          studentRows += `<tr><td colspan="6" style="background:#c8d8f0;padding:5px 8px;font-weight:bold;font-size:11px;border:1px solid #bbb">
+            ${sec}
+          </td></tr>`;
+          lastSection = sec;
+          lastGroupe  = "";
+        }
+        // Group separator row (inside a section block)
+        if (showAllGroupes && grp !== lastGroupe) {
+          studentRows += `<tr><td colspan="6" style="background:#e8e8f0;padding:4px 8px;font-size:10px;color:#444;border:1px solid #bbb;padding-left:${showAllSections ? "22px" : "8px"}">
+            ${grp}
+          </td></tr>`;
+          lastGroupe = grp;
+        }
+
+        studentRows += `<tr>
+          <td style="text-align:center">${counter++}</td>
+          <td>${s.matricule}</td>
+          <td>${s.nom}</td>
+          <td>${s.prenom}</td>
+          <td>${sec}</td>
+          <td>${grp}</td>
+          <td>${extraStatutCol ? (s.statut ?? "—") : ""}</td>
+        </tr>`;
+      }
+    } else {
+      studentRows = students.map((s, i) => `<tr>
         <td style="text-align:center">${i + 1}</td>
         <td>${s.matricule}</td>
         <td>${s.nom}</td>
         <td>${s.prenom}</td>
-        ${opts.section && opts.section !== "Tous" ? "" : "<td>—</td>"}
+        <td>${s.section || "—"}</td>
         <td>${s.groupe}</td>
         <td>${extraStatutCol ? (s.statut ?? "—") : ""}</td>
-      </tr>`).join("")
-    : Array.from({ length: 15 }, (_, i) => `<tr>
-        <td style="text-align:center">${i + 1}</td>
-        <td></td><td></td><td></td>
-        ${opts.section && opts.section !== "Tous" ? "" : "<td></td>"}
-        <td>${opts.groupe !== "Tous" ? opts.groupe : "—"}</td><td></td>
       </tr>`).join("");
+    }
+  } else {
+    studentRows = Array.from({ length: 15 }, (_, i) => `<tr>
+      <td style="text-align:center">${i + 1}</td>
+      <td></td><td></td><td></td>
+      <td>${opts.section !== "Tous" ? opts.section : "—"}</td>
+      <td>${opts.groupe !== "Tous" ? opts.groupe : "—"}</td>
+      <td></td>
+    </tr>`).join("");
+  }
 
   return `<html><head><title>${title}</title>
   <style>
@@ -220,7 +262,7 @@ function buildDocHtml(
     <table>
       <thead><tr>
         <th>N°</th><th>Matricule</th><th>Nom</th><th>Prénom</th>
-        ${opts.section && opts.section !== "Tous" ? "" : "<th>Section</th>"}
+        <th>Section</th>
         <th>Groupe</th>
         <th>${lastColHeader}</th>
       </tr></thead>
@@ -253,6 +295,7 @@ export default function AgentSheets() {
         nom:       String(s.nom ?? ""),
         prenom:    String(s.prenom ?? ""),
         niveau:    String(s.niveau ?? ""),
+        section:   String(s.section ?? ""),
         groupe:    String(s.groupe ?? ""),
         statut:    String((s as Record<string, unknown>).statut_deliberation ?? "—"),
       }));
@@ -282,6 +325,7 @@ export default function AgentSheets() {
   function getFilteredStudents(): StudentRow[] {
     return allStudents.filter(s => {
       if (s.niveau !== filterNiveau) return false;
+      if (filterSection !== "Tous" && s.section !== filterSection) return false;
       if (filterGroupe !== "Tous" && s.groupe !== filterGroupe) return false;
       return true;
     });
@@ -302,7 +346,6 @@ export default function AgentSheets() {
         "liste-section-groupe":    "Liste_Generale",
         "liste-emargement":        "Feuille_Emargement",
         "liste-etudiants-statut":  "Liste_Statut",
-        "emargement-examen":       "Emargement_Examen",
         "liste-examen-salle":      "Liste_Examen_Salle",
       };
       const filename = `${titles[docId] ?? "Document"}_${filterNiveau}_${filterGroupe}.html`;

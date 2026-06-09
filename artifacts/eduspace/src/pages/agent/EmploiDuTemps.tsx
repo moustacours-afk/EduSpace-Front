@@ -48,7 +48,7 @@ type NewSession = {
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
-type TabType = "timetable" | "rooms" | "groups";
+type TabType = "timetable" | "rooms";
 
 function exportTimetablePDF(sessions: Seance[], scope: string, niveau: string, dept: string, creneauxList: { debut: string; fin: string }[], jours: string[]) {
   const tc: Record<string, string> = { CM: "#dbeafe:#1d4ed8", TD: "#e0e7ff:#4338ca", TP: "#ccfbf1:#0f766e" };
@@ -298,16 +298,6 @@ export default function AgentEmploiDuTemps() {
   async function toggleRoom(s: Salle) { try { await api.updateSalle(s.id, { disponible: !s.disponible }); await fetchSalles(); } catch { /* ignore */ } }
   async function deleteRoom(id: number) { try { await api.deleteSalle(id); await fetchSalles(); } catch { /* ignore */ } }
 
-  // ── Groups (derived from real students) ──
-  const allGroups = useMemo(() => {
-    const map = new Map<string, { nom: string; filiere: string; niveau: string; section: string; nb: number }>();
-    students.filter(s => s.filiere === agentFiliere).forEach(s => {
-      const key = `${s.niveau}|${s.section}|${s.groupe}`;
-      const cur = map.get(key) ?? { nom: s.groupe, filiere: s.filiere, niveau: s.niveau, section: s.section, nb: 0 };
-      cur.nb++; map.set(key, cur);
-    });
-    return [...map.values()].sort((a, b) => a.niveau.localeCompare(b.niveau) || a.nom.localeCompare(b.nom, undefined, { numeric: true }));
-  }, [students, agentFiliere]);
 
   const scopeLabel = filterGroupe !== "all" ? filterGroupe : filterSection !== "all" ? filterSection : "Toutes sections / groupes";
 
@@ -340,7 +330,6 @@ export default function AgentEmploiDuTemps() {
             {([
               { key: "timetable", icon: CalendarDays, label: "Emplois du temps" },
               { key: "rooms", icon: DoorOpen, label: `Salles (${salles.length})` },
-              { key: "groups", icon: UsersRound, label: `Groupes (${allGroups.length})` },
             ] as const).map(t => (
               <button key={t.key} onClick={() => setActiveTab(t.key)}
                 className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all ${activeTab === t.key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
@@ -475,7 +464,6 @@ export default function AgentEmploiDuTemps() {
                         <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs">Salle</th>
                         <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Capacité</th>
                         <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs">Type</th>
-                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Disponibilité</th>
                         <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Occupation</th>
                         <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Actions</th>
                       </tr>
@@ -488,7 +476,6 @@ export default function AgentEmploiDuTemps() {
                             <td className="px-4 py-3 font-semibold">{r.nom}</td>
                             <td className="px-4 py-3 text-center">{r.capacite} places</td>
                             <td className="px-4 py-3"><Badge className={`text-xs border ${r.type === "Amphithéâtre" ? "bg-purple-100 text-purple-700 border-purple-200" : r.type === "Laboratoire" ? "bg-teal-100 text-teal-700 border-teal-200" : "bg-blue-100 text-blue-700 border-blue-200"}`}>{r.type}</Badge></td>
-                            <td className="px-4 py-3 text-center"><Badge className={`text-xs border ${r.disponible ? "bg-green-100 text-green-800 border-green-200" : "bg-red-100 text-red-800 border-red-200"}`}>{r.disponible ? "Disponible" : "Indisponible"}</Badge></td>
                             <td className="px-4 py-3 text-center"><span className={`font-semibold ${occ > 6 ? "text-amber-600" : ""}`}>{occ}</span><span className="text-xs text-muted-foreground"> séance(s)</span></td>
                             <td className="px-4 py-3 text-center">
                               <div className="flex items-center justify-center gap-1">
@@ -499,7 +486,7 @@ export default function AgentEmploiDuTemps() {
                           </tr>
                         );
                       })}
-                      {salles.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">Aucune salle.</td></tr>}
+                      {salles.length === 0 && <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">Aucune salle.</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -507,42 +494,6 @@ export default function AgentEmploiDuTemps() {
             </motion.div>
           )}
 
-          {/* ── GROUPS TAB ── */}
-          {activeTab === "groups" && (
-            <motion.div variants={item}>
-              <Card className="overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/40 border-b border-border">
-                      <tr>
-                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs">Groupe</th>
-                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs">Section</th>
-                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Niveau</th>
-                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Nb étudiants</th>
-                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground text-xs">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {allGroups.map((g, i) => (
-                        <tr key={i} className="border-b border-border/50 hover:bg-muted/10">
-                          <td className="px-4 py-3 font-semibold">{g.nom}</td>
-                          <td className="px-4 py-3 text-muted-foreground text-xs">{g.section || "—"}</td>
-                          <td className="px-4 py-3 text-center"><Badge className="text-xs bg-primary/10 text-primary border-primary/20">{g.niveau}</Badge></td>
-                          <td className="px-4 py-3 text-center font-semibold">{g.nb}</td>
-                          <td className="px-4 py-3 text-center">
-                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => { setActiveTab("timetable"); setNiveau(g.niveau); setFilterSection(g.section || "all"); setFilterGroupe(g.nom); }}>
-                              <CalendarDays className="w-3.5 h-3.5 mr-1" />Voir EDT
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                      {allGroups.length === 0 && <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">Aucun groupe — organisez d'abord les étudiants.</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            </motion.div>
-          )}
         </motion.div>
       </main>
 

@@ -14,7 +14,7 @@ export function TeacherSidebar() {
   const [location, setLocation] = useLocation();
 
   return (
-    <aside className="w-64 min-h-screen flex flex-col bg-sidebar text-sidebar-foreground">
+    <aside className="w-64 sticky top-0 h-screen flex flex-col bg-sidebar text-sidebar-foreground overflow-y-auto">
       <div className="p-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-sm ring-1 ring-white/10">

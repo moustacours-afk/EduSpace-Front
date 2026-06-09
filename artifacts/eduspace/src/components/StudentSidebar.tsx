@@ -33,7 +33,7 @@ export function StudentSidebar() {
 
   return (
     <aside
-      className={`${collapsed ? "w-16" : "w-64"} min-h-screen bg-sidebar text-sidebar-foreground flex flex-col flex-shrink-0 transition-all duration-250 relative`}
+      className={`${collapsed ? "w-16" : "w-64"} sticky top-0 h-screen bg-sidebar text-sidebar-foreground flex flex-col flex-shrink-0 transition-all duration-250`}
     >
       <div className={`p-4 border-b border-sidebar-border flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
         {!collapsed && (

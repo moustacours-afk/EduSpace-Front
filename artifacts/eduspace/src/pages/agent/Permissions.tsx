@@ -47,8 +47,9 @@ export default function AgentPermissions() {
   const [teachers, setTeachers] = useState<TeacherPerm[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterPerm, setFilterPerm] = useState<"all" | "avec" | "sans">("all");
   const [editing, setEditing] = useState<TeacherPerm | null>(null);
-  const [form, setForm] = useState({ peutSaisirCC: false, peutSaisirExamen: false, semestre: "", notesAdmin: "" });
+  const [form, setForm] = useState({ peutSaisirCC: false, peutSaisirExamen: false });
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
@@ -67,8 +68,6 @@ export default function AgentPermissions() {
     setForm({
       peutSaisirCC: t.peutSaisirCC,
       peutSaisirExamen: t.peutSaisirExamen,
-      semestre: t.semestre ?? "",
-      notesAdmin: t.notesAdmin ?? "",
     });
   }
 
@@ -79,8 +78,6 @@ export default function AgentPermissions() {
       await api.updatePermission(editing.id, {
         peutSaisirCC: form.peutSaisirCC,
         peutSaisirExamen: form.peutSaisirExamen,
-        semestre: form.semestre || null,
-        notesAdmin: form.notesAdmin || null,
       });
       toast({ title: "Permissions mises à jour", description: `Dr. ${editing.nom} — permissions sauvegardées.` });
       setEditing(null);
@@ -102,9 +99,13 @@ export default function AgentPermissions() {
     }
   }
 
-  const filtered = teachers.filter((t) =>
-    `${t.nom} ${t.prenom} ${t.departement}`.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = teachers.filter((t) => {
+    const matchSearch = `${t.nom} ${t.prenom} ${t.grade} ${t.departement}`.toLowerCase().includes(search.toLowerCase());
+    if (!matchSearch) return false;
+    if (filterPerm === "avec") return t.peutSaisirCC || t.peutSaisirExamen;
+    if (filterPerm === "sans") return !t.peutSaisirCC && !t.peutSaisirExamen;
+    return true;
+  });
 
   const withPerm = teachers.filter((t) => t.peutSaisirCC || t.peutSaisirExamen).length;
   const noPerm   = teachers.length - withPerm;
@@ -141,16 +142,24 @@ export default function AgentPermissions() {
             ))}
           </motion.div>
 
-          {/* Search */}
-          <motion.div variants={item} className="flex gap-3">
-            <div className="relative flex-1 max-w-sm">
+          {/* Search + filter */}
+          <motion.div variants={item} className="flex flex-wrap gap-3 items-center">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Rechercher un enseignant…"
+                placeholder="Rechercher par nom, grade, département…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
               />
+            </div>
+            <div className="flex gap-1.5">
+              {(["all", "avec", "sans"] as const).map(v => (
+                <button key={v} onClick={() => setFilterPerm(v)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filterPerm === v ? "border-brand bg-brand/10 text-brand" : "border-border text-muted-foreground hover:bg-muted/40"}`}>
+                  {v === "all" ? "Tous" : v === "avec" ? "Avec permission" : "Sans permission"}
+                </button>
+              ))}
             </div>
           </motion.div>
 
@@ -170,14 +179,13 @@ export default function AgentPermissions() {
                         <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Grade / Dept.</th>
                         <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Contrôle Continu</th>
                         <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Examen</th>
-                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Semestre</th>
                         <th className="text-right px-5 py-3 font-semibold text-muted-foreground">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filtered.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="text-center py-10 text-muted-foreground">
+                          <td colSpan={5} className="text-center py-10 text-muted-foreground">
                             Aucun enseignant trouvé.
                           </td>
                         </tr>
@@ -205,9 +213,6 @@ export default function AgentPermissions() {
                           </td>
                           <td className="px-4 py-3.5 text-center">
                             <PermBadge active={t.peutSaisirExamen} label="Examen" />
-                          </td>
-                          <td className="px-4 py-3.5 text-center text-muted-foreground text-xs">
-                            {t.semestre ?? <span className="italic">Tous</span>}
                           </td>
                           <td className="px-5 py-3.5 text-right">
                             <div className="flex items-center justify-end gap-2">
@@ -264,25 +269,6 @@ export default function AgentPermissions() {
                 ))}
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground block mb-1.5 uppercase tracking-wide">Semestre (optionnel)</label>
-                <Input
-                  value={form.semestre}
-                  onChange={(e) => setForm((f) => ({ ...f, semestre: e.target.value }))}
-                  placeholder="Ex : S5, S6 — vide = tous les semestres"
-                  className="text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground block mb-1.5 uppercase tracking-wide">Note administrative</label>
-                <Input
-                  value={form.notesAdmin}
-                  onChange={(e) => setForm((f) => ({ ...f, notesAdmin: e.target.value }))}
-                  placeholder="Remarque interne (optionnel)…"
-                  className="text-sm"
-                />
-              </div>
             </div>
           )}
           <DialogFooter>

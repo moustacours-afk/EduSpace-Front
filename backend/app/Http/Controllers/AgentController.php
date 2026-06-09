@@ -736,6 +736,66 @@ class AgentController extends Controller
         return response()->json(['message' => 'Permissions révoquées.']);
     }
 
+    // ─── Student notes (read + edit for dettes) ──────────────────────────────
+
+    public function studentNotes(Request $request, int $id)
+    {
+        $etudiant = Etudiant::findOrFail($id);
+        if ($dept = $this->agentDept($request)) {
+            if ($etudiant->filiere !== $dept) abort(403);
+        }
+        $notes = $etudiant->notes()->with('module')->get()->map(fn ($n) => [
+            'id'           => $n->id,
+            'moduleId'     => $n->module_id,
+            'module'       => $n->module->intitule,
+            'code'         => $n->module->code,
+            'typeUe'       => $n->module->type_ue,
+            'credits'      => $n->module->credits,
+            'coefficient'  => $n->module->coefficient,
+            'hasTp'        => (bool) $n->module->has_tp,
+            'semestre'     => $n->semestre,
+            'exam'         => $n->note_exam,
+            'controle'     => $n->note_controle,
+            'tp'           => $n->note_tp,
+            'moyenne'      => $n->moyenne,
+            'creditAcquis' => $n->credit_acquis,
+            'situation'    => $n->situation,
+            'statut'       => $n->statut,
+        ]);
+        return response()->json($notes);
+    }
+
+    public function updateNote(Request $request, int $noteId)
+    {
+        $note = Note::with('module')->findOrFail($noteId);
+        $validated = $request->validate([
+            'note_exam'     => 'nullable|numeric|min:0|max:20',
+            'note_controle' => 'nullable|numeric|min:0|max:20',
+            'note_tp'       => 'nullable|numeric|min:0|max:20',
+        ]);
+        $exam = isset($validated['note_exam'])     ? (float)$validated['note_exam']     : (float)$note->note_exam;
+        $cc   = isset($validated['note_controle']) ? (float)$validated['note_controle'] : (float)$note->note_controle;
+        $tp   = isset($validated['note_tp'])       ? (float)$validated['note_tp']       : ($note->note_tp !== null ? (float)$note->note_tp : null);
+        $hasTp = (bool) $note->module->has_tp;
+        $moy = $hasTp && $tp !== null
+            ? round($exam * 0.6 + $cc * 0.2 + $tp * 0.2, 2)
+            : round($exam * 0.6 + $cc * 0.4, 2);
+        $sit = $moy >= 10 ? 'admis' : ($moy >= 8 ? 'rattrapage' : 'ajourne');
+        $note->update([
+            'note_exam'     => $exam,
+            'note_controle' => $cc,
+            'note_tp'       => $tp,
+            'moyenne'       => $moy,
+            'situation'     => $sit,
+            'credit_acquis' => $sit === 'admis' ? $note->module->credits : 0,
+        ]);
+        return response()->json([
+            'moyenne'      => $moy,
+            'situation'    => $sit,
+            'creditAcquis' => $sit === 'admis' ? $note->module->credits : 0,
+        ]);
+    }
+
     // ─── Stats ───────────────────────────────────────────────────────────────
 
     public function stats(Request $request)

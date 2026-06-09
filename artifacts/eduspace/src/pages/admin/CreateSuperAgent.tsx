@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShieldCheck, Search, Building2, MapPin, Lock, User,
   Eye, EyeOff, CheckCircle, KeyRound, AlertTriangle,
+  Copy, RefreshCw, Printer,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,25 @@ import { WILAYAS, ETABLISSEMENTS_PAR_WILAYA } from "@/lib/superAgentStore";
 // Share ONLY this password with whoever is authorised to create super-agent accounts.
 const OWNER_PASSWORD = "EduSpaceOwner@2024";
 // ─────────────────────────────────────────────────────────────────────────────
+
+function generatePassword() {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$!";
+  return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+      className="p-1.5 rounded hover:bg-slate-100 transition-colors"
+      title="Copier"
+    >
+      {copied ? <CheckCircle className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-slate-500" />}
+    </button>
+  );
+}
 
 // ── Searchable dropdown ──────────────────────────────────────────────────────
 function SearchableSelect({
@@ -170,6 +190,8 @@ function OwnerGate({ onUnlock }: { onUnlock: () => void }) {
   );
 }
 
+type CreatedInfo = { email: string; password: string; name: string };
+
 // ── Main creation form ───────────────────────────────────────────────────────
 function CreateForm() {
   const [wilaya,      setWilaya]      = useState("");
@@ -177,47 +199,76 @@ function CreateForm() {
   const [nom,         setNom]         = useState("");
   const [prenom,      setPrenom]      = useState("");
   const [email,       setEmail]       = useState("");
-  const [password,    setPassword]    = useState("");
+  const [password,    setPassword]    = useState(() => generatePassword());
+  const [confirm,     setConfirm]     = useState("");
   const [showPwd,     setShowPwd]     = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState("");
-  const [success,     setSuccess]     = useState("");
+  const [createdInfo, setCreatedInfo] = useState<CreatedInfo | null>(null);
 
-  const universites  = wilaya ? (ETABLISSEMENTS_PAR_WILAYA[wilaya] ?? []) : [];
+  // Keep confirm in sync when password is regenerated
+  useEffect(() => { setConfirm(""); }, [password]);
 
-  // A Directeur is scoped to a université only (no faculté). Faculty-level
-  // accounts (Doyens) are created later by the Director inside the app.
+  const universites = wilaya ? (ETABLISSEMENTS_PAR_WILAYA[wilaya] ?? []) : [];
+  const confirmMismatch = confirm.length > 0 && confirm !== password;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!nom || !prenom || !email || !password || !universite) {
       setError("Remplissez tous les champs obligatoires (*).");
       return;
     }
+    if (password !== confirm) {
+      setError("Les mots de passe ne correspondent pas.");
+      return;
+    }
     setLoading(true);
     setError("");
-    setSuccess("");
     try {
       const res = await fetch("http://127.0.0.1:8000/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
           email, password,
-          role:        "super_agent",
-          nom, prenom,
-          universite,
-          // No faculté → this super_agent is a Directeur (university level).
+          role: "super_agent",
+          nom, prenom, universite,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? "Erreur");
-      setSuccess(`Compte Directeur créé avec succès pour ${prenom} ${nom} (${universite}).`);
-      setNom(""); setPrenom(""); setEmail(""); setPassword("");
+      setCreatedInfo({ email, password, name: `${prenom} ${nom}` });
+      setNom(""); setPrenom(""); setEmail(""); setConfirm("");
       setWilaya(""); setUniversite("");
+      setPassword(generatePassword());
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erreur lors de la création.");
     } finally {
       setLoading(false);
     }
+  }
+
+  function handlePrint() {
+    if (!createdInfo) return;
+    const win = window.open("", "_blank", "width=500,height=400");
+    if (!win) return;
+    win.document.write(`<html><head><title>Identifiants — ${createdInfo.name}</title>
+    <style>
+      body{font-family:Arial,sans-serif;padding:32px;color:#111}
+      h2{margin-bottom:4px}p{color:#555;font-size:13px;margin-bottom:24px}
+      .box{border:1px solid #ddd;border-radius:8px;padding:14px 18px;margin-bottom:12px}
+      .label{font-size:11px;color:#888;margin-bottom:4px}
+      .value{font-family:monospace;font-size:16px;font-weight:bold;letter-spacing:1px}
+      .pw{color:#6d28d9}
+      @media print{button{display:none}}
+    </style></head><body>
+    <h2>Identifiants — Directeur</h2>
+    <p>${createdInfo.name}</p>
+    <div class="box"><div class="label">Email</div><div class="value">${createdInfo.email}</div></div>
+    <div class="box"><div class="label">Mot de passe</div><div class="value pw">${createdInfo.password}</div></div>
+    <button onclick="window.print()" style="margin-top:16px;padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨 Imprimer</button>
+    </body></html>`);
+    win.document.close();
   }
 
   return (
@@ -259,23 +310,59 @@ function CreateForm() {
               <Input type="email" placeholder="m.benali@univ.dz" value={email} onChange={e => setEmail(e.target.value)} />
             </div>
 
+            {/* Auto-generated password */}
             <div>
-              <label className="text-xs font-medium text-slate-500 block mb-1">
-                <Lock className="inline w-3 h-3 mr-1" />Mot de passe du compte *
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-slate-500 flex items-center gap-1">
+                  <Lock className="w-3 h-3" />Mot de passe du compte *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setPassword(generatePassword())}
+                  className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" />Régénérer
+                </button>
+              </div>
               <div className="relative">
                 <Input
                   type={showPwd ? "text" : "password"}
-                  placeholder="Min. 6 caractères"
+                  readOnly
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="pr-10"
+                  className="pr-20 font-mono bg-purple-50 border-purple-200 text-purple-900 font-semibold"
+                />
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                  <CopyButton text={password} />
+                  <button type="button" className="p-1.5 rounded hover:bg-slate-100 text-slate-400"
+                    onClick={() => setShowPwd(v => !v)}>
+                    {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Confirm password */}
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1">Confirmer le mot de passe *</label>
+              <div className="relative">
+                <Input
+                  type={showConfirm ? "text" : "password"}
+                  placeholder="Ressaisissez le mot de passe"
+                  value={confirm}
+                  onChange={e => setConfirm(e.target.value)}
+                  className={`pr-10 ${confirmMismatch ? "border-red-400 focus:ring-red-200" : confirm && confirm === password ? "border-green-400" : ""}`}
                 />
                 <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  onClick={() => setShowPwd(v => !v)}>
-                  {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  onClick={() => setShowConfirm(v => !v)}>
+                  {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              {confirmMismatch && (
+                <p className="text-xs text-red-500 mt-1">Les mots de passe ne correspondent pas.</p>
+              )}
+              {confirm && confirm === password && (
+                <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Mots de passe identiques.</p>
+              )}
             </div>
 
             <hr className="border-slate-100" />
@@ -316,20 +403,57 @@ function CreateForm() {
             {error && (
               <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>
             )}
-            {success && (
-              <div className="flex items-start gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                {success}
-              </div>
-            )}
 
-            <Button type="submit" disabled={loading}
+            <Button type="submit" disabled={loading || confirmMismatch || !confirm}
               className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-5 rounded-xl">
               {loading ? "Création en cours…" : "Créer le compte Directeur"}
             </Button>
           </form>
         </Card>
       </motion.div>
+
+      {/* ── CREDENTIALS MODAL ── */}
+      <AnimatePresence>
+        {createdInfo && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
+              <Card className="p-6 w-full max-w-sm shadow-2xl">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <h3 className="font-bold text-base">Compte créé — {createdInfo.name}</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Transmettez ces identifiants au Directeur. Notez le mot de passe maintenant, il ne sera plus affiché.
+                </p>
+                <div className="space-y-3">
+                  <div className="bg-muted/20 border border-border rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground mb-1.5">Email</p>
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-semibold text-sm">{createdInfo.email}</span>
+                      <CopyButton text={createdInfo.email} />
+                    </div>
+                  </div>
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                    <p className="text-xs text-purple-600 mb-1.5">Mot de passe généré</p>
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-xl tracking-widest text-purple-800">{createdInfo.password}</span>
+                      <CopyButton text={createdInfo.password} />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-5">
+                  <Button variant="outline" className="flex-1 gap-2" onClick={handlePrint}>
+                    <Printer className="w-4 h-4" />Imprimer
+                  </Button>
+                  <Button className="flex-1 bg-purple-600 hover:bg-purple-700" onClick={() => setCreatedInfo(null)}>
+                    Fermer
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

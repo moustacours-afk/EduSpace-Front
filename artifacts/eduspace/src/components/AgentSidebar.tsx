@@ -6,7 +6,7 @@ import { syncOrgFromStudents } from "@/lib/orgStore";
 import {
   LayoutDashboard, Users, CalendarDays, CheckSquare, LogOut,
   GraduationCap, Bell, BookOpen, Calendar, Megaphone,
-  ChevronLeft, ChevronRight, ListChecks, Layers, FileSpreadsheet, ShieldCheck,
+  ChevronLeft, ChevronRight, ListChecks, Layers, FileSpreadsheet, ShieldCheck, ClipboardEdit,
 } from "lucide-react";
 
 const navSections = [
@@ -34,6 +34,7 @@ const navSections = [
     items: [
       { href: "/agent/emploi-du-temps", icon: CalendarDays, label: "Emplois du temps" },
       { href: "/agent/notes", icon: CheckSquare, label: "Notes & Validation" },
+      { href: "/agent/dettes", icon: ClipboardEdit, label: "Gestion des dettes" },
       { href: "/agent/deliberations", icon: ListChecks, label: "Délibérations" },
       { href: "/agent/feuilles", icon: FileSpreadsheet, label: "Feuilles" },
       { href: "/agent/permissions", icon: ShieldCheck, label: "Permissions Enseignants" },
@@ -83,7 +84,7 @@ export function AgentSidebar() {
 
   return (
     <aside
-      className={`${collapsed ? "w-16" : "w-64"} min-h-screen flex flex-col flex-shrink-0 transition-all duration-200 bg-sidebar text-sidebar-foreground`}
+      className={`${collapsed ? "w-16" : "w-64"} sticky top-0 h-screen flex flex-col flex-shrink-0 transition-all duration-200 bg-sidebar text-sidebar-foreground`}
     >
       <div className={`p-4 border-b border-sidebar-border flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
         <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : ""}`}>
