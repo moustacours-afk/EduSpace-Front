@@ -169,10 +169,21 @@ function SemestreTable({ niveau, label, data }: { niveau: string; label: string;
   );
 }
 
+function semToYear(sem: string): number {
+  const num = parseInt(sem.replace(/\D/g, ""), 10);
+  return isNaN(num) ? 0 : Math.ceil(num / 2);
+}
+
+function anneeLabel(y: number): string {
+  const labels = ["1ère", "2ème", "3ème", "4ème", "5ème"];
+  return (labels[y - 1] ?? `${y}ème`) + " Année";
+}
+
 export default function EtudiantGeneral() {
   const user = getUser();
   const profile = user?.profile as Record<string, string> | null;
   const [notes, setNotes] = useState<NoteRow[]>([]);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
   useEffect(() => {
     api.notes().then((d) => setNotes(d as NoteRow[])).catch(() => {});
@@ -182,22 +193,34 @@ export default function EtudiantGeneral() {
   const filiere   = profile?.filiere ?? "";
   const niveau    = profile?.niveau ?? "";
 
-  const bySemestre = notes.reduce<Record<string, NoteRow[]>>((acc, n) => {
+  const allSemestres = [...new Set(notes.map(n => n.semestre))].sort();
+  const years        = [...new Set(allSemestres.map(semToYear))].sort();
+
+  // Filter semesters by selected year
+  const semestres = selectedYear === null
+    ? allSemestres
+    : allSemestres.filter(s => semToYear(s) === selectedYear);
+
+  const filteredNotes = notes.filter(n => semestres.includes(n.semestre));
+
+  const bySemestre = filteredNotes.reduce<Record<string, NoteRow[]>>((acc, n) => {
     (acc[n.semestre] ??= []).push(n);
     return acc;
   }, {});
-  const semestres = Object.keys(bySemestre).sort();
 
-  const moyGenerale = notes.length
-    ? (notes.reduce((a, n) => a + n.moyenne, 0) / notes.length)
+  const coefSum     = filteredNotes.reduce((a, n) => a + (n.coefficient ?? 1), 0);
+  const moyGenerale = filteredNotes.length && coefSum
+    ? filteredNotes.reduce((a, n) => a + n.moyenne * (n.coefficient ?? 1), 0) / coefSum
     : null;
 
-  const totalCredits = notes.reduce((a, n) => a + n.creditAcquis, 0);
-  const situationGlobale = notes.length
-    ? (notes.every((n) => n.situation === "admis") ? "admis"
-      : notes.some((n) => n.situation === "ajourne") ? "ajourne"
+  const totalCredits    = filteredNotes.reduce((a, n) => a + n.creditAcquis, 0);
+  const situationGlobale = filteredNotes.length
+    ? (filteredNotes.every((n) => n.situation === "admis") ? "admis"
+      : filteredNotes.some((n) => n.situation === "ajourne") ? "ajourne"
       : "rattrapage") as keyof typeof situationConfig
     : null;
+
+  const scopeLabel = selectedYear !== null ? anneeLabel(selectedYear) : "toutes les années";
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -221,11 +244,43 @@ export default function EtudiantGeneral() {
             </Card>
           ) : (
             <>
+              {/* Year filter buttons */}
+              {years.length > 1 && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setSelectedYear(null)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                      selectedYear === null
+                        ? "border-blue-500 bg-blue-500/10 text-blue-700"
+                        : "border-border text-muted-foreground hover:bg-muted/40"
+                    }`}
+                  >
+                    Toutes les années
+                  </button>
+                  {years.map(y => (
+                    <button
+                      key={y}
+                      onClick={() => setSelectedYear(y)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                        selectedYear === y
+                          ? "border-blue-500 bg-blue-500/10 text-blue-700"
+                          : "border-border text-muted-foreground hover:bg-muted/40"
+                      }`}
+                    >
+                      {anneeLabel(y)}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Summary card */}
               <div className="flex items-center gap-4 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl">
                 <div className="flex-1">
-                  <p className="text-xs text-blue-500 mb-1 font-medium">Moyenne générale</p>
+                  <p className="text-xs text-blue-500 mb-1 font-medium capitalize">
+                    Moyenne — {scopeLabel}
+                  </p>
                   <p className="text-3xl font-extrabold text-blue-700">
-                    {moyGenerale?.toFixed(2)}<span className="text-base font-normal text-blue-400"> / 20</span>
+                    {moyGenerale?.toFixed(2) ?? "—"}<span className="text-base font-normal text-blue-400"> / 20</span>
                   </p>
                   {moyGenerale !== null && mention(moyGenerale) && (
                     <p className="text-xs text-blue-500 mt-1">{mention(moyGenerale)}</p>

@@ -32,6 +32,23 @@ type NoteRow = {
   moyenne: number | null; creditAcquis: number; situation: string; statut: string;
 };
 
+function semNumToYear(sem: string): number {
+  const num = parseInt(sem.replace(/\D/g, ""), 10);
+  return isNaN(num) ? 0 : Math.ceil(num / 2);
+}
+
+function yearLabel(y: number): string {
+  const labels = ["1ère", "2ème", "3ème", "4ème", "5ème"];
+  return (labels[y - 1] ?? `${y}ème`) + " Année";
+}
+
+function weightedMoy(rows: NoteRow[]): number | null {
+  const valid = rows.filter(n => n.moyenne !== null);
+  const totalCr = valid.reduce((s, n) => s + (n.credits || 0), 0);
+  if (!valid.length || totalCr === 0) return null;
+  return Math.round(valid.reduce((s, n) => s + ((n.moyenne ?? 0) * (n.credits || 0)), 0) / totalCr * 100) / 100;
+}
+
 function situationBadge(situation: string) {
   if (situation === "admis")      return <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">Admis</Badge>;
   if (situation === "rattrapage") return <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">Rattrapage</Badge>;
@@ -58,8 +75,9 @@ function ReleveModal({ student, onClose }: { student: Student; onClose: () => vo
 
   useEffect(() => { load(); }, [load]);
 
-  const dettes   = notes.filter(n => n.situation !== "admis");
+  const dettes    = notes.filter(n => n.situation !== "admis");
   const semestres = [...new Set(notes.map(n => n.semestre))].sort();
+  const noteYears = [...new Set(semestres.map(semNumToYear))].sort();
 
   // Weighted UE moyenne for a given (semestre, ue) pair — uses ALL modules (not just dettes)
   function ueWeightedMoy(sem: string, ue: string): number | null {
@@ -139,28 +157,60 @@ function ReleveModal({ student, onClose }: { student: Student; onClose: () => vo
               <p className="text-sm">Aucune note disponible.</p>
             </div>
           ) : (
-            <div className="space-y-8">
-              {semestres.map(sem => {
-                const semNotes = notes.filter(n => n.semestre === sem);
-                const ueKeys   = [...new Set(semNotes.map(n => n.typeUe || "UE"))];
-                const semDettes = semNotes.filter(n => n.situation !== "admis").length;
+            <div className="space-y-6">
+              {noteYears.map(year => {
+                const s1Key = `S${(year - 1) * 2 + 1}`;
+                const s2Key = `S${year * 2}`;
+                const yearSems = semestres.filter(s => s === s1Key || s === s2Key);
+                const yearNotes = notes.filter(n => yearSems.includes(n.semestre));
+                const yearMoy = weightedMoy(yearNotes);
+                const yearDettes = yearNotes.filter(n => n.situation !== "admis").length;
                 return (
-                  <div key={sem}>
-                    {/* Semestre header */}
-                    <div className="flex items-center gap-2 mb-3 border-b pb-1">
-                      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{sem}</p>
-                      {semDettes > 0
-                        ? <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-600 border-red-200">{semDettes} dette(s)</Badge>
-                        : <Badge className="text-[10px] px-1.5 py-0 bg-green-100 text-green-700 border-green-200">Validé</Badge>
+                  <div key={year}>
+                    {/* ── Year header ── */}
+                    <div className="flex items-center gap-3 bg-muted/40 border border-border rounded-lg px-4 py-2.5 mb-4">
+                      <span className="font-bold text-sm">{yearLabel(year)}</span>
+                      <span className="text-xs text-muted-foreground">({yearSems.join(" + ")})</span>
+                      <div className="flex-1" />
+                      {yearMoy !== null && (
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${yearMoy >= 10 ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-600 border-red-200"}`}>
+                          Moy. annuelle : {yearMoy}/20
+                        </span>
+                      )}
+                      {yearDettes > 0
+                        ? <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-600 border-red-200">{yearDettes} dette(s)</Badge>
+                        : <Badge className="text-[10px] px-1.5 py-0 bg-green-100 text-green-700 border-green-200">Année validée</Badge>
                       }
                     </div>
 
-                    <div className="space-y-4">
-                      {ueKeys.map(ue => {
-                        const ueNotes  = semNotes.filter(n => (n.typeUe || "UE") === ue);
-                        const ueDettes = ueNotes.filter(n => n.situation !== "admis");
-                        const ueMoy    = ueWeightedMoy(sem, ue);
-                        const isUeLocked = ueDettes.length > 0 && ueMoy !== null && ueMoy >= 10;
+                    <div className="space-y-6 ml-1">
+                      {yearSems.map(sem => {
+                        const semNotes = notes.filter(n => n.semestre === sem);
+                        const semMoy   = weightedMoy(semNotes);
+                        const ueKeys   = [...new Set(semNotes.map(n => n.typeUe || "UE"))];
+                        const semDettes = semNotes.filter(n => n.situation !== "admis").length;
+                        return (
+                          <div key={sem}>
+                            {/* Semestre header */}
+                            <div className="flex items-center gap-2 mb-3 border-b pb-1">
+                              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{sem}</p>
+                              {semMoy !== null && (
+                                <span className={`text-xs font-semibold ${semMoy >= 10 ? "text-green-600" : "text-red-500"}`}>
+                                  Moy : {semMoy}/20
+                                </span>
+                              )}
+                              {semDettes > 0
+                                ? <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-600 border-red-200">{semDettes} dette(s)</Badge>
+                                : <Badge className="text-[10px] px-1.5 py-0 bg-green-100 text-green-700 border-green-200">Validé</Badge>
+                              }
+                            </div>
+
+                            <div className="space-y-4">
+                              {ueKeys.map(ue => {
+                                const ueNotes  = semNotes.filter(n => (n.typeUe || "UE") === ue);
+                                const ueDettes = ueNotes.filter(n => n.situation !== "admis");
+                                const ueMoy    = ueWeightedMoy(sem, ue);
+                                const isUeLocked = ueDettes.length > 0 && ueMoy !== null && ueMoy >= 10;
 
                         return (
                           <div key={ue}>
@@ -275,6 +325,10 @@ function ReleveModal({ student, onClose }: { student: Student; onClose: () => vo
                                     </AnimatePresence>
                                   </Card>
                                 );
+                              })}
+                            </div>
+                          </div>
+                        );
                               })}
                             </div>
                           </div>
