@@ -1,0 +1,19 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="EduSpace">
+  <defs>
+    <linearGradient id="es-bg" x1="6" y1="4" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#42566D"/>
+      <stop offset="0.55" stop-color="#356A74"/>
+      <stop offset="1" stop-color="#2C7C7A"/>
+    </linearGradient>
+    <linearGradient id="es-board" x1="11" y1="19" x2="53" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E9F3F2"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#es-bg)"/>
+  <path d="M21 30 L21 41 Q32 47 43 41 L43 30 Q32 36 21 30 Z" fill="#D5E7E5"/>
+  <path d="M32 18.5 L53.5 28.25 L32 38 L10.5 28.25 Z" fill="url(#es-board)"/>
+  <circle cx="32" cy="28.25" r="2.2" fill="#2C7C7A"/>
+  <path d="M32 28.25 L49 27 L49 41.5" stroke="#FFFFFF" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="49" cy="43.2" r="2.5" fill="#FFFFFF"/>
+</svg>
