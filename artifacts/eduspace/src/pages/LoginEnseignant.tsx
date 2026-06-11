@@ -10,6 +10,17 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { loginWithMatricule } from "@/lib/api";
 import { setAuth } from "@/lib/auth";
+import { DemoAccountsCard } from "@/components/DemoAccountsCard";
+
+const DEMO_ACCOUNTS = [
+  { label: "Algorithmique / PFE (responsable)", identifiant: "m.hadj@univ-oran1.dz" },
+  { label: "Systèmes d'Exploitation 2", identifiant: "s.khelifi@univ-oran1.dz" },
+  { label: "Réseaux / Sécurité", identifiant: "y.belkacem@univ-oran1.dz" },
+  { label: "Bases de Données Avancées", identifiant: "h.boukhalfa@univ-oran1.dz" },
+  { label: "Génie Logiciel", identifiant: "f.lahmar@univ-oran1.dz" },
+  { label: "Compilation / Web & Mobile", identifiant: "n.mansouri@univ-oran1.dz" },
+  { label: "Intelligence Artificielle", identifiant: "k.benmabrouk@univ-oran1.dz" },
+];
 
 const schema = z.object({
   email: z.string().min(3, "Identifiant requis"),
@@ -139,6 +150,8 @@ export default function LoginEnseignant() {
             </form>
           </Form>
         </div>
+
+        <DemoAccountsCard accounts={DEMO_ACCOUNTS} />
       </motion.div>
     </div>
   );

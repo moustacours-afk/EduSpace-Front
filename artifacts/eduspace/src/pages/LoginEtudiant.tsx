@@ -10,6 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { loginWithMatricule } from "@/lib/api";
 import { setAuth } from "@/lib/auth";
+import { DemoAccountsCard } from "@/components/DemoAccountsCard";
+
+const DEMO_ACCOUNTS = [
+  { label: "KADI Islam — L3 Groupe 1", identifiant: "222237400711" },
+  { label: "Mecheri Fatima Zohra — L3 G1", identifiant: "222237347305" },
+  { label: "Negadi Mohammed Aymene — L3 G2", identifiant: "222237347817" },
+  { label: "Touati Hanene — L3 G2", identifiant: "222237401612" },
+];
 
 const schema = z.object({
   email: z.string().min(3, "Identifiant requis"),
@@ -139,6 +147,8 @@ export default function LoginEtudiant() {
             </form>
           </Form>
         </div>
+
+        <DemoAccountsCard accounts={DEMO_ACCOUNTS} />
       </motion.div>
     </div>
   );

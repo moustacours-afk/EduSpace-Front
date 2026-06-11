@@ -10,6 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { loginWithMatricule } from "@/lib/api";
 import { setAuth } from "@/lib/auth";
+import { DemoAccountsCard } from "@/components/DemoAccountsCard";
+
+const DEMO_ACCOUNTS = [
+  { label: "Agent — Informatique", identifiant: "n.ferhat@univ-oran1.dz" },
+  { label: "Agent — Mathématiques", identifiant: "a.bensaid@univ-oran1.dz" },
+  { label: "Agent — Physique", identifiant: "r.mansouri@univ-oran1.dz" },
+  { label: "Agent — Chimie", identifiant: "s.boudiaf@univ-oran1.dz" },
+];
 
 const schema = z.object({
   username: z.string().min(1, "Nom d'utilisateur requis"),
@@ -130,6 +138,8 @@ export default function LoginAgent() {
             Plateforme réservée aux agents pédagogiques autorisés
           </p>
         </div>
+
+        <DemoAccountsCard accounts={DEMO_ACCOUNTS} />
       </motion.div>
     </div>
   );

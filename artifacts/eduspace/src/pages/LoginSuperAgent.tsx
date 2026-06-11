@@ -10,6 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { login } from "@/lib/api";
 import { setAuth } from "@/lib/auth";
+import { DemoAccountsCard } from "@/components/DemoAccountsCard";
+
+const DEMO_ACCOUNTS = [
+  { label: "Directeur (niveau université)", identifiant: "directeur@univ-oran1.dz" },
+  { label: "Doyen (Faculté des Sciences Exactes)", identifiant: "doyen.sea@univ-oran1.dz" },
+];
 
 const schema = z.object({
   email: z.string().min(1, "Email requis"),
@@ -121,6 +127,8 @@ export default function LoginSuperAgent() {
             Accès réservé à l'administration centrale
           </p>
         </div>
+
+        <DemoAccountsCard accounts={DEMO_ACCOUNTS} />
       </motion.div>
     </div>
   );
